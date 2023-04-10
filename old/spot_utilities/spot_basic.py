@@ -1,26 +1,26 @@
 #  Copyright [2023] Boston Dynamics AI Institute, Inc.
+from enum import IntEnum
 import sys
 import time
-from enum import IntEnum
 from typing import Callable, Optional
 
-import rclpy
-import spot_driver.conversions as conv
-from bdai_ros.wrappers.action_client import ActionClientWrapper
-from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
-from bosdyn.client.frame_helpers import BODY_FRAME_NAME, VISION_FRAME_NAME
-from bosdyn.client.robot_command import RobotCommandBuilder
 from geometry_msgs.msg import Twist
+import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
 from rclpy.node import Node
 from rclpy.task import Future
-from spot_msgs.action import RobotCommand
-from spot_msgs.srv import (ClearBehaviorFault, ListGraph, ListWorldObjects, SetLocomotion, SetVelocity)
-from std_srvs.srv import SetBool, Trigger
 from tf2_ros import TransformException
 
-from bdai.utilities.math_helpers import SE2Pose
+from bosdyn.client.frame_helpers import BODY_FRAME_NAME, VISION_FRAME_NAME
+from bosdyn.client.robot_command import RobotCommandBuilder
+
+from bdai_ros.wrappers.action_client import ActionClientWrapper
+from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
+import spot_driver.conversions as conv
+from spot_msgs.action import RobotCommand
+from spot_msgs.srv import ClearBehaviorFault, ListGraph, ListWorldObjects, SetLocomotion, SetVelocity
+from std_srvs.srv import SetBool, Trigger
 
 
 class SpotBasic(Node):
