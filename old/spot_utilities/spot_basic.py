@@ -1,29 +1,26 @@
 #  Copyright [2023] Boston Dynamics AI Institute, Inc.
-from enum import IntEnum
 import sys
 import time
+from enum import IntEnum
 from typing import Callable, Optional
 
 import rclpy
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
+import spot_driver.conversions as conv
+from bdai_ros.wrappers.action_client import ActionClientWrapper
+from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
+from bosdyn.client.frame_helpers import BODY_FRAME_NAME, VISION_FRAME_NAME
+from bosdyn.client.robot_command import RobotCommandBuilder
+from geometry_msgs.msg import Twist
+from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
 from rclpy.node import Node
 from rclpy.task import Future
-from geometry_msgs.msg import PoseStamped, Twist
-from std_srvs.srv import Trigger, SetBool
+from spot_msgs.action import RobotCommand
+from spot_msgs.srv import (ClearBehaviorFault, ListGraph, ListWorldObjects, SetLocomotion, SetVelocity)
+from std_srvs.srv import SetBool, Trigger
 from tf2_ros import TransformException
 
-from bosdyn.client.robot_command import RobotCommandBuilder
-from bosdyn.client.frame_helpers import BODY_FRAME_NAME, VISION_FRAME_NAME
-
-import spot_driver.conversions as conv
-from spot_msgs.action import NavigateTo, RobotCommand, Trajectory
-from spot_msgs.srv import ClearBehaviorFault, ListGraph, ListWorldObjects, SetLocomotion, SetVelocity
-
 from bdai.utilities.math_helpers import SE2Pose
-from bdai_ros.utilities.manual_conversions import to_se2_pose
-from bdai_ros.wrappers.action_client import ActionClientWrapper
-from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 
 
 class SpotBasic(Node):
@@ -51,14 +48,21 @@ class SpotBasic(Node):
         JOG = 7  # Demo gait which moves diagonal leg pairs together with an aerial phase.
         HOP = 8  # Demo gait which hops while holding some feet in the air.
 
-    def __init__(self, options, node_name: Optional[str] = None, num_threads: int = 1):
+    def __init__(self,
+                 node_name: Optional[str] = None,
+                 num_threads: int = 1,
+                 robot_name: str = "",
+                 disable_collisions: bool = False,
+                 dry: bool = False):
+        ''' options is expected to have the following keys: robot_name, disable_collisions, dry
+        '''
         if node_name is None:
             node_name = "spot_init"
-        self._robot_name = options.robot_name
+        self._robot_name = robot_name
         super().__init__(node_name, namespace=self._robot_name)
 
-        self._disable_collisions = options.disable_collisions
-        self._dry = options.dry
+        self._disable_collisions = disable_collisions
+        self._dry = dry
 
         if num_threads == 1:
             self._executor = SingleThreadedExecutor()
@@ -409,6 +413,8 @@ class SpotBasic(Node):
         if action_goal is None:
             return False
         if not self._dry:
+            raise NotImplementedError
+            #TODO: Add a result callback in this function call
             return self.command_async(action_goal)
 
     def shutdown(self):
@@ -423,11 +429,11 @@ def main():
     parser.add_argument("robot_name", help="Name of the robot if the ROS driver is inside that namespace")
     parser.add_argument("--disable-collisions", action="store_true", help="Flag for disabling collision avoidance")
     parser.add_argument("--dry", action="store_true", help="Flag for if this is a dry run")
-    parser.add_argument("--playback", action="store_true", help="Flag for if this playing back a rosbag")
-    options = parser.parse_args()
+    # parser.add_argument("--playback", action="store_true", help="Flag for if this playing back a rosbag")
+    options = vars(parser.parse_args())
 
     rclpy.init()
-    spot_init = SpotBasic(options)
+    spot_init = SpotBasic(**options)
     spot_init.initialize_robot()
     spot_init.stand()
     time.sleep(1.0)
