@@ -68,7 +68,7 @@ class SpotBasic(Node):
 
         self._disable_collisions = self.get_parameter('disable_collisions').get_parameter_value().bool_value
         self._dry = self.get_parameter('dry').get_parameter_value().bool_value
-        self._visualize_goals = self.get_parameter("visualize_goals").get_parameter_value().bool_value
+        self._rviz = self.get_parameter("rviz").get_parameter_value().bool_value
 
         self._executor = MultiThreadedExecutor(num_threads)
         self._executor.add_node(self)
@@ -107,7 +107,7 @@ class SpotBasic(Node):
                                      cache_time_s=30,
                                      wait_for_transform=[self.body_frame_name, self.vision_frame_name])
 
-        if self._visualize_goals:
+        if self._rviz:
             self._vis_pub = self.create_publisher(Marker, '/visualization_marker', 10)
 
     def initialize_robot(self) -> bool:
@@ -382,12 +382,12 @@ class SpotBasic(Node):
         # TODO: What to return on a dry run? Just success?
         return None
 
-    def _draw_arrow(self, frame_id: str, marker_id: str, frame_t_arrow: SE2Pose | SE3Pose, color: Color) -> None:
+    def _draw_arrow(self, frame_id: str, ns: str, frame_t_arrow: SE2Pose | SE3Pose, color: Color) -> None:
         """ TODO
 
         Args:
             frame_id:
-            marker_id:
+            ns:
             frame_t_arrow:
             color
         """
@@ -395,9 +395,9 @@ class SpotBasic(Node):
         marker.header.stamp = self.get_clock().now().to_msg()
         marker.header.frame_id = frame_id
         marker.id = 0
-        marker.ns = marker_id
-        marker.type = marker.ARROW
-        marker.action = marker.ADD
+        marker.ns = ns
+        marker.type = Marker.ARROW
+        marker.action = Marker.ADD
         marker.pose = to_ros_pose(frame_t_arrow)
         marker.color = color
         marker.scale.x = 0.3
@@ -438,15 +438,17 @@ class SpotBasic(Node):
                 self.get_logger().error(f"Cannot get transform from vision to body for {self.robot_name}. Error was "
                                         f"{e}.")
                 return None
-            goal_se2 = vision_t_body * goal_se2
+            vision_t_goal = vision_t_body * goal_se2
+        else:
+            vision_t_goal = goal_se2
         # TODO: are there other frames that we should take care of
 
-        if self._visualize_goals:
-            self._draw_arrow(self.vision_frame_name, self.body_frame_name, goal_se2, color=Color(g=1.0, a=1.0))
+        if self._rviz:
+            self._draw_arrow(self.vision_frame_name, self.body_frame_name, vision_t_goal, color=Color(g=1.0, a=1.0))
 
-        proto_goal = RobotCommandBuilder.synchro_se2_trajectory_point_command(goal_x=goal_se2.x,
-                                                                              goal_y=goal_se2.y,
-                                                                              goal_heading=goal_se2.yaw,
+        proto_goal = RobotCommandBuilder.synchro_se2_trajectory_point_command(goal_x=vision_t_goal.x,
+                                                                              goal_y=vision_t_goal.y,
+                                                                              goal_heading=vision_t_goal.yaw,
                                                                               frame_name=VISION_FRAME_NAME,
                                                                               body_height=height,
                                                                               params=mobility_params)
