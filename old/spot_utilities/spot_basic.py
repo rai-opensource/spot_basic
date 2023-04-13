@@ -5,9 +5,9 @@ from threading import Event
 import time
 from typing import Callable, Optional
 
-from geometry_msgs.msg import PoseStamped, Twist
+from geometry_msgs.msg import Twist
 import rclpy
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
+from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.node import Node
 from rclpy.task import Future
 from std_msgs.msg import ColorRGBA as Color
@@ -19,9 +19,9 @@ from bosdyn.client.frame_helpers import BODY_FRAME_NAME, VISION_FRAME_NAME
 from bosdyn.client.robot_command import RobotCommandBuilder
 
 import spot_driver.conversions as conv
-from spot_msgs.action import NavigateTo, RobotCommand, Trajectory
+from spot_msgs.action import RobotCommand
 from spot_msgs.srv import ClearBehaviorFault, ListGraph, ListWorldObjects, SetLocomotion, SetVelocity
-from visualization_msgs.msg import Marker, MarkerArray
+from visualization_msgs.msg import Marker
 
 from bdai.utilities.math_helpers import SE2Pose, SE3Pose
 from bdai_ros.utilities.manual_conversions import to_ros_pose
@@ -33,14 +33,15 @@ class SpotBasic(Node):
     """ Base ROS2 Node that provides interfaces to calling various commands """
 
     TRIGGER_SERVICES = [
-        'claim', 'release', 'stop', 'self_right', 'sit', 'stand', 'power_on', 'power_off', 'estop/hard', 'estop/gentle',
-        'estop/release'
+        "claim", "release", "stop", "self_right", "sit", "stand", "power_on", "power_off", "estop/hard", "estop/gentle",
+        "estop/release"
     ]
 
     class LocomotionHint(IntEnum):
         """ Enumeration of the locomotion hints
 
-        See https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html?highlight=mobilityparams#locomotionhint
+        See
+        https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html?highlight=mobilityparams#locomotionhint
         Note: Comments below for each enumerator come directly from the above link
         """
         UNKNOWN = 0  # Listed for completeness, but the docs say do not use
@@ -54,20 +55,20 @@ class SpotBasic(Node):
         JOG = 7  # Demo gait which moves diagonal leg pairs together with an aerial phase.
         HOP = 8  # Demo gait which hops while holding some feet in the air.
 
-    def __init__(self, node_name: Optional[str] = None, num_threads: int = 2):
+    def __init__(self, node_name: Optional[str] = None):
         if node_name is None:
             node_name = "spot_basic"
         super().__init__(node_name)
 
-        self.declare_parameters(namespace='',
-                                parameters=[('robot_name', ''), ('disable_collisions', False), ('dry', False),
-                                            ('rviz', False)])
+        self.declare_parameters(namespace="",
+                                parameters=[("robot_name", ""), ("disable_collisions", False), ("dry", False),
+                                            ("rviz", False)])
         # Get the robot name
-        self.robot_name = self.get_parameter('robot_name').get_parameter_value().string_value
+        self.robot_name = self.get_parameter("robot_name").get_parameter_value().string_value
         self._namespace = self.robot_name
 
-        self._disable_collisions = self.get_parameter('disable_collisions').get_parameter_value().bool_value
-        self._dry = self.get_parameter('dry').get_parameter_value().bool_value
+        self._disable_collisions = self.get_parameter("disable_collisions").get_parameter_value().bool_value
+        self._dry = self.get_parameter("dry").get_parameter_value().bool_value
         self._rviz = self.get_parameter("rviz").get_parameter_value().bool_value
 
         self._callback_group = ReentrantCallbackGroup()
@@ -95,21 +96,20 @@ class SpotBasic(Node):
         self._list_world_objects_client = self.create_client(ListWorldObjects,
                                                              f"/{self._namespace}/list_world_objects",
                                                              callback_group=self._callback_group)
-        self._robot_command_action_client = ActionClientWrapper(RobotCommand, f'robot_command', self.get_name(),
+        self._robot_command_action_client = ActionClientWrapper(RobotCommand, "robot_command", self.get_name(),
                                                                 self._namespace)
 
         self.body_frame_name = f"{self.robot_name}/{BODY_FRAME_NAME}"
         self.vision_frame_name = f"{self.robot_name}/{VISION_FRAME_NAME}"
-        self._tf = TFListenerWrapper(self.get_name() + '_tf',
+        self._tf = TFListenerWrapper(self.get_name() + "_tf",
                                      cache_time_s=30,
                                      wait_for_transform=[self.body_frame_name, self.vision_frame_name])
 
         if self._rviz:
-            self._vis_pub = self.create_publisher(Marker, '/visualization_marker', 10)
+            self._vis_pub = self.create_publisher(Marker, "/visualization_marker", 10)
 
     def initialize_robot(self) -> bool:
-        ''' Returns true/false based on success of claiming and powering up Spot.
-        '''
+        """ Returns true/false based on success of claiming and powering up Spot. """
         # Claim robot.
         if not self.claim():
             return False
@@ -158,7 +158,7 @@ class SpotBasic(Node):
         Returns:
             True if the command succeeded, False otherwise
         """
-        return self._trigger('claim')
+        return self._trigger("claim")
 
     def release(self) -> bool:
         """ Trigger the 'release' service on the SpotDriver
@@ -166,7 +166,7 @@ class SpotBasic(Node):
         Returns:
             True if the command succeeded, False otherwise
         """
-        return self._trigger('release')
+        return self._trigger("release")
 
     def stop(self) -> bool:
         """ Trigger the 'stop' service on the SpotDriver
@@ -369,7 +369,7 @@ class SpotBasic(Node):
         # TODO: What to return on a dry run? Just success?
         return None
 
-    def command_async(self, goal: RobotCommand.Goal, response_callback: Callable) -> Future:
+    def command_async(self, goal: RobotCommand.Goal, response_callback: Callable = None) -> Future:
         """ Runs the `RobotCommand` action asynchronously
 
         Args:
@@ -385,7 +385,8 @@ class SpotBasic(Node):
             return None
         if not self._dry:
             goal_future = self._robot_command_action_client.send_goal_async(goal)
-            goal_future.add_done_callback(response_callback)
+            if response_callback:
+                goal_future.add_done_callback(response_callback)
             return goal_future
         # TODO: What to return on a dry run? Just success?
         return None
@@ -419,11 +420,11 @@ class SpotBasic(Node):
         conv.convert_proto_to_bosdyn_msgs_robot_command(proto, action_goal.command)
         return action_goal
 
-    def _get_walk_to_action_goal(self, goal_se2: SE2Pose, height: float, base_frame: str) -> RobotCommand.Goal:
+    def _get_walk_to_action_goal(self, base_frame_t_goal: SE2Pose, height: float, base_frame: str) -> RobotCommand.Goal:
         """ TODO
 
         Args:
-            goal_se2:
+            base_frame_t_goal:
             height:
             base_frame:
 
@@ -446,9 +447,9 @@ class SpotBasic(Node):
                 self.get_logger().error(f"Cannot get transform from vision to body for {self.robot_name}. Error was "
                                         f"{e}.")
                 return None
-            vision_t_goal = vision_t_body * goal_se2
+            vision_t_goal = vision_t_body * base_frame_t_goal
         else:
-            vision_t_goal = goal_se2
+            vision_t_goal = base_frame_t_goal
         # TODO: are there other frames that we should take care of
 
         if self._rviz:
@@ -463,7 +464,7 @@ class SpotBasic(Node):
         return self._convert_proto_to_action_goal(proto_goal)
 
     def walk_to(self,
-                goal_se2: SE2Pose,
+                base_frame_t_goal: SE2Pose,
                 height: float = 0,
                 base_frame: str = VISION_FRAME_NAME,
                 timeout_sec: float = None) -> Optional[RobotCommand.Result]:
@@ -477,7 +478,7 @@ class SpotBasic(Node):
         Returns:
 
         """
-        action_goal = self._get_walk_to_action_goal(goal_se2, height, base_frame)
+        action_goal = self._get_walk_to_action_goal(base_frame_t_goal, height, base_frame)
         return self.command(action_goal, timeout_sec)
 
     def walk_to_async(self, goal_se2, height: float = 0, base_frame: str = VISION_FRAME_NAME) -> Optional[Future]:
@@ -561,9 +562,25 @@ class SpotBasic(Node):
         action_goal = self._get_arm_pose_action_goal(goal, base_frame, time_sec)
         return self.command_async(action_goal)
 
+    def claw_gripper_open(self):
+        action_goal = self._convert_proto_to_action_goal(RobotCommandBuilder.claw_gripper_open_command())
+        return self.command(action_goal)
+
+    def claw_gripper_open_async(self):
+        action_goal = self._convert_proto_to_action_goal(RobotCommandBuilder.claw_gripper_open_command())
+        return self.command_async(action_goal)
+
+    def claw_gripper_close(self):
+        action_goal = self._convert_proto_to_action_goal(RobotCommandBuilder.claw_gripper_close_command())
+        return self.command(action_goal)
+
+    def claw_gripper_close_async(self):
+        action_goal = self._convert_proto_to_action_goal(RobotCommandBuilder.claw_gripper_close_command())
+        return self.command_async(action_goal)
+
     def shutdown(self) -> None:
         """ TODO """
-        self.get_logger().info('Shutdown tf listener.')
+        self.get_logger().info("Shutdown tf listener.")
         self._tf.shutdown()
         # TODO: Is there anything else that we should shutdown?
 
