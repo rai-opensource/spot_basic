@@ -1,13 +1,13 @@
 #  Copyright [2023] Boston Dynamics AI Institute, Inc.
 from enum import IntEnum
 import sys
+from threading import Event
 import time
 from typing import Callable, Optional
 
 from geometry_msgs.msg import PoseStamped, Twist
 import rclpy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
-from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
 from rclpy.node import Node
 from rclpy.task import Future
 from std_msgs.msg import ColorRGBA as Color
@@ -70,8 +70,6 @@ class SpotBasic(Node):
         self._dry = self.get_parameter('dry').get_parameter_value().bool_value
         self._rviz = self.get_parameter("rviz").get_parameter_value().bool_value
 
-        self._executor = MultiThreadedExecutor(num_threads)
-        self._executor.add_node(self)
         self._callback_group = ReentrantCallbackGroup()
 
         self._trigger_clients = {}
@@ -97,9 +95,8 @@ class SpotBasic(Node):
         self._list_world_objects_client = self.create_client(ListWorldObjects,
                                                              f"/{self._namespace}/list_world_objects",
                                                              callback_group=self._callback_group)
-        self._robot_command_action_client = ActionClientWrapper(RobotCommand,
-                                                                'robot_command',
-                                                                namespace=self._namespace)
+        self._robot_command_action_client = ActionClientWrapper(RobotCommand, f'robot_command', self.get_name(),
+                                                                self._namespace)
 
         self.body_frame_name = f"{self.robot_name}/{BODY_FRAME_NAME}"
         self.vision_frame_name = f"{self.robot_name}/{VISION_FRAME_NAME}"
@@ -122,6 +119,16 @@ class SpotBasic(Node):
             return False
         return True
 
+    def _wait_for_future(self, future):
+        event = Event()
+
+        def done_callback(_):
+            nonlocal event
+            event.set()
+
+        future.add_done_callback(done_callback)
+        event.wait()
+
     def _trigger(self, command_name: str) -> bool:
         """ Triggers a command service on the SpotDriver
 
@@ -135,8 +142,9 @@ class SpotBasic(Node):
         except KeyError:
             self.get_logger().error(f"No trigger command {command_name}")
             return False
-        # TODO: Are there other exceptions that should be caught?
-        self._executor.spin_until_future_complete(future)
+
+        self._wait_for_future(future)
+
         response = future.result()
         if not response.success:
             self.get_logger().error(
@@ -256,7 +264,7 @@ class SpotBasic(Node):
         request = SetBool.Request()
         request.data = value
         future = self._stair_mode_client.call_async(request)
-        self._executor.spin_until_future_complete(future)
+        self._wait_for_future(future)
         response = future.result()
         if not response.success:
             self.get_logger().debug(
@@ -273,7 +281,7 @@ class SpotBasic(Node):
         request = SetLocomotion.Request()
         request.locomotion_mode = int(l_hint)
         future = self._locomotion_mode_client.call_async(request)
-        self._executor.spin_until_future_complete(future)
+        self._wait_for_future(future)
         response = future.result()
         if not response.success:
             self.get_logger().debug(f"Setting locomotion_mode to '{l_hint}' for {self.robot_name} response {response}")
@@ -290,7 +298,7 @@ class SpotBasic(Node):
         request = SetVelocity.Request()
         request.velocity = velocity_limit
         future = self._max_velocity_client.call_async(request)
-        self._executor.spin_until_future_complete(future)
+        self._wait_for_future(future)
         response = future.result()
         if not response.success:
             self.get_logger().debug(
@@ -309,7 +317,7 @@ class SpotBasic(Node):
         request = ClearBehaviorFault.Request()
         request.id = bid
         future = self._clear_behavior_fault_client.call_async(request)
-        self._executor.spin_until_future_complete(future)
+        self._wait_for_future(future)
         response = future.result()
         if not response.success:
             self.get_logger().debug(f"Clearing behavior fault {bid} for {self.robot_name} response {response}")
@@ -322,7 +330,7 @@ class SpotBasic(Node):
         request = ListGraph.Request()
         request.upload_filepath = upload_filepath
         future = self._list_graph_client.call_async(request)
-        self._executor.spin_until_future_complete(future)
+        self._wait_for_future(future)
         response = future.result()
         if not response.success:
             self.get_logger().debug(f"List graph {upload_filepath} for {self.robot_name} response {response}")
@@ -334,7 +342,7 @@ class SpotBasic(Node):
         request = ListWorldObjects.Request()
         request.request = p_request
         future = self._clear_behavior_fault_client.call_async(request)
-        self._executor.spin_until_future_complete(future)
+        self._wait_for_future(future)
         response = future.result()
         if not response.success:
             self.get_logger().debug(f"List world objects for {self.robot_name} response {response}")
