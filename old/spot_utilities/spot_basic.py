@@ -61,7 +61,7 @@ class SpotBasic(Node):
 
         self.declare_parameters(namespace='',
                                 parameters=[('robot_name', ''), ('disable_collisions', False), ('dry', False),
-                                            ('visualize_goals', False)])
+                                            ('rviz', False)])
         # Get the robot name
         self.robot_name = self.get_parameter('robot_name').get_parameter_value().string_value
         self._namespace = self.robot_name
