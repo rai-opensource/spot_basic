@@ -3,7 +3,7 @@ from enum import IntEnum
 import sys
 from threading import Event
 import time
-from typing import Callable, Optional
+from typing import Optional
 
 from geometry_msgs.msg import Twist
 import rclpy
@@ -14,7 +14,7 @@ from std_msgs.msg import ColorRGBA as Color
 from std_srvs.srv import SetBool, Trigger
 from tf2_ros import TransformException
 
-from bosdyn.api.spot.robot_command_pb2 import MobilityParams, ObstacleParams
+from bosdyn.api.spot import robot_command_pb2
 from bosdyn.client.frame_helpers import BODY_FRAME_NAME, VISION_FRAME_NAME
 from bosdyn.client.robot_command import RobotCommandBuilder
 
@@ -54,6 +54,10 @@ class SpotBasic(Node):
         SPEED_SELECT_AMBLE = 6  # Amble which comes to a stand when not commanded to move.
         JOG = 7  # Demo gait which moves diagonal leg pairs together with an aerial phase.
         HOP = 8  # Demo gait which hops while holding some feet in the air.
+
+    class BatteryChangeDirHint(IntEnum):
+        RIGHT = 1
+        LEFT = 2
 
     def __init__(self, node_name: Optional[str] = None):
         if node_name is None:
@@ -119,7 +123,8 @@ class SpotBasic(Node):
             return False
         return True
 
-    def _wait_for_future(self, future):
+    @staticmethod
+    def _wait_for_future(future: Future) -> None:
         event = Event()
 
         def done_callback(_):
@@ -351,13 +356,6 @@ class SpotBasic(Node):
     def command(self, goal: RobotCommand.Goal, timeout_sec=None) -> RobotCommand.Result:
         """ Runs the `RobotCommand` action
 
-        Args:
-            goal:
-            timeout_sec:
-
-        Returns:
-
-
         See https://github.com/bdaiinstitute/spot_ros2/blob/main/spot_msgs/action/RobotCommand.action
         """
         if goal is None:
@@ -369,14 +367,8 @@ class SpotBasic(Node):
         # TODO: What to return on a dry run? Just success?
         return None
 
-    def command_async(self, goal: RobotCommand.Goal, response_callback: Callable = None) -> Future:
+    def command_async(self, goal: RobotCommand.Goal) -> Future:
         """ Runs the `RobotCommand` action asynchronously
-
-        Args:
-            goal:
-            response_callback:
-
-        Returns:
 
         See https://github.com/bdaiinstitute/spot_ros2/blob/main/spot_msgs/action/RobotCommand.action
         """
@@ -385,21 +377,12 @@ class SpotBasic(Node):
             return None
         if not self._dry:
             goal_future = self._robot_command_action_client.send_goal_async(goal)
-            if response_callback:
-                goal_future.add_done_callback(response_callback)
             return goal_future
         # TODO: What to return on a dry run? Just success?
         return None
 
     def _draw_arrow(self, frame_id: str, ns: str, frame_t_arrow: SE2Pose | SE3Pose, color: Color) -> None:
-        """ TODO
-
-        Args:
-            frame_id:
-            ns:
-            frame_t_arrow:
-            color
-        """
+        """ TODO """
         marker = Marker()
         marker.header.stamp = self.get_clock().now().to_msg()
         marker.header.frame_id = frame_id
@@ -420,25 +403,38 @@ class SpotBasic(Node):
         conv.convert_proto_to_bosdyn_msgs_robot_command(proto, action_goal.command)
         return action_goal
 
+    def _get_battery_change_pose(self, dir_hint: BatteryChangeDirHint):
+        proto = RobotCommandBuilder.battery_change_pose_command(int(dir_hint))
+        return self._convert_proto_to_action_goal(proto)
+
+    def go_to_battery_change_pose(self,
+                                  dir_hint: BatteryChangeDirHint = BatteryChangeDirHint.RIGHT,
+                                  timeout_sec: Optional[float] = None):
+        """ Send command to go to the battery change pose asynchronously """
+        action_goal = self._get_battery_change_pose(dir_hint)
+        return self.command(action_goal, timeout_sec)
+
+    def go_to_battery_change_pose_async(self, dir_hint: BatteryChangeDirHint = BatteryChangeDirHint.RIGHT):
+        """ Send command to go to the battery change pose asynchronously """
+        action_goal = self._get_battery_change_pose(dir_hint)
+        return self.command_async(action_goal)
+
     def _get_walk_to_action_goal(self, base_frame_t_goal: SE2Pose, height: float, base_frame: str) -> RobotCommand.Goal:
         """ TODO
 
         Args:
-            base_frame_t_goal:
-            height:
-            base_frame:
-
-        Returns:
-
+            base_frame_t_goal: Transform from the base frame the goal
+            height: The height of the spot's body
+            base_frame: The name of the base frame
         """
         self.get_logger().info("Walking to goal...")
 
         # Mobility command
-        obstacles = ObstacleParams(disable_vision_body_obstacle_avoidance=self._disable_collisions,
-                                   disable_vision_foot_obstacle_avoidance=self._disable_collisions,
-                                   disable_vision_foot_constraint_avoidance=self._disable_collisions,
-                                   obstacle_avoidance_padding=.001)
-        mobility_params = MobilityParams(obstacle_params=obstacles)
+        obstacles = robot_command_pb2.ObstacleParams(disable_vision_body_obstacle_avoidance=self._disable_collisions,
+                                                     disable_vision_foot_obstacle_avoidance=self._disable_collisions,
+                                                     disable_vision_foot_constraint_avoidance=self._disable_collisions,
+                                                     obstacle_avoidance_padding=.001)
+        mobility_params = robot_command_pb2.MobilityParams(obstacle_params=obstacles)
 
         if base_frame == BODY_FRAME_NAME:
             try:
@@ -467,81 +463,72 @@ class SpotBasic(Node):
                 base_frame_t_goal: SE2Pose,
                 height: float = 0,
                 base_frame: str = VISION_FRAME_NAME,
-                timeout_sec: float = None) -> Optional[RobotCommand.Result]:
-        """ TODO
-        
-        Args:
-            goal_se2:
-            height:
-            base_frame:
-
-        Returns:
-
-        """
+                timeout_sec: Optional[float] = None) -> Optional[RobotCommand.Result]:
+        """ Send a command to walk to a goal synchronously """
         action_goal = self._get_walk_to_action_goal(base_frame_t_goal, height, base_frame)
         return self.command(action_goal, timeout_sec)
 
-    def walk_to_async(self, goal_se2, height: float = 0, base_frame: str = VISION_FRAME_NAME) -> Optional[Future]:
-        """ TODO
-
-        Args:
-            goal_se2:
-            height:
-            base_frame:
-
-        Returns:
-
-        """
-        action_goal = self._get_walk_to_action_goal(goal_se2, height, base_frame)
+    def walk_to_async(self,
+                      base_frame_t_goal,
+                      height: float = 0,
+                      base_frame: str = VISION_FRAME_NAME) -> Optional[Future]:
+        """ Send a command to walk to a goal asynchronously  """
+        action_goal = self._get_walk_to_action_goal(base_frame_t_goal, height, base_frame)
         return self.command_async(action_goal)
 
     def _get_arm_stow_action_goal(self):
+        """ Create the ROS msg to stow the arm """
         proto = RobotCommandBuilder.arm_stow_command()
         return self._convert_proto_to_action_goal(proto)
 
-    def stow_arm(self) -> Optional[RobotCommand.Result]:
-        """ TODO
-
-        Returns:
-
-        """
+    def stow_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommand.Result]:
+        """ Send a command to stow the arm synchronously """
         action_goal = self._get_arm_stow_action_goal()
-        return self.command(action_goal)
+        return self.command(action_goal, timeout_sec)
 
     def stow_arm_async(self) -> Optional[RobotCommand.Result]:
-        """ TODO
-
-        Returns:
-
-        """
+        """ Send a command to stow the arm asynchronously """
         action_goal = self._get_arm_stow_action_goal()
         return self.command_async(action_goal)
 
     def _get_arm_ready_action_goal(self):
+        """ Create the ROS msg to move the arm to the ready position"""
         proto = RobotCommandBuilder.arm_ready_command()
         return self._convert_proto_to_action_goal(proto)
 
-    def ready_arm(self):
+    def ready_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommand.Result]:
+        """ Send a command to move the arm to the ready position synchronously """
         action_goal = self._get_arm_ready_action_goal()
-        return self.command(action_goal)
+        return self.command(action_goal, timeout_sec)
+
+    # Alias
+    unstow_arm = ready_arm
 
     def ready_arm_async(self):
+        """ Send a command to move the arm to the ready position asynchronously"""
         action_goal = self._get_arm_ready_action_goal()
         return self.command_async(action_goal)
 
+    # Alias
+    unstow_arm_async = ready_arm_async
+
     def _get_arm_carry_action_goal(self):
+        """ Create the ROS msg to move the arm to the carry position """
         proto = RobotCommandBuilder.arm_carry_command()
         return self._convert_proto_to_action_goal(proto)
 
     def carry_arm(self):
+        """ Move the arm to the carry position synchronously"""
         action_goal = self._get_arm_carry_action_goal()
         return self.command(action_goal)
 
     def carry_arm_async(self):
+        """ Move the arm to the carry position asynchronously"""
         action_goal = self._get_arm_carry_action_goal()
         return self.command_async(action_goal)
 
-    def _get_arm_pose_action_goal(self, goal: SE3Pose, base_frame: str, time_sec: float) -> RobotCommand.Goal:
+    def _get_arm_pose_action_goal(self, goal: SE3Pose, frame_name: str, duration_sec: float) -> RobotCommand.Goal:
+        """ Create the ROS Msg for moving the end effector to specific pose """
         proto = RobotCommandBuilder.arm_pose_command(x=goal.x,
                                                      y=goal.y,
                                                      z=goal.z,
@@ -549,18 +536,58 @@ class SpotBasic(Node):
                                                      qx=goal.rotation.x,
                                                      qy=goal.rotation.y,
                                                      qz=goal.rotation.z,
-                                                     frame_name=base_frame,
-                                                     seconds=time_sec)
+                                                     frame_name=frame_name,
+                                                     seconds=duration_sec)
 
         return self._convert_proto_to_action_goal(proto)
 
-    def move_end_effector_to(self, goal: SE3Pose, base_frame: str, time_sec: float):
-        action_goal = self._get_arm_pose_action_goal(goal, base_frame, time_sec)
-        return self.command(action_goal)
+    def move_end_effector_cartesian(self,
+                                    goal: SE3Pose,
+                                    frame_name: str = VISION_FRAME_NAME,
+                                    move_duration_sec: float = 5.0,
+                                    timeout_sec: Optional[float] = None):
+        """ Send command to move the end effort to a specific pose synchronously
 
-    def move_end_effector_to_async(self, goal: SE3Pose, base_frame: str, time_sec: float):
-        action_goal = self._get_arm_pose_action_goal(goal, base_frame, time_sec)
+        Args:
+            goal: A pose for the end effector to move to relative to the base frame
+            frame_name: Name of the base frame
+            move_duration_sec: The duration of the move
+            timeout_sec: The timeout on the command
+
+        See:
+        https://github.com/boston-dynamics/spot-sdk/blob/master/python/bosdyn-client/src/bosdyn/client/robot_command.py#L1224
+        """
+        action_goal = self._get_arm_pose_action_goal(goal, frame_name, move_duration_sec)
+        return self.command(action_goal, timeout_sec)
+
+    def move_end_effector_cartesian_async(self,
+                                          goal: SE3Pose,
+                                          frame_name: str = VISION_FRAME_NAME,
+                                          move_duration_sec: float = 5.0):
+        """ Send command to move the end effort to a specific pose asynchronously
+
+        Args:
+            goal: A pose for the end effector to move to relative to the base frame
+            frame_name: Name of the base frame
+            move_duration_sec: The duration of the move
+
+        See:
+        https://github.com/boston-dynamics/spot-sdk/blob/master/python/bosdyn-client/src/bosdyn/client/robot_command.py#L1224
+        """
+        action_goal = self._get_arm_pose_action_goal(goal, frame_name, move_duration_sec)
         return self.command_async(action_goal)
+
+    def move_end_effector_force(self):
+        pass
+
+    def move_end_effector_force_async(self):
+        pass
+
+    def move_end_effector_impedance(self):
+        pass
+
+    def move_end_effector_impedance_async(self):
+        pass
 
     def claw_gripper_open(self):
         action_goal = self._convert_proto_to_action_goal(RobotCommandBuilder.claw_gripper_open_command())
@@ -582,6 +609,7 @@ class SpotBasic(Node):
         """ TODO """
         self.get_logger().info("Shutdown tf listener.")
         self._tf.shutdown()
+        self._robot_command_action_client.destroy()
         # TODO: Is there anything else that we should shutdown?
 
 
