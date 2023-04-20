@@ -2,7 +2,7 @@
 from enum import IntEnum
 import sys
 from threading import Event, Thread
-from typing import Callable, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from geometry_msgs.msg import Twist
 import rclpy
@@ -19,6 +19,7 @@ from bosdyn.client.frame_helpers import BODY_FRAME_NAME, HAND_FRAME_NAME, VISION
 from bosdyn.client.robot_command import RobotCommandBuilder
 
 from bosdyn_msgs.msg import ListWorldObjectRequest, ListWorldObjectResponse, RobotCommandFeedback
+import py_trees
 import spot_driver.conversions as conv
 from spot_msgs.action import RobotCommand
 from spot_msgs.srv import ClearBehaviorFault, ListGraph, ListWorldObjects, SetLocomotion, SetVelocity
@@ -46,6 +47,7 @@ class RobotCommandHandle(object):
         self.__get_result_future: Optional[Future] = None
         self.__feedback_callback_internal: Optional[Callable[[RobotCommandFeedback], None]] = None
         self.__result_callback_internal: Optional[Callable[[RobotCommandFeedback], None]] = None
+        self.__on_failure_callback: Optional[Callable] = None
         self.result: Optional[RobotCommandFeedback] = None
 
         self.__logger = RcutilsLogger(name=f"{self.__robot_name}.{self.__command_name}")
@@ -65,21 +67,26 @@ class RobotCommandHandle(object):
         """ Sets the callback for processing the resulting feedback from executing a RobotCommand """
         self.__result_callback_internal = result_callback
 
+    def set_on_failure_callback(self, on_failure_callback: Callable) -> None:
+        """  """
+        self.__on_failure_callback = on_failure_callback
+
     def __goal_response_callback(self, future: Future) -> None:
         """ Callback that handles receiving a response from the ActionServer
 
          Note: This does not handle receiving a result directly
          """
         if future.result() is None:
-            if self.__logger is not None:
-                self.__logger.debug(f"RobotCommand request failed: {future.exception():!r}")
+            self.__logger.error(f"RobotCommand request failed: {future.exception():!r}")
+            self.__failure()
             return
         self.__goal_handle = future.result()
         if not self.__goal_handle.accepted:
-            self.__logger.debug("RobotCommand rejected")
+            self.__logger.error("RobotCommand rejected")
+            self.__failure()
             return
 
-        self.__logger.debug("RobotCommand accepted")
+        self.__logger.info("RobotCommand accepted")
 
         self.__get_result_future = self.__goal_handle.get_result_async()
         self.__get_result_future.add_done_callback(self.__get_result_callback)
@@ -97,6 +104,8 @@ class RobotCommandHandle(object):
         result = future.result().result
         if not result.success:
             self.__logger.error(f"RobotCommand resulted in failure. Msg: {result.message}")
+            self.__failure()
+            return
 
         self.result = result.result
         if self.__result_callback_internal is not None:
@@ -119,6 +128,38 @@ class RobotCommandHandle(object):
         else:
             self.__logger.debug("RobotCommand failed to canceled")
         # TODO: cleanup
+
+    def __failure(self) -> None:
+        if self.__on_failure_callback is not None:
+            self.__on_failure_callback()
+
+
+class RobotCommandBehavior(py_trees.behaviour.Behaviour):
+
+    def __init__(self, name: str):
+        super().__init__(name)
+        self._spot: Optional[SpotBasic] = None
+        self._action_handle: Optional[RobotCommandHandle] = None
+        self._status: py_trees.common.Status = py_trees.common.Status.INVALID
+
+    def setup(self, **kwargs: Dict[str, Any]) -> None:
+        self._spot = kwargs.get("spot")
+
+    def update(self) -> py_trees.common.Status:
+        return self._status
+
+    def terminate(self, new_status: py_trees.common.Status) -> None:
+        if self._status == py_trees.common.Status.RUNNING and new_status == py_trees.common.Status.INVALID:
+            self._action_handle.cancel()
+
+    # pylint: disable=unused-argument
+    def _get_result_callback(self, feedback: RobotCommandFeedback) -> None:
+        self._status = py_trees.common.Status.SUCCESS
+
+    # pylint: enable=unused-argument
+
+    def _on_failure_callback(self) -> None:
+        self._status = py_trees.common.Status.FAILURE
 
 
 class SpotBasic(object):
@@ -501,17 +542,17 @@ class SpotBasic(object):
 
         Note: This is a blocking call
         """
-        self.__node.get_logger().debug("Sending RobotCommand [{self._robot_name}.{command_name}]")
+        self.__node.get_logger().info(f"Sending RobotCommand [{self.__robot_name}.{command_name}]")
         future = self.__robot_command_action_client.send_goal_async(goal)
         self.__wait_for_future(future, timeout_sec=timeout_sec)
         goal_handle = future.result()
         if not goal_handle.accepted:
             self.__node.get_logger().error(f"RobotCommand [{self.__robot_name}.{command_name}] was not accepted")
             return None
-        self.__node.get_logger().error(f"RobotCommand [{self.__robot_name}.{command_name}] accepted")
+        self.__node.get_logger().info(f"RobotCommand [{self.__robot_name}.{command_name}] accepted")
         future = goal_handle.get_result_async()
         self.__wait_for_future(future, timeout_sec=timeout_sec)
-        self.__node.get_logger().error(f"Received response for RobotCommand [{self.__robot_name}.{command_name}]")
+        self.__node.get_logger().info(f"Received response for RobotCommand [{self.__robot_name}.{command_name}]")
         return future.result().result
 
     def command(self, command_name: str, goal: RobotCommand.Goal, timeout_sec=None) -> Optional[RobotCommandFeedback]:
@@ -538,13 +579,13 @@ class SpotBasic(object):
         # TODO: What to return on a dry run? Just success?
         return None
 
-    def command_async(
-            self,
-            command_name: str,
-            goal: RobotCommand.Goal,
-            *,
-            result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None) -> Optional[RobotCommandHandle]:
+    def command_async(self,
+                      command_name: str,
+                      goal: RobotCommand.Goal,
+                      *,
+                      result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+                      feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+                      on_failure_callback: Optional[Callable[[None], None]] = None) -> Optional[RobotCommandHandle]:
         """ Runs the `RobotCommand` action asynchronously
 
         Args:
@@ -552,9 +593,10 @@ class SpotBasic(object):
             goal: The Action Goal sent to the action server
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
-            TODO
+            A handle for the asynchronous lifecycle of the action
 
         See https://github.com/bdaiinstitute/spot_ros2/blob/main/spot_msgs/action/RobotCommand.action
         """
@@ -573,6 +615,9 @@ class SpotBasic(object):
                 send_goal_future = self.__robot_command_action_client.send_goal_async(
                     goal, feedback_callback=handle.get_feedback_callback)
             handle.set_send_goal_future(send_goal_future)
+
+            if on_failure_callback is not None:
+                handle.set_on_failure_callback(on_failure_callback)
 
             return handle
         # TODO: What to return on a dry run? Just success?
@@ -626,13 +671,15 @@ class SpotBasic(object):
             dir_hint: BatteryChangeDirHint = BatteryChangeDirHint.RIGHT,
             *,
             result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None) -> Optional[RobotCommandHandle]:
+            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+            on_failure_callback: Optional[Callable[[None], None]] = None) -> Optional[RobotCommandHandle]:
         """ Send command to go to the battery change pose asynchronously
 
         Args:
             dir_hint: A hint for the direction to roll
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
             TODO
@@ -641,7 +688,8 @@ class SpotBasic(object):
         return self.command_async("go_to_battery_change_pose",
                                   action_goal,
                                   result_callback=result_callback,
-                                  feedback_callback=feedback_callback)
+                                  feedback_callback=feedback_callback,
+                                  on_failure_callback=on_failure_callback)
 
     def __get_walk_to_action_goal(self, vision_t_goal: SE2Pose, height: float) -> RobotCommand.Goal:
         """ TODO
@@ -691,13 +739,13 @@ class SpotBasic(object):
         action_goal = self.__get_walk_to_action_goal(vision_t_goal, height)
         return self.command("walk_to", action_goal, timeout_sec)
 
-    def walk_to_async(
-            self,
-            vision_t_goal: SE2Pose,
-            height: float = 0,
-            *,
-            result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None) -> Optional[RobotCommandHandle]:
+    def walk_to_async(self,
+                      vision_t_goal: SE2Pose,
+                      height: float = 0,
+                      *,
+                      result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+                      feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+                      on_failure_callback: Optional[Callable[[None], None]] = None) -> Optional[RobotCommandHandle]:
         """ Send the command to walk to a specific SE2 pose
 
         Args:
@@ -705,6 +753,7 @@ class SpotBasic(object):
             height: The height of the body
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
             TODO
@@ -713,7 +762,8 @@ class SpotBasic(object):
         return self.command_async("walk_to",
                                   action_goal,
                                   result_callback=result_callback,
-                                  feedback_callback=feedback_callback)
+                                  feedback_callback=feedback_callback,
+                                  on_failure_callback=on_failure_callback)
 
     def __get_arm_stow_action_goal(self):
         """ Create the ROS msg to stow the arm """
@@ -733,16 +783,17 @@ class SpotBasic(object):
         action_goal = self.__get_arm_stow_action_goal()
         return self.command("stow_arm", action_goal, timeout_sec)
 
-    def stow_arm_async(
-            self,
-            *,
-            result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None) -> Optional[RobotCommandHandle]:
+    def stow_arm_async(self,
+                       *,
+                       result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+                       feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+                       on_failure_callback: Optional[Callable[[None], None]] = None) -> Optional[RobotCommandHandle]:
         """ Send a command to stow the arm asynchronously
 
         Args:
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
             TODO
@@ -751,7 +802,8 @@ class SpotBasic(object):
         return self.command_async("stow_arm",
                                   action_goal,
                                   result_callback=result_callback,
-                                  feedback_callback=feedback_callback)
+                                  feedback_callback=feedback_callback,
+                                  on_failure_callback=on_failure_callback)
 
     def __get_arm_ready_action_goal(self):
         """ Create the ROS msg to move the arm to the ready position"""
@@ -774,16 +826,17 @@ class SpotBasic(object):
     # Alias
     unstow_arm = ready_arm
 
-    def ready_arm_async(
-            self,
-            *,
-            result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None) -> Optional[RobotCommandHandle]:
+    def ready_arm_async(self,
+                        *,
+                        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+                        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+                        on_failure_callback: Optional[Callable[[None], None]] = None) -> Optional[RobotCommandHandle]:
         """ Send a command to move the arm to the ready position asynchronously
 
         Args:
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
             TODO
@@ -792,7 +845,8 @@ class SpotBasic(object):
         return self.command_async("ready_arm",
                                   action_goal,
                                   result_callback=result_callback,
-                                  feedback_callback=feedback_callback)
+                                  feedback_callback=feedback_callback,
+                                  on_failure_callback=on_failure_callback)
 
     # Alias
     unstow_arm_async = ready_arm_async
@@ -815,16 +869,17 @@ class SpotBasic(object):
         action_goal = self.__get_arm_carry_action_goal()
         return self.command("carry_arm", action_goal, timeout_sec)
 
-    def carry_arm_async(
-            self,
-            *,
-            result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None) -> Optional[RobotCommandHandle]:
+    def carry_arm_async(self,
+                        *,
+                        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+                        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+                        on_failure_callback: Optional[Callable[[None], None]] = None) -> Optional[RobotCommandHandle]:
         """ Move the arm to the carry position asynchronously
 
         Args:
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
             TODO
@@ -833,7 +888,8 @@ class SpotBasic(object):
         return self.command_async("carry_arm",
                                   action_goal,
                                   result_callback=result_callback,
-                                  feedback_callback=feedback_callback)
+                                  feedback_callback=feedback_callback,
+                                  on_failure_callback=on_failure_callback)
 
     def __get_arm_pose_action_goal(self, vision_t_goal: SE3Pose, move_duration_sec: float) -> RobotCommand.Goal:
         """ Create the ROS Msg for moving the end effector to specific pose """
@@ -876,7 +932,8 @@ class SpotBasic(object):
             move_duration_sec: float = 5.0,
             *,
             result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None) -> Optional[RobotCommandHandle]:
+            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+            on_failure_callback: Optional[Callable[[None], None]] = None) -> Optional[RobotCommandHandle]:
         """ Send command to move the end effector to a specific pose asynchronously
 
         Args:
@@ -884,6 +941,7 @@ class SpotBasic(object):
             move_duration_sec: The duration of the move
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
             TODO
@@ -895,7 +953,8 @@ class SpotBasic(object):
         return self.command_async("move_end_effector_cartesian",
                                   action_goal,
                                   result_callback=result_callback,
-                                  feedback_callback=feedback_callback)
+                                  feedback_callback=feedback_callback,
+                                  on_failure_callback=on_failure_callback)
 
     def move_end_effector_force(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
         """
@@ -913,12 +972,14 @@ class SpotBasic(object):
             self,
             *,
             result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None) -> Optional[RobotCommandHandle]:
+            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+            on_failure_callback: Optional[Callable[[None], None]] = None) -> Optional[RobotCommandHandle]:
         """ TODO
 
         Args:
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
             TODO
@@ -940,12 +1001,14 @@ class SpotBasic(object):
             self,
             *,
             result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None) -> Optional[RobotCommandHandle]:
+            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+            on_failure_callback: Optional[Callable[[None], None]] = None) -> Optional[RobotCommandHandle]:
         """ TODO
 
         Args:
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
             TODO
@@ -969,12 +1032,14 @@ class SpotBasic(object):
             self,
             *,
             result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None) -> Optional[RobotCommandHandle]:
+            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+            on_failure_callback: Optional[Callable[[None], None]] = None) -> Optional[RobotCommandHandle]:
         """ Send a command to open the gripper asynchronously
 
         Args:
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
             TODO
@@ -983,7 +1048,8 @@ class SpotBasic(object):
         return self.command_async("claw_gripper_open",
                                   action_goal,
                                   result_callback=result_callback,
-                                  feedback_callback=feedback_callback)
+                                  feedback_callback=feedback_callback,
+                                  on_failure_callback=on_failure_callback)
 
     def claw_gripper_close(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
         """ Send a command to close the gripper
@@ -1002,12 +1068,14 @@ class SpotBasic(object):
             self,
             *,
             result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None) -> Optional[RobotCommandHandle]:
+            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+            on_failure_callback: Optional[Callable[[None], None]] = None) -> Optional[RobotCommandHandle]:
         """ Send a command to close the gripper asynchronously
 
         Args:
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
             TODO
@@ -1016,7 +1084,8 @@ class SpotBasic(object):
         return self.command_async("claw_gripper_close",
                                   action_goal,
                                   result_callback=result_callback,
-                                  feedback_callback=feedback_callback)
+                                  feedback_callback=feedback_callback,
+                                  on_failure_callback=on_failure_callback)
 
     def shutdown(self) -> None:
         """ Shutdown all the internal components """
