@@ -398,7 +398,16 @@ class SpotBasic(object):
             pass
 
     @staticmethod
-    def __wait_for_future(future: Future, timeout_sec: Optional[float] = None) -> None:
+    def __wait_for_future(future: Future, timeout_sec: Optional[float] = None) -> bool:
+        """ Blocks while waiting for a future to become done
+
+        Args:
+            future: The future to be waited on
+            timeout_sec: An optional timeout for who long to wait
+
+        Returns:
+            True if successful, False if the timeout was triggered
+        """
         event = Event()
 
         def done_callback(_):
@@ -407,9 +416,9 @@ class SpotBasic(object):
 
         future.add_done_callback(done_callback)
         if timeout_sec is None:
-            event.wait()
+            return event.wait()
         else:
-            event.wait(timeout_sec)
+            return event.wait(timeout_sec)
 
     def initialize_robot(self) -> bool:
         """Returns true/false based on success of claiming and powering up Spot."""
@@ -436,7 +445,8 @@ class SpotBasic(object):
             self.__node.get_logger().error(f"No trigger command {command_name}")
             return False
 
-        self.__wait_for_future(future)
+        if not self.__wait_for_future(future):
+            return False
 
         response = future.result()
         if not response.success:
@@ -558,7 +568,8 @@ class SpotBasic(object):
         request = SetBool.Request()
         request.data = value
         future = self.__stair_mode_client.call_async(request)
-        self.__wait_for_future(future)
+        if not self.__wait_for_future(future):
+            return False
         response = future.result()
         if not response.success:
             self.__node.get_logger().debug(
@@ -576,7 +587,8 @@ class SpotBasic(object):
         request = SetLocomotion.Request()
         request.locomotion_mode = int(l_hint)
         future = self.__locomotion_mode_client.call_async(request)
-        self.__wait_for_future(future)
+        if not self.__wait_for_future(future):
+            return False
         response = future.result()
         if not response.success:
             self.__node.get_logger().debug(
@@ -594,7 +606,8 @@ class SpotBasic(object):
         request = SetVelocity.Request()
         request.velocity = velocity_limit
         future = self.__max_velocity_client.call_async(request)
-        self.__wait_for_future(future)
+        if not self.__wait_for_future(future):
+            return False
         response = future.result()
         if not response.success:
             self.__node.get_logger().debug(
@@ -613,7 +626,8 @@ class SpotBasic(object):
         request = ClearBehaviorFault.Request()
         request.id = bid
         future = self.__clear_behavior_fault_client.call_async(request)
-        self.__wait_for_future(future)
+        if not self.__wait_for_future(future):
+            return False
         response = future.result()
         if not response.success:
             self.__node.get_logger().debug(
@@ -627,7 +641,8 @@ class SpotBasic(object):
         request = ListGraph.Request()
         request.upload_filepath = upload_filepath
         future = self.__list_graph_client.call_async(request)
-        self.__wait_for_future(future)
+        if not self.__wait_for_future(future):
+            return []
         response = future.result()
         return response.waypoint_ids
 
@@ -640,7 +655,8 @@ class SpotBasic(object):
         request = ListWorldObjects.Request()
         request.request = p_request
         future = self.__list_world_objects_client.call_async(request)
-        self.__wait_for_future(future)
+        if not self.__wait_for_future(future):
+            return None
         response = future.result()
         return response.response
 
@@ -662,15 +678,21 @@ class SpotBasic(object):
         Note: This is a blocking call
         """
         self.__node.get_logger().info(f"Sending RobotCommand [{self.__robot_name}.{command_name}]")
+
         future = self.__robot_command_action_client.send_goal_async(goal)
-        self.__wait_for_future(future, timeout_sec=timeout_sec)
+        if not self.__wait_for_future(future, timeout_sec=timeout_sec):
+            return None
+
         goal_handle = future.result()
         if not goal_handle.accepted:
             self.__node.get_logger().error(f"RobotCommand [{self.__robot_name}.{command_name}] was not accepted")
             return None
+
         self.__node.get_logger().info(f"RobotCommand [{self.__robot_name}.{command_name}] accepted")
         future = goal_handle.get_result_async()
-        self.__wait_for_future(future, timeout_sec=timeout_sec)
+        if not self.__wait_for_future(future, timeout_sec=timeout_sec):
+            return None
+
         self.__node.get_logger().info(f"Received response for RobotCommand [{self.__robot_name}.{command_name}]")
         return future.result()
 
