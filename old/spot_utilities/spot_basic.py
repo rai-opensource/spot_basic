@@ -1,8 +1,8 @@
 #  Copyright [2023] Boston Dynamics AI Institute, Inc.
-from enum import IntEnum
+from enum import Enum, IntEnum
 import sys
 from threading import Event, Thread
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from geometry_msgs.msg import Twist
 import rclpy
@@ -14,9 +14,11 @@ from rclpy.task import Future
 from std_msgs.msg import ColorRGBA as Color
 from std_srvs.srv import SetBool, Trigger
 
-from bosdyn.api.spot import robot_command_pb2
-from bosdyn.client.frame_helpers import BODY_FRAME_NAME, HAND_FRAME_NAME, VISION_FRAME_NAME
+from bosdyn.api import geometry_pb2, robot_command_pb2
+from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
+from bosdyn.client.frame_helpers import BODY_FRAME_NAME, HAND_FRAME_NAME, ODOM_FRAME_NAME, VISION_FRAME_NAME
 from bosdyn.client.robot_command import RobotCommandBuilder
+from bosdyn.util import seconds_to_duration
 
 from bosdyn_msgs.msg import ListWorldObjectRequest, ListWorldObjectResponse, RobotCommandFeedback
 import py_trees
@@ -26,7 +28,100 @@ from spot_msgs.srv import ClearBehaviorFault, ListGraph, ListWorldObjects, SetLo
 from visualization_msgs.msg import Marker
 
 from bdai.utilities.math_helpers import SE2Pose, SE3Pose
-from bdai_ros.utilities.manual_conversions import to_ros_pose
+from bdai_ros.utilities.manual_conversions import se3pose_to_proto, to_ros_pose
+
+
+class RobotCommandHandle(object):
+    """ Handle for an asynchronous RobotCommand sent via an action client """
+
+    def __init__(self, robot_name: str, command_name: str):
+        """ Constructor
+
+        Arg:
+            robot_name: Name of the robot
+            command_name: representative name of the command used for logging
+        """
+        self.__robot_name = robot_name
+        self.__command_name = command_name
+
+        self.__send_goal_future: Optional[Future] = None
+        self.__goal_handle = None
+        self.__get_result_future: Optional[Future] = None
+        self.__feedback_callback_internal: Optional[Callable[[RobotCommandFeedback], None]] = None
+        self.__result_callback_internal: Optional[Callable[[RobotCommandFeedback], None]] = None
+        self.result: Optional[RobotCommandFeedback] = None
+
+        self.__logger = RcutilsLogger(name=f"{self.__robot_name}.{self.__command_name}")
+
+    def set_send_goal_future(self, send_goal_future: Future) -> None:
+        """ Sets the future received from sending the Action.Goal and sets up the callback for when a response is
+            received
+        """
+        self.__send_goal_future = send_goal_future
+        self.__send_goal_future.add_done_callback(self.__goal_response_callback)
+
+    def set_feedback_callback(self, feedback_callback: Callable[[RobotCommandFeedback], None]) -> None:
+        """ Sets the callback used to process feedback received while a RobotCommand is being executed """
+        self.__feedback_callback_internal = feedback_callback
+
+    def set_result_callback(self, result_callback: Callable[[RobotCommandFeedback], None]) -> None:
+        """ Sets the callback for processing the resulting feedback from executing a RobotCommand """
+        self.__result_callback_internal = result_callback
+
+    def __goal_response_callback(self, future: Future) -> None:
+        """ Callback that handles receiving a response from the ActionServer
+
+         Note: This does not handle receiving a result directly
+         """
+        if future.result() is None:
+            if self.__logger is not None:
+                self.__logger.debug(f"RobotCommand request failed: {future.exception():!r}")
+            return
+        self.__goal_handle = future.result()
+        if not self.__goal_handle.accepted:
+            self.__logger.debug("RobotCommand rejected")
+            return
+
+        self.__logger.debug("RobotCommand accepted")
+
+        self.__get_result_future = self.__goal_handle.get_result_async()
+        self.__get_result_future.add_done_callback(self.__get_result_callback)
+
+    def get_feedback_callback(self, feedback: RobotCommand.Feedback) -> None:
+        """ Public feedback callback given to the ActionClient
+
+        Currently just pulls the feedback from the future and passes it to the user provided callback
+        """
+        if self.__feedback_callback_internal is not None:
+            self.__feedback_callback_internal(feedback.feedback)
+
+    def __get_result_callback(self, future: Future) -> None:
+        """ Callback for pulling the resulting feedback out of the future and passing it to a user provided callback """
+        result = future.result().result
+        if not result.success:
+            self.__logger.error(f"RobotCommand resulted in failure. Msg: {result.message}")
+
+        self.result = result.result
+        if self.__result_callback_internal is not None:
+            self.__result_callback_internal(self.result)
+        # TODO: cleanup
+
+    def cancel(self) -> None:
+        """ Send the desire to cancel a command """
+        self.__logger.debug("Canceling RobotCommand")
+
+        if self.__goal_handle is not None:
+            future = self.__goal_handle.cancel_goal_async()
+            future.add_done_callback(self.cancel_response_callback)
+
+    def cancel_response_callback(self, future: Future) -> None:
+        """ Callback for handling the response to attempting to cancel a command """
+        cancel_response = future.result()
+        if len(cancel_response.goals_canceling) > 0:
+            self.__logger.debug("RobotCommand successfully canceled")
+        else:
+            self.__logger.debug("RobotCommand failed to canceled")
+        # TODO: cleanup
 
 
 class RobotCommandHandle(object):
@@ -163,42 +258,66 @@ class RobotCommandBehavior(py_trees.behaviour.Behaviour):
 
 
 class SpotBasic(object):
-    """ Base ROS2 Node that provides interfaces to calling various commands """
+    """Base ROS2 Node that provides interfaces to calling various commands"""
 
     TRIGGER_SERVICES = [
-        "claim", "release", "stop", "self_right", "sit", "stand", "power_on", "power_off", "estop/hard", "estop/gentle",
-        "estop/release"
+        "claim",
+        "release",
+        "stop",
+        "self_right",
+        "sit",
+        "stand",
+        "power_on",
+        "power_off",
+        "estop/hard",
+        "estop/gentle",
+        "estop/release",
     ]
 
     class LocomotionHint(IntEnum):
-        """ Enumeration of the locomotion hints
+        """Enumeration of the locomotion hints
 
         See
         https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html?highlight=mobilityparams#locomotionhint
         Note: Comments below for each enumerator come directly from the above link
         """
+
         UNKNOWN = 0  # Listed for completeness, but the docs say do not use
         AUTO = 1  # No hint, robot chooses an appropriate gait (typically trot.)
         TROT = 2  # Most robust gait which moves diagonal legs together.
         SPEED_SELECT_TROT = 3  # Trot which comes to a stand when not commanded to move.
         CRAWL = 4  # Slow and steady gait which moves only one foot at a time.
-        SPEED_SELECT_CRAWL = 10  # Crawl which comes to a stand when not commanded to move.
+        SPEED_SELECT_CRAWL = (
+            10  # Crawl which comes to a stand when not commanded to move.
+        )
         AMBLE = 5  # Four beat gait where one foot touches down at a time.
-        SPEED_SELECT_AMBLE = 6  # Amble which comes to a stand when not commanded to move.
-        JOG = 7  # Demo gait which moves diagonal leg pairs together with an aerial phase.
+        SPEED_SELECT_AMBLE = (
+            6  # Amble which comes to a stand when not commanded to move.
+        )
+        JOG = (
+            7  # Demo gait which moves diagonal leg pairs together with an aerial phase.
+        )
         HOP = 8  # Demo gait which hops while holding some feet in the air.
 
     class BatteryChangeDirHint(IntEnum):
         RIGHT = 1
         LEFT = 2
 
-    def __init__(self,
-                 robot_name: str,
-                 parent_node_name: str,
-                 *,
-                 disable_collisions: bool = False,
-                 dry: bool = False,
-                 rviz: bool = False):
+    class FrameHint(Enum):
+        BODY = BODY_FRAME_NAME
+        VISION = VISION_FRAME_NAME
+        ODOM = ODOM_FRAME_NAME
+        HAND = HAND_FRAME_NAME
+
+    def __init__(
+        self,
+        robot_name: str,
+        parent_node_name: str,
+        *,
+        disable_collisions: bool = False,
+        dry: bool = False,
+        rviz: bool = False,
+    ):
         """
         Args:
             robot_name: name of the robot
@@ -293,7 +412,7 @@ class SpotBasic(object):
             event.wait(timeout_sec)
 
     def initialize_robot(self) -> bool:
-        """ Returns true/false based on success of claiming and powering up Spot. """
+        """Returns true/false based on success of claiming and powering up Spot."""
         # Claim robot.
         if not self.claim():
             return False
@@ -327,7 +446,7 @@ class SpotBasic(object):
         return True
 
     def claim(self) -> bool:
-        """ Triggers the 'claim' service on the SpotDriver
+        """Triggers the 'claim' service on the SpotDriver
 
         Returns:
             True if the command succeeded, False otherwise
@@ -335,7 +454,7 @@ class SpotBasic(object):
         return self.trigger_service("claim")
 
     def release(self) -> bool:
-        """ Triggers the 'release' service on the SpotDriver
+        """Triggers the 'release' service on the SpotDriver
 
         Returns:
             True if the command succeeded, False otherwise
@@ -343,7 +462,7 @@ class SpotBasic(object):
         return self.trigger_service("release")
 
     def stop(self) -> bool:
-        """ Triggers the 'stop' service on the SpotDriver
+        """Triggers the 'stop' service on the SpotDriver
 
         Returns:
             True if the command succeeded, False otherwise
@@ -351,7 +470,7 @@ class SpotBasic(object):
         return self.trigger_service("stop")
 
     def self_right(self) -> bool:
-        """ Triggers the 'self_right' service on the SpotDriver
+        """Triggers the 'self_right' service on the SpotDriver
 
         Returns:
             True if the command succeeded, False otherwise
@@ -359,7 +478,7 @@ class SpotBasic(object):
         return self.trigger_service("self_right")
 
     def sit(self) -> bool:
-        """ Triggers the 'sit' service on the SpotDriver
+        """Triggers the 'sit' service on the SpotDriver
 
         Returns:
             True if the command succeeded, False otherwise
@@ -367,7 +486,7 @@ class SpotBasic(object):
         return self.trigger_service("sit")
 
     def stand(self) -> bool:
-        """ Triggers the 'stand' service on the SpotDriver
+        """Triggers the 'stand' service on the SpotDriver
 
         Returns:
             True if the command succeeded, False otherwise
@@ -375,7 +494,7 @@ class SpotBasic(object):
         return self.trigger_service("stand")
 
     def rollover(self) -> bool:
-        """ Triggers the 'rollover' service on the SpotDriver
+        """Triggers the 'rollover' service on the SpotDriver
 
         Returns:
             True if the command succeeded, False otherwise
@@ -383,7 +502,7 @@ class SpotBasic(object):
         return self.trigger_service("rollover")
 
     def power_on(self) -> bool:
-        """ Triggers the 'power_on' service on the SpotDriver
+        """Triggers the 'power_on' service on the SpotDriver
 
         Returns:
             True if the command succeeded, False otherwise
@@ -394,7 +513,7 @@ class SpotBasic(object):
     power_motors_on = power_on
 
     def power_off(self) -> bool:
-        """ Triggers the 'power_off' service on the SpotDriver
+        """Triggers the 'power_off' service on the SpotDriver
 
         Returns:
             True if the command succeeded, False otherwise
@@ -405,7 +524,7 @@ class SpotBasic(object):
     power_motors_off = power_off
 
     def estop_hard(self) -> bool:
-        """ Triggers the 'estop/hard' service on the SpotDriver. The robot will immediately cut power to the motors
+        """Triggers the 'estop/hard' service on the SpotDriver. The robot will immediately cut power to the motors
 
         Returns:
             True if the command succeeded, False otherwise
@@ -413,7 +532,7 @@ class SpotBasic(object):
         return self.trigger_service("estop/hard")
 
     def estop_gentle(self) -> bool:
-        """ Triggers the 'estop/gentle' service on the SpotDriver. The robot will try to settle on the ground before
+        """Triggers the 'estop/gentle' service on the SpotDriver. The robot will try to settle on the ground before
                 cutting power to the motors.
 
         Returns:
@@ -422,7 +541,7 @@ class SpotBasic(object):
         return self.trigger_service("estop/hard")
 
     def estop_release(self) -> bool:
-        """ Triggers the 'estop/release' service on the SpotDriver
+        """Triggers the 'estop/release' service on the SpotDriver
 
         Returns:
             True if the command succeeded, False otherwise
@@ -466,7 +585,7 @@ class SpotBasic(object):
         return True
 
     def set_max_velocity(self, velocity_limit: Twist) -> SetVelocity.Response:
-        """ Set the maximum velocity on the SpotDriver
+        """Set the maximum velocity on the SpotDriver
 
         Returns:
             True if the command succeeded, False otherwise
@@ -484,7 +603,7 @@ class SpotBasic(object):
         return True
 
     def clear_behavior_fault(self, bid: int) -> ClearBehaviorFault.Response:
-        """ Clear a behavior fault on the SpotDriver
+        """Clear a behavior fault on the SpotDriver
 
         Returns:
             True if the command succeeded, False otherwise
@@ -513,7 +632,7 @@ class SpotBasic(object):
         return response.waypoint_ids
 
     def list_world_objects(self, p_request: ListWorldObjectRequest) -> ListWorldObjectResponse:
-        """ Requests a list of world objects
+        """Requests a list of world objects
 
         TODO: not use ROS msgs
         """
@@ -553,7 +672,7 @@ class SpotBasic(object):
         future = goal_handle.get_result_async()
         self.__wait_for_future(future, timeout_sec=timeout_sec)
         self.__node.get_logger().info(f"Received response for RobotCommand [{self.__robot_name}.{command_name}]")
-        return future.result().result
+        return future.result()
 
     def command(self, command_name: str, goal: RobotCommand.Goal, timeout_sec=None) -> Optional[RobotCommandFeedback]:
         """ Runs the `RobotCommand` action
@@ -946,8 +1065,8 @@ class SpotBasic(object):
         Returns:
             TODO
 
-        See:
-        https://github.com/boston-dynamics/spot-sdk/blob/master/python/bosdyn-client/src/bosdyn/client/robot_command.py#L1224
+        Returns:
+            TODO
         """
         action_goal = self.__get_arm_pose_action_goal(vision_t_goal, move_duration_sec)
         return self.command_async("move_end_effector_cartesian",
@@ -986,29 +1105,99 @@ class SpotBasic(object):
         """
         pass
 
-    def move_end_effector_impedance(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
-        """
-        Args:
-            timeout_sec: A timeout for waiting on a response/result from the action server. Setting to None creates no
-                timeout
+    def __get_arm_impedance_action_goal(
+        self,
+        root_frame_name: FrameHint,
+        root_t_task: SE3Pose,
+        wrist_t_tool: SE3Pose,
+        trajectory: List[Tuple[SE3Pose, float]],
+        stiffness: List[float] = None,
+        damping: List[float] = None,
+        wrench_nm: List[float] = None,
+    ) -> RobotCommand.Goal:
+        """Create the ROS Msg for moving the end effector to specific pose using hybrid position/impedance control.
 
-        Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+        The stiffness and damping gains are defaulted to their maximum values. Note that this is in the task frame, so these were
+        probably empirically obtained. (See code comment in here https://github.com/boston-dynamics/spot-sdk/blob/master/python/examples/arm_impedance_control/arm_impedance_control.py.)
         """
-        pass
+
+        if stiffness is None:
+            stiffness = [500, 500, 500, 60, 60, 60]
+        if damping is None:
+            damping = [2.5, 2.5, 2.5, 1.0, 1.0, 1.0]
+        if wrench_nm is None:
+            wrench_nm = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+        # Make sure we keep adjusting the body for the arm
+        body_control = spot_command_pb2.BodyControlParams(
+            body_assist_for_manipulation=spot_command_pb2.BodyControlParams.BodyAssistForManipulation(
+                enable_hip_height_assist=True, enable_body_yaw_assist=False))
+        stand_command = RobotCommandBuilder.synchro_stand_command(params=spot_command_pb2.MobilityParams(
+            body_control=body_control))
+        robot_cmd = robot_command_pb2.RobotCommand()
+        robot_cmd.CopyFrom(stand_command)
+
+        impedance_cmd = robot_cmd.synchronized_command.arm_command.arm_impedance_command
+        impedance_cmd.root_frame_name = root_frame_name
+
+        impedance_cmd.root_tform_task.CopyFrom(se3pose_to_proto(root_t_task))
+        impedance_cmd.wrist_tform_tool.CopyFrom(se3pose_to_proto(wrist_t_tool))
+        impedance_cmd.diagonal_stiffness_matrix.CopyFrom(geometry_pb2.Vector(values=stiffness))
+        impedance_cmd.diagonal_damping_matrix.CopyFrom(geometry_pb2.Vector(values=damping))
+        impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.force.x = wrench_nm[0]
+        impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.force.y = wrench_nm[1]
+        impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.force.z = wrench_nm[2]
+        impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.torque.x = wrench_nm[3]
+        impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.torque.y = wrench_nm[4]
+        impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.torque.z = wrench_nm[5]
+
+        # Set up our `desired_tool` trajectory. This is where we want the tool to be with respect
+        # to the task frame. The stiffness we set will drag the tool towards `desired_tool`.
+        cmd_trajectory = impedance_cmd.task_tform_desired_tool
+        for pose, duration in trajectory:
+            point = cmd_trajectory.points.add()
+            point.time_since_reference.CopyFrom(seconds_to_duration(duration))
+            point.pose.CopyFrom(se3pose_to_proto(pose))
+
+        return self.__convert_proto_to_action_goal(robot_cmd)
+
+    def move_end_effector_impedance(
+        self,
+        root_frame_name: FrameHint,
+        root_t_task: SE3Pose,
+        wrist_t_tool: SE3Pose,
+        trajectory: List[Tuple[SE3Pose, float]],
+        stiffness: List[float] = None,
+        damping: List[float] = None,
+        wrench_nm: List[float] = None,
+        timeout_sec: Optional[float] = 5.0,
+    ) -> Optional[RobotCommandFeedback]:
+        """Impdence control as variable stiffness/damping position control combined with a feedfoward force control as a wrench.
+
+            Args:
+            root_frame_name: name of root frame as a string
+            root_t_task: the transform from the root frame to the "task frame" (this doesn't need a name)
+            wrist_t_tool: The tool pose relative to the parent link (link_wr1). This can also be thought of as the "remote center" frame.
+            trajectory: Discrete waypoints of where we want the tool to be relative to the task frame and the duration of time to slerp over.
+            stiffness: the position/stiffness gains for the x, y, z, rot_x, rot_y, rot_z axes in the task frame
+            damping: the derivative/damping gains for the x, y, z, rot_x, rot_y, rot_z axes in the task frame
+            wrench_nm: the feedforward wrench for x, y, z, torque_x, torque_y, torque_z in the task frame
+            timeout_sec: the timeout
+        """
+        action_goal = self.__get_arm_impedance_action_goal(root_frame_name, root_t_task, wrist_t_tool, trajectory,
+                                                           stiffness, damping, wrench_nm)
+        return self.command("move_end_effector_impedance", action_goal, timeout_sec)
 
     def move_end_effector_impedance_async(
             self,
             *,
             result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-            on_failure_callback: Optional[Callable[[None], None]] = None) -> Optional[RobotCommandHandle]:
+            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None) -> Optional[RobotCommandHandle]:
         """ TODO
 
         Args:
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
-            on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
             TODO
@@ -1100,10 +1289,20 @@ class SpotBasic(object):
 
 def main():
     import argparse
+    import math
+    import time
 
+    from bdai.utilities.math_helpers import Quaternion
     parser = argparse.ArgumentParser()
-    parser.add_argument("robot_name", help="Name of the robot if the ROS driver is inside that namespace")
-    parser.add_argument("--disable-collisions", action="store_true", help="Flag for disabling collision avoidance")
+    parser.add_argument(
+        "robot_name",
+        help="Name of the robot if the ROS driver is inside that namespace",
+    )
+    parser.add_argument(
+        "--disable-collisions",
+        action="store_true",
+        help="Flag for disabling collision avoidance",
+    )
     parser.add_argument("--dry", action="store_true", help="Flag for if this is a dry run")
     options = parser.parse_args()
 
@@ -1115,7 +1314,25 @@ def main():
     # logger = RcutilsLogger(name="main")
 
     # TESTING CODE GOES HERE
+    spot_basic.initialize_robot()
+    # spot_basic.stand()
 
+    body_t_task = SE3Pose(x=0.6, y=0.0, z=0.4, rotation=Quaternion(w=1.0, x=0.0, y=0.0, z=0.0))
+
+    trajectory = [(SE3Pose.identity(), 1.0), (SE3Pose(x=0.1, y=0, z=0,
+                                                      rotation=Quaternion.from_yaw(math.pi / 2.0)), 5.0)]
+    # trajectory.pop()
+
+    spot_basic.move_end_effector_impedance(root_frame_name=BODY_FRAME_NAME,
+                                           root_t_task=body_t_task,
+                                           wrist_t_tool=SE3Pose.identity(),
+                                           trajectory=trajectory,
+                                           timeout_sec=20.0)
+
+    spot_basic.move_end_effector_cartesian(body_t_task, 1.0, 1.0)
+
+    time.sleep(1.0)
+    spot_basic.sit()
     spot_basic.shutdown()
     rclpy.shutdown()
     return 0
