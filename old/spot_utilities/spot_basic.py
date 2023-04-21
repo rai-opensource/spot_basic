@@ -4,6 +4,8 @@ import sys
 from threading import Event, Thread
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from numpy import deg2rad
+
 from geometry_msgs.msg import Twist
 import rclpy
 from rclpy.action import ActionClient
@@ -14,7 +16,7 @@ from rclpy.task import Future
 from std_msgs.msg import ColorRGBA as Color
 from std_srvs.srv import SetBool, Trigger
 
-from bosdyn.api import geometry_pb2, robot_command_pb2
+from bosdyn.api import geometry_pb2, manipulation_api_pb2, robot_command_pb2
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.client.frame_helpers import BODY_FRAME_NAME, HAND_FRAME_NAME, ODOM_FRAME_NAME, VISION_FRAME_NAME
 from bosdyn.client.robot_command import RobotCommandBuilder
@@ -1210,6 +1212,86 @@ class SpotBasic(object):
                                   result_callback=result_callback,
                                   feedback_callback=feedback_callback,
                                   on_failure_callback=on_failure_callback)
+
+    @staticmethod
+    def set_tight_top_down_grasp(grasp):
+        """ A helper method to add constraints to the grasp such that the object
+        is grasped from the top, moving down along the vertical axis, with high accuracy
+        relative to the user requested position and constraints.
+        """
+
+        # Specify the frame we're using.
+        grasp.grasp_params.grasp_params_frame_name = BODY_FRAME_NAME
+
+        # The axis on the gripper is the x-axis.
+        axis_on_gripper_ewrt_gripper = geometry_pb2.Vec3(x=1, y=0, z=0)
+
+        # The axis in the frame is the negative z-axis
+        axis_to_align_with_ewrt_vision = geometry_pb2.Vec3(x=0, y=0, z=-1)
+
+        # Add the vector constraint to our proto.
+        constraint = grasp.grasp_params.allowable_orientation.add()
+        constraint.vector_alignment_with_tolerance.axis_on_gripper_ewrt_gripper.CopyFrom(axis_on_gripper_ewrt_gripper)
+        constraint.vector_alignment_with_tolerance.axis_to_align_with_ewrt_frame.CopyFrom(
+            axis_to_align_with_ewrt_vision)
+
+        # We'll take anything within about 1.0 degrees for top-down or horizontal grasps.
+        constraint.vector_alignment_with_tolerance.threshold_radians = deg2rad(1.0)
+
+        grasp.grasp_params.position_constraint.CopyFrom(
+            manipulation_api_pb2.GRASP_POSITION_CONSTRAINT_FIXED_AT_USER_POSITION)
+
+    def grasp_in_image(self,
+                       pixel_xy: List[float],
+                       image_data: Any,
+                       palm_placement_ratio: float,
+                       apply_grasp_params_func: Optional[Callable] = None):
+        """ Grasp an item in an image taken with a camera on spot.
+
+        Args:
+            pixel_xy: The point in the image where spot will do object detection,
+                and then grasp the object.
+            image_data: Image data taken using spot (need to figure out data type).
+            palm_placement_ratio: a float [0.0, 1.0] that indicates how far
+                in the edge of the object is into the palm cavity.
+                (0.0 will place the base of palm with camera against the object,
+                1.0 will be a 'finger pinch')
+            apply_grasp_params_func: A helper function that will apply grasp parameters
+                to modify default grasping behavior.
+                (see https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html?highlight=pickobjectinimage#graspparams) # pylint: disable=global-statement
+        """
+        pick_vec = geometry_pb2.Vec2(x=pixel_xy[0], y=pixel_xy[1])
+        grasp = manipulation_api_pb2.PickObjectInImage(
+            pixel_xy=pick_vec,
+            transforms_snapshot_for_camera=image_data.shot.transforms_snapshot,
+            frame_name_image_sensor=image_data.shot.frame_name_image_sensor,
+            camera_model=image_data.source.pinhole)
+
+        # We can specify where in the gripper we want to grasp.
+        grasp.grasp_params.grasp_palm_to_fingertip = palm_placement_ratio
+
+        if apply_grasp_params_func is not None:
+            apply_grasp_params_func(grasp)
+
+        # Build the proto
+        grasp_request = manipulation_api_pb2.ManipulationApiRequest(pick_object_in_image=grasp)
+
+        return self.__convert_proto_to_action_goal(grasp_request)
+
+    def palm_grasp_in_image_top_down(
+        self,
+        pixel_xy: List[float],
+        image_data: Any,
+    ):
+        """ Grasp an item in an image taken with a camera on spot with the palm
+        pressed into the object.
+
+        Args:
+            pixel_xy: The point in the image where spot will do object detection,
+                and then grasp the object.
+            image_data: Image data taken using spot (need to figure out data type).
+        """
+        return self.grasp_in_image(pixel_xy, image_data, 0.0, self.set_tight_top_down_grasp)
 
     def shutdown(self) -> None:
         """ Shutdown all the internal components """
