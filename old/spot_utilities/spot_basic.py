@@ -49,99 +49,6 @@ class RobotCommandHandle(object):
         self.__get_result_future: Optional[Future] = None
         self.__feedback_callback_internal: Optional[Callable[[RobotCommandFeedback], None]] = None
         self.__result_callback_internal: Optional[Callable[[RobotCommandFeedback], None]] = None
-        self.result: Optional[RobotCommandFeedback] = None
-
-        self.__logger = RcutilsLogger(name=f"{self.__robot_name}.{self.__command_name}")
-
-    def set_send_goal_future(self, send_goal_future: Future) -> None:
-        """ Sets the future received from sending the Action.Goal and sets up the callback for when a response is
-            received
-        """
-        self.__send_goal_future = send_goal_future
-        self.__send_goal_future.add_done_callback(self.__goal_response_callback)
-
-    def set_feedback_callback(self, feedback_callback: Callable[[RobotCommandFeedback], None]) -> None:
-        """ Sets the callback used to process feedback received while a RobotCommand is being executed """
-        self.__feedback_callback_internal = feedback_callback
-
-    def set_result_callback(self, result_callback: Callable[[RobotCommandFeedback], None]) -> None:
-        """ Sets the callback for processing the resulting feedback from executing a RobotCommand """
-        self.__result_callback_internal = result_callback
-
-    def __goal_response_callback(self, future: Future) -> None:
-        """ Callback that handles receiving a response from the ActionServer
-
-         Note: This does not handle receiving a result directly
-         """
-        if future.result() is None:
-            if self.__logger is not None:
-                self.__logger.debug(f"RobotCommand request failed: {future.exception():!r}")
-            return
-        self.__goal_handle = future.result()
-        if not self.__goal_handle.accepted:
-            self.__logger.debug("RobotCommand rejected")
-            return
-
-        self.__logger.debug("RobotCommand accepted")
-
-        self.__get_result_future = self.__goal_handle.get_result_async()
-        self.__get_result_future.add_done_callback(self.__get_result_callback)
-
-    def get_feedback_callback(self, feedback: RobotCommand.Feedback) -> None:
-        """ Public feedback callback given to the ActionClient
-
-        Currently just pulls the feedback from the future and passes it to the user provided callback
-        """
-        if self.__feedback_callback_internal is not None:
-            self.__feedback_callback_internal(feedback.feedback)
-
-    def __get_result_callback(self, future: Future) -> None:
-        """ Callback for pulling the resulting feedback out of the future and passing it to a user provided callback """
-        result = future.result().result
-        if not result.success:
-            self.__logger.error(f"RobotCommand resulted in failure. Msg: {result.message}")
-
-        self.result = result.result
-        if self.__result_callback_internal is not None:
-            self.__result_callback_internal(self.result)
-        # TODO: cleanup
-
-    def cancel(self) -> None:
-        """ Send the desire to cancel a command """
-        self.__logger.debug("Canceling RobotCommand")
-
-        if self.__goal_handle is not None:
-            future = self.__goal_handle.cancel_goal_async()
-            future.add_done_callback(self.cancel_response_callback)
-
-    def cancel_response_callback(self, future: Future) -> None:
-        """ Callback for handling the response to attempting to cancel a command """
-        cancel_response = future.result()
-        if len(cancel_response.goals_canceling) > 0:
-            self.__logger.debug("RobotCommand successfully canceled")
-        else:
-            self.__logger.debug("RobotCommand failed to canceled")
-        # TODO: cleanup
-
-
-class RobotCommandHandle(object):
-    """ Handle for an asynchronous RobotCommand sent via an action client """
-
-    def __init__(self, robot_name: str, command_name: str):
-        """ Constructor
-
-        Arg:
-            robot_name: Name of the robot
-            command_name: representative name of the command used for logging
-        """
-        self.__robot_name = robot_name
-        self.__command_name = command_name
-
-        self.__send_goal_future: Optional[Future] = None
-        self.__goal_handle = None
-        self.__get_result_future: Optional[Future] = None
-        self.__feedback_callback_internal: Optional[Callable[[RobotCommandFeedback], None]] = None
-        self.__result_callback_internal: Optional[Callable[[RobotCommandFeedback], None]] = None
         self.__on_failure_callback: Optional[Callable] = None
         self.result: Optional[RobotCommandFeedback] = None
 
@@ -1137,10 +1044,13 @@ class SpotBasic(object):
         damping: List[float] = None,
         wrench_nm: List[float] = None,
     ) -> RobotCommand.Goal:
-        """Create the ROS Msg for moving the end effector to specific pose using hybrid position/impedance control.
+        """Create the ROS Msg for moving the end effector to specific
+        pose using hybrid position/impedance control.
 
-        The stiffness and damping gains are defaulted to their maximum values. Note that this is in the task frame, so these were
-        probably empirically obtained. (See code comment in here https://github.com/boston-dynamics/spot-sdk/blob/master/python/examples/arm_impedance_control/arm_impedance_control.py.)
+        The stiffness and damping gains are defaulted to their maximum values.
+        Note that this is in the task frame, so these were probably empirically obtained.
+        (See code comment in here
+        https://github.com/boston-dynamics/spot-sdk/blob/master/python/examples/arm_impedance_control/arm_impedance_control.py.) # pylint: disable=global-statement
         """
 
         if stiffness is None:
@@ -1194,13 +1104,16 @@ class SpotBasic(object):
         wrench_nm: List[float] = None,
         timeout_sec: Optional[float] = 5.0,
     ) -> Optional[RobotCommandFeedback]:
-        """Impdence control as variable stiffness/damping position control combined with a feedfoward force control as a wrench.
+        """Impdence control as variable stiffness/damping position control combined with a
+            feedfoward force control as a wrench.
 
             Args:
             root_frame_name: name of root frame as a string
             root_t_task: the transform from the root frame to the "task frame" (this doesn't need a name)
-            wrist_t_tool: The tool pose relative to the parent link (link_wr1). This can also be thought of as the "remote center" frame.
-            trajectory: Discrete waypoints of where we want the tool to be relative to the task frame and the duration of time to slerp over.
+            wrist_t_tool: The tool pose relative to the parent link (link_wr1).
+                This can also be thought of as the "remote center" frame.
+            trajectory: Discrete waypoints of where we want the tool to be relative to the task frame
+                and the duration of time to slerp over.
             stiffness: the position/stiffness gains for the x, y, z, rot_x, rot_y, rot_z axes in the task frame
             damping: the derivative/damping gains for the x, y, z, rot_x, rot_y, rot_z axes in the task frame
             wrench_nm: the feedforward wrench for x, y, z, torque_x, torque_y, torque_z in the task frame
