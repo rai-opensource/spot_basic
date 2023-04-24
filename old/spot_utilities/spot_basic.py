@@ -1106,10 +1106,10 @@ class SpotBasic(object):
         wrench_nm: List[float] = None,
         timeout_sec: Optional[float] = 5.0,
     ) -> Optional[RobotCommandFeedback]:
-        """Impdence control as variable stiffness/damping position control combined with a
-            feedfoward force control as a wrench.
+        """Impedance control as variable stiffness/damping position control combined with a
+            feedforward force control as a wrench.
 
-            Args:
+        Args:
             root_frame_name: name of root frame as a string
             root_t_task: the transform from the root frame to the "task frame" (this doesn't need a name)
             wrist_t_tool: The tool pose relative to the parent link (link_wr1).
@@ -1120,6 +1120,9 @@ class SpotBasic(object):
             damping: the derivative/damping gains for the x, y, z, rot_x, rot_y, rot_z axes in the task frame
             wrench_nm: the feedforward wrench for x, y, z, torque_x, torque_y, torque_z in the task frame
             timeout_sec: the timeout
+
+        Returns:
+            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
         """
         action_goal = self.__get_arm_impedance_action_goal(root_frame_name, root_t_task, wrist_t_tool, trajectory,
                                                            stiffness, damping, wrench_nm)
@@ -1127,19 +1130,44 @@ class SpotBasic(object):
 
     def move_end_effector_impedance_async(
             self,
+            root_frame_name: FrameHint,
+            root_t_task: SE3Pose,
+            wrist_t_tool: SE3Pose,
+            trajectory: List[Tuple[SE3Pose, float]],
+            stiffness: List[float] = None,
+            damping: List[float] = None,
+            wrench_nm: List[float] = None,
             *,
             result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None) -> Optional[RobotCommandHandle]:
-        """ TODO
+            feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+            on_failure_callback: Optional[Callable[[None], None]] = None) -> Optional[RobotCommandHandle]:
+        """ Impedance control as variable stiffness/damping position control combined with a
+            feedforward force control as a wrench.
 
         Args:
+            root_frame_name: name of root frame as a string
+            root_t_task: the transform from the root frame to the "task frame" (this doesn't need a name)
+            wrist_t_tool: The tool pose relative to the parent link (link_wr1).
+                This can also be thought of as the "remote center" frame.
+            trajectory: Discrete waypoints of where we want the tool to be relative to the task frame
+                and the duration of time to slerp over.
+            stiffness: the position/stiffness gains for the x, y, z, rot_x, rot_y, rot_z axes in the task frame
+            damping: the derivative/damping gains for the x, y, z, rot_x, rot_y, rot_z axes in the task frame
+            wrench_nm: the feedforward wrench for x, y, z, torque_x, torque_y, torque_z in the task frame
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
             TODO
         """
-        pass
+        action_goal = self.__get_arm_impedance_action_goal(root_frame_name, root_t_task, wrist_t_tool, trajectory,
+                                                           stiffness, damping, wrench_nm)
+        return self.command_async("move_end_effector_impedance",
+                                  action_goal,
+                                  result_callback=result_callback,
+                                  feedback_callback=feedback_callback,
+                                  on_failure_callback=on_failure_callback)
 
     def claw_gripper_open(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
         """ Send a command to open the gripper
