@@ -24,6 +24,7 @@ from bosdyn.util import seconds_to_duration
 
 from bosdyn_msgs.msg import ListWorldObjectRequest, ListWorldObjectResponse, RobotCommandFeedback
 import py_trees
+from rcl_interfaces.srv import GetParameters
 import spot_driver.conversions as conv
 from spot_msgs.action import RobotCommand
 from spot_msgs.srv import ClearBehaviorFault, ListGraph, ListWorldObjects, SetLocomotion, SetVelocity
@@ -278,6 +279,10 @@ class SpotBasic(object):
         self.__list_world_objects_client = self.__node.create_client(ListWorldObjects,
                                                                      f"/{self.__robot_name}/list_world_objects",
                                                                      callback_group=self.__callback_group)
+        self.__get_parameters_client = self.__node.create_client(GetParameters,
+                                                                 f"/{self.__robot_name}/spot_ros2/get_parameters",
+                                                                 callback_group=self.__callback_group)
+
         self.__robot_command_action_client = ActionClient(self.__node, RobotCommand, "robot_command")
         self.__node.get_logger().info(f"Waiting for the 'RobotCommand' action server for {self.__robot_name}")
         self.__robot_command_action_client.wait_for_server()
@@ -568,6 +573,22 @@ class SpotBasic(object):
             return None
         response = future.result()
         return response.response
+
+    def has_arm(self) -> Optional[bool]:
+        """ Queries if the spot has an arm
+
+        Returns:
+            True if the spot has an arm, False if it does not, and None if the query failed
+        """
+        self.__node.get_logger().info(f"Checking if {self.robot_name} has an arm")
+        request = GetParameters.Request()
+        request.names = ["has_arm"]
+        future = self.__get_parameters_client.call_async(request)
+        if not self.__wait_for_future(future):
+            return None
+        response = future.result()
+        param = response.values[0]
+        return param.bool_value
 
     def __send_command_goal_and_wait(self,
                                      command_name: str,
@@ -1334,10 +1355,11 @@ class SpotBasic(object):
 
 def main():
     import argparse
-    import math
-    import time
 
-    from bdai.utilities.math_helpers import Quaternion
+    # import math
+    # import time
+    #
+    # from bdai.utilities.math_helpers import Quaternion
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "robot_name",
@@ -1356,29 +1378,10 @@ def main():
                            parent_node_name="dummy_node",
                            disable_collisions=options.disable_collisions,
                            dry=options.dry)
-    # logger = RcutilsLogger(name="main")
+    logger = RcutilsLogger(name="main")
 
     # TESTING CODE GOES HERE
-    spot_basic.initialize_robot()
-    # spot_basic.stand()
-
-    body_t_task = SE3Pose(x=0.6, y=0.0, z=0.4, rotation=Quaternion(w=1.0, x=0.0, y=0.0, z=0.0))
-
-    trajectory = [(SE3Pose.identity(), 1.0), (SE3Pose(x=0.1, y=0, z=0,
-                                                      rotation=Quaternion.from_yaw(math.pi / 2.0)), 5.0)]
-    # trajectory.pop()
-
-    spot_basic.move_end_effector_impedance(root_frame_name=BODY_FRAME_NAME,
-                                           root_t_task=body_t_task,
-                                           wrist_t_tool=SE3Pose.identity(),
-                                           trajectory=trajectory,
-                                           timeout_sec=20.0)
-
-    spot_basic.move_end_effector_cartesian(body_t_task, 1.0, 1.0)
-
-    time.sleep(1.0)
-    spot_basic.sit()
-    spot_basic.shutdown()
+    logger.info(f"has arm: {spot_basic.has_arm()}")
     rclpy.shutdown()
     return 0
 
