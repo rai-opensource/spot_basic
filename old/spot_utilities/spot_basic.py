@@ -754,11 +754,11 @@ class SpotBasic(object):
         self.__node.get_logger().info("Walking to goal...")
 
         # Mobility command
-        obstacles = robot_command_pb2.ObstacleParams(disable_vision_body_obstacle_avoidance=self.__disable_collisions,
-                                                     disable_vision_foot_obstacle_avoidance=self.__disable_collisions,
-                                                     disable_vision_foot_constraint_avoidance=self.__disable_collisions,
-                                                     obstacle_avoidance_padding=.001)
-        mobility_params = robot_command_pb2.MobilityParams(obstacle_params=obstacles)
+        obstacles = spot_command_pb2.ObstacleParams(disable_vision_body_obstacle_avoidance=self.__disable_collisions,
+                                                    disable_vision_foot_obstacle_avoidance=self.__disable_collisions,
+                                                    disable_vision_foot_constraint_avoidance=self.__disable_collisions,
+                                                    obstacle_avoidance_padding=.001)
+        mobility_params = spot_command_pb2.MobilityParams(obstacle_params=obstacles)
 
         if self.__rviz:
             self.__draw_arrow(self.vision_frame_name, self.body_frame_name, vision_t_goal, color=Color(g=1.0, a=1.0))
