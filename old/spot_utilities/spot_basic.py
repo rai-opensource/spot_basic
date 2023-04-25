@@ -1096,8 +1096,8 @@ class SpotBasic(object):
         The stiffness and damping gains are defaulted to their maximum values.
         Note that this is in the task frame, so these were probably empirically obtained.
         (See code comment in here
-        https://github.com/boston-dynamics/spot-sdk/blob/master/python/examples/arm_impedance_control/arm_impedance_control.py.) # pylint: disable=global-statement
-        """
+        https://github.com/boston-dynamics/spot-sdk/blob/master/python/examples/arm_impedance_control/arm_impedance_control.py.)
+        """  # noqa: E501
 
         if stiffness is None:
             stiffness = [500, 500, 500, 60, 60, 60]
@@ -1348,8 +1348,8 @@ class SpotBasic(object):
                 1.0 will be a 'finger pinch')
             apply_grasp_params_func: A helper function that will apply grasp parameters
                 to modify default grasping behavior.
-                (see https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html?highlight=pickobjectinimage#graspparams) # pylint: disable=global-statement
-        """
+                (see https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html?highlight=pickobjectinimage#graspparams)
+        """  # noqa: E501
         pick_vec = geometry_pb2.Vec2(x=pixel_xy[0], y=pixel_xy[1])
         grasp = manipulation_api_pb2.PickObjectInImage(
             pixel_xy=pick_vec,
