@@ -4,19 +4,21 @@ from enum import Enum, IntEnum
 from threading import Event, Thread
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+import numpy as np
 import py_trees
 import rclpy
 import spot_driver.conversions as conv
-from bdai.utilities.math_helpers import SE2Pose, SE3Pose
+from bdai.trajectory.se2_trajectory import SE2Trajectory
+from bdai.utilities.math_helpers import SE2Pose, SE2Velocity, SE3Pose
 from bdai_ros.utilities.manual_conversions import se3pose_to_proto, to_ros_pose
 from bosdyn.api import geometry_pb2, manipulation_api_pb2, robot_command_pb2
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
+from bosdyn.api.trajectory_pb2 import POS_INTERP_CUBIC, PositionalInterpolation
 from bosdyn.client.frame_helpers import BODY_FRAME_NAME, HAND_FRAME_NAME, ODOM_FRAME_NAME, VISION_FRAME_NAME
 from bosdyn.client.robot_command import RobotCommandBuilder
 from bosdyn.util import seconds_to_duration
 from bosdyn_msgs.msg import ListWorldObjectRequest, ListWorldObjectResponse, RobotCommandFeedback
 from geometry_msgs.msg import Twist
-from numpy import deg2rad
 from rcl_interfaces.srv import GetParameters
 from rclpy.action import ActionClient
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -28,6 +30,8 @@ from spot_msgs.srv import ClearBehaviorFault, ListGraph, ListWorldObjects, SetLo
 from std_msgs.msg import ColorRGBA as Color
 from std_srvs.srv import SetBool, Trigger
 from visualization_msgs.msg import Marker
+
+from spot_utilities.robot_command_helpers import timestamped_se2_vecs_to_robot_command_proto
 
 
 class RobotCommandHandle(object):
@@ -244,6 +248,8 @@ class SpotBasic(object):
 
         if self.__rviz:
             self.__vis_pub = self.__node.create_publisher(Marker, "/visualization_marker", 10)
+
+        self.__velocity_cmd_publisher = self.__node.create_publisher(Twist, f"/{self.__robot_name}/cmd_vel", 1)
 
         self.__trigger_clients = {}
         for command_name in self.TRIGGER_SERVICES:
@@ -761,6 +767,19 @@ class SpotBasic(object):
             on_failure_callback=on_failure_callback,
         )
 
+    def __get_mobility_params(self) -> spot_command_pb2.MobilityParams:
+        """Create the MobilityParams object for use when building robot commands"""
+
+        # NOTE so far there is no way to change this and it might as well be set as an attribute during init.
+        # but possibly we'll want to change some of these parameters on the fly someday
+        obstacles = spot_command_pb2.ObstacleParams(
+            disable_vision_body_obstacle_avoidance=self.__disable_collisions,
+            disable_vision_foot_obstacle_avoidance=self.__disable_collisions,
+            disable_vision_foot_constraint_avoidance=self.__disable_collisions,
+            obstacle_avoidance_padding=0.001,
+        )
+        return spot_command_pb2.MobilityParams(obstacle_params=obstacles)
+
     def __get_walk_to_action_goal(self, vision_t_goal: SE2Pose, height: float) -> RobotCommand.Goal:
         """TODO
 
@@ -773,15 +792,6 @@ class SpotBasic(object):
         """
         self.__node.get_logger().info("Walking to goal...")
 
-        # Mobility command
-        obstacles = spot_command_pb2.ObstacleParams(
-            disable_vision_body_obstacle_avoidance=self.__disable_collisions,
-            disable_vision_foot_obstacle_avoidance=self.__disable_collisions,
-            disable_vision_foot_constraint_avoidance=self.__disable_collisions,
-            obstacle_avoidance_padding=0.001,
-        )
-        mobility_params = spot_command_pb2.MobilityParams(obstacle_params=obstacles)
-
         if self.__rviz:
             self.__draw_arrow(self.vision_frame_name, self.body_frame_name, vision_t_goal, color=Color(g=1.0, a=1.0))
 
@@ -791,7 +801,7 @@ class SpotBasic(object):
             goal_heading=vision_t_goal.yaw,
             frame_name=VISION_FRAME_NAME,
             body_height=height,
-            params=mobility_params,
+            params=self.__get_mobility_params(),
         )
         return self.__convert_proto_to_action_goal(proto_goal)
 
@@ -836,6 +846,92 @@ class SpotBasic(object):
         action_goal = self.__get_walk_to_action_goal(vision_t_goal, height)
         return self.command_async(
             "walk_to",
+            action_goal,
+            result_callback=result_callback,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
+
+    def walk_velocity(self, body_velocity: SE2Velocity) -> None:
+        """Send the command to walk/turn in a specific body-frame direction at a specific speed
+
+        Args:
+            body_velocity: the desired SE2 in the body frame
+        """
+        velocity_cmd_msg = Twist()
+        velocity_cmd_msg.linear.x = body_velocity.linear_velocity_x
+        velocity_cmd_msg.linear.y = body_velocity.linear_velocity_y
+        velocity_cmd_msg.angular.z = body_velocity.angular_velocity
+        self.__velocity_cmd_publisher.publish(velocity_cmd_msg)
+
+    def __get_walk_trajectory_action_goal(
+        self,
+        vision_t_trajectory: SE2Trajectory,
+        timestep_sec: float = 0.1,
+        interpolation: PositionalInterpolation = POS_INTERP_CUBIC,
+    ) -> RobotCommand.Goal:
+        """Create an action goal for visiting a sequence of poses with a given time schedule and interpolation settings
+
+        Args:
+            vision_t_trajectory: SE2Trajectory, i.e., time-parameterization of sequence of poses in vision frame
+            timestep_sec: time step used to sample poses from the trajectory
+            interpolation: method used to interpolate between sampled poses (0 = none, 1 = linear, 2 = cubic)
+        """
+        self.__node.get_logger().info("Walking along commanded trajectory...")
+
+        proto_goal = timestamped_se2_vecs_to_robot_command_proto(
+            *vision_t_trajectory(timestep_sec=timestep_sec, with_timestamps=True),
+            interpolation=interpolation,
+            mobility_params=self.__get_mobility_params(),
+            base_frame=VISION_FRAME_NAME,
+        )
+        return self.__convert_proto_to_action_goal(proto_goal)
+
+    def walk_trajectory(
+        self,
+        vision_t_trajectory: SE2Trajectory,
+        timestep_sec: float = 0.1,
+        interpolation: PositionalInterpolation = POS_INTERP_CUBIC,
+        timeout_sec: Optional[float] = None,
+    ) -> Optional[RobotCommand.Result]:
+        """Send a command to walk along a trajectory synchronously
+
+        Args:
+            vision_t_trajectory: SE2Trajectory, i.e., time-parameterization of sequence of poses in vision frame
+            timestep_sec: time step used to sample poses from the trajectory
+            interpolation: method used to interpolate between sampled poses (0 = none, 1 = linear, 2 = cubic)
+            timeout_sec: A timeout for waiting on a response/result from the action server. Setting to None creates no
+                timeout
+        """
+        action_goal = self.__get_walk_trajectory_action_goal(vision_t_trajectory, timestep_sec, interpolation)
+        return self.command("walk_trajectory", action_goal, timeout_sec)
+
+    def walk_trajectory_async(
+        self,
+        vision_t_trajectory: SE2Trajectory,
+        timestep_sec: float = 0.1,
+        interpolation: int = 2,
+        *,
+        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Optional[RobotCommandHandle]:
+        """Send the command to walk along a trajectory asynchronously
+
+        Args:
+            vision_t_trajectory: SE2Trajectory, i.e., time-parameterization of sequence of poses in vision frame
+            timestep_sec: time step used to sample poses from the trajectory
+            interpolation: method used to interpolate between sampled poses (0 = none, 1 = linear, 2 = cubic)
+            result_callback: A callback to process/handle the resulting feedback from executing the command
+            feedback_callback: A callback to process/handle the feedback received during the execution of the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
+
+        Returns:
+            TODO
+        """
+        action_goal = self.__get_walk_trajectory_action_goal(vision_t_trajectory, timestep_sec, interpolation)
+        return self.command_async(
+            "walk_trajectory",
             action_goal,
             result_callback=result_callback,
             feedback_callback=feedback_callback,
@@ -1323,7 +1419,7 @@ class SpotBasic(object):
         )
 
         # We'll take anything within about 1.0 degrees for top-down or horizontal grasps.
-        constraint.vector_alignment_with_tolerance.threshold_radians = deg2rad(1.0)
+        constraint.vector_alignment_with_tolerance.threshold_radians = np.deg2rad(1.0)
 
         grasp.grasp_params.position_constraint.CopyFrom(
             manipulation_api_pb2.GRASP_POSITION_CONSTRAINT_FIXED_AT_USER_POSITION
@@ -1425,6 +1521,7 @@ def main():
     logger = RcutilsLogger(name="main")
 
     # TESTING CODE GOES HERE
+    # DS recommendation: make a file in spot_utilities/examples
     logger.info(f"has arm: {spot_basic.has_arm()}")
     rclpy.shutdown()
     return 0
