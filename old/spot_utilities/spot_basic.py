@@ -459,7 +459,7 @@ class SpotBasic(object):
         Returns:
             True if the command succeeded, False otherwise
         """
-        return self.trigger_service("estop/hard")
+        return self.trigger_service("estop/gentle")
 
     def estop_release(self) -> bool:
         """Triggers the 'estop/release' service on the SpotDriver
@@ -467,7 +467,7 @@ class SpotBasic(object):
         Returns:
             True if the command succeeded, False otherwise
         """
-        return self.trigger_service("estop/hard")
+        return self.trigger_service("estop/release")
 
     def set_stair_mode(self, value: bool) -> bool:
         """Sets whether to be in stair_mode on the SpotDriver
