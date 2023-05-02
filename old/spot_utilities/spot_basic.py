@@ -1216,7 +1216,7 @@ class SpotBasic(object):
         robot_cmd.CopyFrom(stand_command)
 
         impedance_cmd = robot_cmd.synchronized_command.arm_command.arm_impedance_command
-        impedance_cmd.root_frame_name = root_frame_name
+        impedance_cmd.root_frame_name = root_frame_name.value
 
         impedance_cmd.root_tform_task.CopyFrom(se3pose_to_proto(root_t_task))
         impedance_cmd.wrist_tform_tool.CopyFrom(se3pose_to_proto(wrist_t_tool))
@@ -1254,7 +1254,7 @@ class SpotBasic(object):
             feedforward force control as a wrench.
 
         Args:
-            root_frame_name: name of root frame as a string
+            root_frame_name: name of root frame as a string (without 'RobotName/' as the prefix)
             root_t_task: the transform from the root frame to the "task frame" (this doesn't need a name)
             wrist_t_tool: The tool pose relative to the parent link (link_wr1).
                 This can also be thought of as the "remote center" frame.
@@ -1288,7 +1288,7 @@ class SpotBasic(object):
         on_failure_callback: Optional[Callable[[None], None]] = None,
     ) -> Optional[RobotCommandHandle]:
         """Impedance control as variable stiffness/damping position control combined with a
-            feedforward force control as a wrench.
+            feed-forward force control as a wrench.
 
         Args:
             root_frame_name: name of root frame as a string
@@ -1299,7 +1299,7 @@ class SpotBasic(object):
                 and the duration of time to slerp over.
             stiffness: the position/stiffness gains for the x, y, z, rot_x, rot_y, rot_z axes in the task frame
             damping: the derivative/damping gains for the x, y, z, rot_x, rot_y, rot_z axes in the task frame
-            wrench_nm: the feedforward wrench for x, y, z, torque_x, torque_y, torque_z in the task frame
+            wrench_nm: the feed-forward wrench for x, y, z, torque_x, torque_y, torque_z in the task frame
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
             on_failure_callback: A callback to process/handle when the action fails for various reasons
