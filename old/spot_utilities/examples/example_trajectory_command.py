@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 #  Copyright [2023] Boston Dynamics AI Institute, Inc.
 """Demonstrate commanding SE2 trajectories via SpotBasic"""
 

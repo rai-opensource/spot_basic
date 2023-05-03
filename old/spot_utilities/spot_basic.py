@@ -250,7 +250,7 @@ class SpotBasic(object):
         if self.__rviz:
             self.__vis_pub = self.__node.create_publisher(Marker, "/visualization_marker", 10)
 
-        self.__velocity_cmd_publisher = self.__node.create_publisher(Twist, f"/{self.__robot_name}/cmd_vel", 1)
+        self.__velocity_cmd_publisher = self.__node.create_publisher(Twist, f"/{self.__robot_name}/cmd_vel", 10)
 
         self.__trigger_clients = {}
         for command_name in self.TRIGGER_SERVICES:
