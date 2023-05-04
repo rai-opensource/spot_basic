@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 #  Copyright [2023] Boston Dynamics AI Institute, Inc.
-import sys
 from enum import Enum, IntEnum
 from threading import Event, Thread
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -1493,40 +1492,30 @@ class SpotBasic(object):
 
 
 def main():
+    rclpy.init()
     import argparse
 
-    # import math
-    # import time
-    #
-    # from bdai.utilities.math_helpers import Quaternion
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "robot_name",
-        help="Name of the robot if the ROS driver is inside that namespace",
-    )
-    parser.add_argument(
-        "--disable-collisions",
-        action="store_true",
-        help="Flag for disabling collision avoidance",
-    )
-    parser.add_argument("--dry", action="store_true", help="Flag for if this is a dry run")
-    options = parser.parse_args()
+    parser.add_argument("robot_name", help="Name of the robot if the ROS driver is inside that namespace")
+    args = parser.parse_args()
 
-    rclpy.init()
-    spot_basic = SpotBasic(
-        robot_name=options.robot_name,
-        parent_node_name="dummy_node",
-        disable_collisions=options.disable_collisions,
-        dry=options.dry,
-    )
-    logger = RcutilsLogger(name="main")
+    node = rclpy.create_node("spot_basic_cli")
+    spot_basic = SpotBasic(robot_name=args.robot_name, parent_node_name=node.get_name())
 
-    # TESTING CODE GOES HERE
-    # DS recommendation: make a file in spot_utilities/examples
-    logger.info(f"has arm: {spot_basic.has_arm()}")
+    while rclpy.ok():
+        cmd = input("Please enter a command:\n" + " ".join(SpotBasic.TRIGGER_SERVICES) + " exit\n> ")
+        if cmd == "exit":
+            break
+        success = spot_basic.trigger_service(cmd)
+        if not success:
+            print(f"Error with command: {cmd}")
+        else:
+            print(f"Successfully executed command: {cmd}")
+
+    spot_basic.shutdown()
+    node.destroy_node()
     rclpy.shutdown()
-    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
