@@ -1482,12 +1482,14 @@ class SpotBasic(object):
 
     def shutdown(self) -> None:
         """Shutdown all the internal components"""
+        self.__robot_command_action_client.destroy()
+        self.__node.destroy_node()
+        self.__executor.shutdown()
         try:
             self.__spin_thread.join()
         except KeyboardInterrupt:
             pass
-        self.__robot_command_action_client.destroy()
-        self.__node.destroy_node()
+
         # TODO: Is there anything else that we should shutdown?
 
 
