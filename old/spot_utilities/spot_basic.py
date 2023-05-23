@@ -9,7 +9,7 @@ import py_trees
 import rclpy
 import spot_driver.conversions as conv
 from bdai.trajectory.se2_trajectory import SE2Trajectory
-from bdai.utilities.math_helpers import SE2Pose, SE2Velocity, SE3Pose
+from bdai.utilities.math_helpers import SE2Pose, SE2Velocity, SE3Pose, Vec3
 from bdai_ros.utilities.manual_conversions import se3pose_to_proto, to_ros_pose
 from bosdyn.api import geometry_pb2, manipulation_api_pb2, robot_command_pb2
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
@@ -17,7 +17,12 @@ from bosdyn.api.trajectory_pb2 import POS_INTERP_CUBIC, PositionalInterpolation
 from bosdyn.client.frame_helpers import BODY_FRAME_NAME, HAND_FRAME_NAME, ODOM_FRAME_NAME, VISION_FRAME_NAME
 from bosdyn.client.robot_command import RobotCommandBuilder
 from bosdyn.util import seconds_to_duration
-from bosdyn_msgs.msg import ListWorldObjectRequest, ListWorldObjectResponse, RobotCommandFeedback
+from bosdyn_msgs.msg import (
+    ListWorldObjectRequest,
+    ListWorldObjectResponse,
+    ManipulationApiFeedbackResponse,
+    RobotCommandFeedback,
+)
 from geometry_msgs.msg import Twist
 from rcl_interfaces.srv import GetParameters
 from rclpy.action import ActionClient
@@ -25,7 +30,7 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.impl.rcutils_logger import RcutilsLogger
 from rclpy.task import Future
-from spot_msgs.action import RobotCommand
+from spot_msgs.action import Manipulation, RobotCommand
 from spot_msgs.srv import ClearBehaviorFault, ListGraph, ListWorldObjects, SetLocomotion, SetVelocity
 from std_msgs.msg import ColorRGBA as Color
 from std_srvs.srv import SetBool, Trigger
@@ -279,8 +284,19 @@ class SpotBasic(object):
         )
 
         self.__robot_command_action_client = ActionClient(self.__node, RobotCommand, "robot_command")
-        self.__node.get_logger().info(f"Waiting for the 'RobotCommand' action server for {self.__robot_name}")
+        self.__node.get_logger().info(f"Waiting for the 'RobotCommand' action server for {self.__robot_name} ...")
         self.__robot_command_action_client.wait_for_server()
+        self.__node.get_logger().info(f"Found the 'RobotCommand' action server for {self.__robot_name}.")
+
+        if self.has_arm():
+            self.__node.get_logger().info("Robot has arm.")
+            self.__manipulation_action_client = ActionClient(self.__node, Manipulation, "manipulation")
+            self.__node.get_logger().info(f"Waiting for the 'Manipulation' action server for {self.__robot_name} ...")
+            self.__manipulation_action_client.wait_for_server()
+            self.__node.get_logger().info(f"Found the 'Manipulation' action server for {self.__robot_name}.")
+        else:
+            self.__node.get_logger().info("Robot has no arm.")
+
         self.__spin_thread.start()
 
     @property
@@ -590,7 +606,7 @@ class SpotBasic(object):
         param = response.values[0]
         return param.bool_value
 
-    def __send_command_goal_and_wait(
+    def __send_robot_command_goal_and_wait(
         self, command_name: str, goal: RobotCommand.Goal, timeout_sec=None
     ) -> Optional[RobotCommandFeedback]:
         """Sends a goal to the robot command action server and waits for it to be done
@@ -625,6 +641,44 @@ class SpotBasic(object):
         self.__node.get_logger().info(f"Received response for RobotCommand [{self.__robot_name}.{command_name}]")
         return future.result()
 
+    def __send_manipulation_goal_and_wait(self, goal: Manipulation.Goal, timeout_sec=None):
+        """Sends a goal to the manipulation action server and waits for it to be done
+
+        Args:
+            command_name: A representative name of the command for logging
+            goal: The Action Goal sent to the action server
+            timeout_sec: A timeout for waiting on a response/result from the action server.
+            Setting to None creates no timeout
+
+        Returns:
+            The feedback from the SpotDriver about the result of the manipulation request if it was accepted,
+            None otherwise
+
+        Note: This is a blocking call
+        """
+        if not self.has_arm():
+            self.__node.get_logger().error("Cannot send Manipulation api request, robot has no arm.")
+            return None
+
+        self.__node.get_logger().info(f"Sending Manipulation request to [{self.__robot_name}]")
+
+        future = self.__manipulation_action_client.send_goal_async(goal)
+        if not self.__wait_for_future(future, timeout_sec=timeout_sec):
+            return None
+
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.__node.get_logger().error(f"Manipulation request to [{self.__robot_name}] was not accepted")
+            return None
+
+        self.__node.get_logger().info(f"Manipulation request to [{self.__robot_name}] accepted")
+        future = goal_handle.get_result_async()
+        if not self.__wait_for_future(future, timeout_sec=timeout_sec):
+            return None
+
+        self.__node.get_logger().info(f"Received response for Manipulation request to [{self.__robot_name}]")
+        return future.result()
+
     def command(self, command_name: str, goal: RobotCommand.Goal, timeout_sec=None) -> Optional[RobotCommandFeedback]:
         """Runs the `RobotCommand` action
 
@@ -645,7 +699,7 @@ class SpotBasic(object):
             # maybe a RobotCommand.Result that represents failure?
             return None
         if not self.__dry:
-            return self.__send_command_goal_and_wait(command_name, goal, timeout_sec)
+            return self.__send_robot_command_goal_and_wait(command_name, goal, timeout_sec)
         # TODO: What to return on a dry run? Just success?
         return None
 
@@ -696,6 +750,27 @@ class SpotBasic(object):
         # TODO: What to return on a dry run? Just success?
         return None
 
+    def manipulation(self, goal: Manipulation.Goal, timeout_sec=None) -> None:  # Optional[ManipulationFeedback]:
+        if goal is None:
+            self.__node.get_logger.warn("Cannot send NULL ActionGoal")
+            # TODO: Is there something better that we can return with information about the failure?
+            # maybe a RobotCommand.Result that represents failure?
+            return None
+        if not self.__dry:
+            return self.__send_manipulation_goal_and_wait(goal, timeout_sec)
+        # TODO: What to return on a dry run? Just success?
+        return None
+
+    def manipulation_async(
+        self,
+        goal: Manipulation.Goal,
+        *,
+        result_callback: Optional[Callable[[ManipulationApiFeedbackResponse], None]] = None,
+        feedback_callback: Optional[Callable[[ManipulationApiFeedbackResponse], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> None:  # Optional[ManipulationHandle]:
+        pass
+
     def __draw_arrow(self, frame_id: str, ns: str, frame_t_arrow: SE2Pose | SE3Pose, color: Color) -> None:
         """Draw an arrow in RVIZ"""
         marker = Marker()
@@ -713,14 +788,20 @@ class SpotBasic(object):
         self.__vis_pub.publish(marker)
 
     @staticmethod
-    def __convert_proto_to_action_goal(proto) -> RobotCommand.Goal:
+    def __convert_proto_to_robot_cmd_action_goal(proto) -> RobotCommand.Goal:
         action_goal = RobotCommand.Goal()
         conv.convert_proto_to_bosdyn_msgs_robot_command(proto, action_goal.command)
         return action_goal
 
+    @staticmethod
+    def __convert_proto_to_manip_cmd_action_goal(proto) -> RobotCommand.Goal:
+        action_goal = Manipulation.Goal()
+        conv.convert_proto_to_bosdyn_msgs_manipulation_api_request(proto, action_goal.command)
+        return action_goal
+
     def __get_battery_change_pose(self, dir_hint: BatteryChangeDirHint):
         proto = RobotCommandBuilder.battery_change_pose_command(int(dir_hint))
-        return self.__convert_proto_to_action_goal(proto)
+        return self.__convert_proto_to_robot_cmd_action_goal(proto)
 
     def go_to_battery_change_pose(
         self, dir_hint: BatteryChangeDirHint = BatteryChangeDirHint.RIGHT, timeout_sec: Optional[float] = None
@@ -803,7 +884,7 @@ class SpotBasic(object):
             body_height=height,
             params=self.__get_mobility_params(),
         )
-        return self.__convert_proto_to_action_goal(proto_goal)
+        return self.__convert_proto_to_robot_cmd_action_goal(proto_goal)
 
     def walk_to(
         self, vision_t_goal: SE2Pose, height: float = 0, timeout_sec: Optional[float] = None
@@ -885,7 +966,7 @@ class SpotBasic(object):
             mobility_params=self.__get_mobility_params(),
             base_frame=VISION_FRAME_NAME,
         )
-        return self.__convert_proto_to_action_goal(proto_goal)
+        return self.__convert_proto_to_robot_cmd_action_goal(proto_goal)
 
     def walk_trajectory(
         self,
@@ -941,7 +1022,7 @@ class SpotBasic(object):
     def __get_arm_stow_action_goal(self):
         """Create the ROS msg to stow the arm"""
         proto = RobotCommandBuilder.arm_stow_command()
-        return self.__convert_proto_to_action_goal(proto)
+        return self.__convert_proto_to_robot_cmd_action_goal(proto)
 
     def stow_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
         """Send a command to stow the arm synchronously
@@ -985,7 +1066,7 @@ class SpotBasic(object):
     def __get_arm_ready_action_goal(self):
         """Create the ROS msg to move the arm to the ready position"""
         proto = RobotCommandBuilder.arm_ready_command()
-        return self.__convert_proto_to_action_goal(proto)
+        return self.__convert_proto_to_robot_cmd_action_goal(proto)
 
     def ready_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
         """Send a command to move the arm to the ready position synchronously
@@ -1035,7 +1116,7 @@ class SpotBasic(object):
     def __get_arm_carry_action_goal(self):
         """Create the ROS msg to move the arm to the carry position"""
         proto = RobotCommandBuilder.arm_carry_command()
-        return self.__convert_proto_to_action_goal(proto)
+        return self.__convert_proto_to_robot_cmd_action_goal(proto)
 
     def carry_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
         """Move the arm to the carry position synchronously
@@ -1090,7 +1171,7 @@ class SpotBasic(object):
             seconds=move_duration_sec,
         )
 
-        return self.__convert_proto_to_action_goal(proto)
+        return self.__convert_proto_to_robot_cmd_action_goal(proto)
 
     def move_end_effector_cartesian(
         self, vision_t_goal: SE3Pose, move_duration_sec: float = 5.0, timeout_sec: Optional[float] = None
@@ -1236,7 +1317,7 @@ class SpotBasic(object):
             point.time_since_reference.CopyFrom(seconds_to_duration(duration))
             point.pose.CopyFrom(se3pose_to_proto(pose))
 
-        return self.__convert_proto_to_action_goal(robot_cmd)
+        return self.__convert_proto_to_robot_cmd_action_goal(robot_cmd)
 
     def move_end_effector_impedance(
         self,
@@ -1327,7 +1408,7 @@ class SpotBasic(object):
         Returns:
             The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
         """
-        action_goal = self.__convert_proto_to_action_goal(RobotCommandBuilder.claw_gripper_open_command())
+        action_goal = self.__convert_proto_to_robot_cmd_action_goal(RobotCommandBuilder.claw_gripper_open_command())
         return self.command("claw_gripper_open", action_goal, timeout_sec)
 
     def claw_gripper_open_async(
@@ -1347,7 +1428,7 @@ class SpotBasic(object):
         Returns:
             TODO
         """
-        action_goal = self.__convert_proto_to_action_goal(RobotCommandBuilder.claw_gripper_open_command())
+        action_goal = self.__convert_proto_to_robot_cmd_action_goal(RobotCommandBuilder.claw_gripper_open_command())
         return self.command_async(
             "claw_gripper_open",
             action_goal,
@@ -1366,7 +1447,7 @@ class SpotBasic(object):
         Returns:
             The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
         """
-        action_goal = self.__convert_proto_to_action_goal(RobotCommandBuilder.claw_gripper_close_command())
+        action_goal = self.__convert_proto_to_robot_cmd_action_goal(RobotCommandBuilder.claw_gripper_close_command())
         return self.command("claw_gripper_close", action_goal, timeout_sec)
 
     def claw_gripper_close_async(
@@ -1386,7 +1467,7 @@ class SpotBasic(object):
         Returns:
             TODO
         """
-        action_goal = self.__convert_proto_to_action_goal(RobotCommandBuilder.claw_gripper_close_command())
+        action_goal = self.__convert_proto_to_robot_cmd_action_goal(RobotCommandBuilder.claw_gripper_close_command())
         return self.command_async(
             "claw_gripper_close",
             action_goal,
@@ -1463,7 +1544,7 @@ class SpotBasic(object):
         # Build the proto
         grasp_request = manipulation_api_pb2.ManipulationApiRequest(pick_object_in_image=grasp)
 
-        return self.__convert_proto_to_action_goal(grasp_request)
+        return self.__convert_proto_to_robot_cmd_action_goal(grasp_request)
 
     def palm_grasp_in_image_top_down(
         self,
@@ -1479,6 +1560,45 @@ class SpotBasic(object):
             image_data: Image data taken using spot (need to figure out data type).
         """
         return self.grasp_in_image(pixel_xy, image_data, 0.0, self.set_tight_top_down_grasp)
+
+    def grasp_along_ray(
+        self,
+        task_frame_t_ray_start: Vec3,
+        task_frame_t_ray_end: Vec3,
+        task_frame_name: str,
+        palm_placement_ratio: float,
+        apply_grasp_params_func=None,
+    ):
+        """Cast a ray in the world and pick the first object found along the ray.
+        This is the lowest-level grasping message; all other grasp options internally
+        use this message to trigger a grasp.
+
+        Example: You see the object you are interested in with the gripper's camera.
+        To grasp it, you cast a ray from the camera out to 4 meters (well past the object).
+        To do this you'd set:
+            ray_start_rt_frame: camera's position
+            ray_end_rt_frame: camera's position + unit vector along ray of interest * 4 meters
+        """
+
+        grasp = manipulation_api_pb2.PickObject(frame_name=task_frame_name)
+        grasp.object_rt_frame.CopyFrom(
+            geometry_pb2.Vec3(x=task_frame_t_ray_end.x, y=task_frame_t_ray_end.y, z=task_frame_t_ray_end.z)
+        )
+        # grasp.frame_name = task_frame_name
+        # Don't move the robot base, but automatically look at the grasp target with the hand camera.
+        # grasp.walk_gaze_mode = manipulation_api_pb2.PICK_AUTO_GAZE
+
+        # We can specify where in the gripper we want to grasp.
+        grasp.grasp_params.grasp_palm_to_fingertip = palm_placement_ratio
+
+        if apply_grasp_params_func is not None:
+            apply_grasp_params_func(grasp)
+
+        # Build the proto
+        grasp_request = manipulation_api_pb2.ManipulationApiRequest(pick_object=grasp)
+
+        action_goal = self.__convert_proto_to_manip_cmd_action_goal(grasp_request)
+        return self.manipulation(action_goal, 10.0)
 
     def shutdown(self) -> None:
         """Shutdown all the internal components"""
