@@ -288,7 +288,7 @@ class SpotBasic(object):
         self.__robot_command_action_client.wait_for_server()
         self.__node.get_logger().info(f"Found the 'RobotCommand' action server for {self.__robot_name}.")
 
-        if self.has_arm():
+        if True:  # self.has_arm():
             self.__node.get_logger().info("Robot has arm.")
             self.__manipulation_action_client = ActionClient(self.__node, Manipulation, "manipulation")
             self.__node.get_logger().info(f"Waiting for the 'Manipulation' action server for {self.__robot_name} ...")
