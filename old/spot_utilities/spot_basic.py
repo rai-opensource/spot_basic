@@ -288,14 +288,14 @@ class SpotBasic(object):
         self.__robot_command_action_client.wait_for_server()
         self.__node.get_logger().info(f"Found the 'RobotCommand' action server for {self.__robot_name}.")
 
-        if True:  # self.has_arm():
-            self.__node.get_logger().info("Robot has arm.")
-            self.__manipulation_action_client = ActionClient(self.__node, Manipulation, "manipulation")
-            self.__node.get_logger().info(f"Waiting for the 'Manipulation' action server for {self.__robot_name} ...")
-            self.__manipulation_action_client.wait_for_server()
+        self.__manipulation_action_client = ActionClient(self.__node, Manipulation, "manipulation")
+        self.__node.get_logger().info(f"Waiting for the 'Manipulation' action server for {self.__robot_name} ...")
+        if self.__manipulation_action_client.wait_for_server(1.0):
             self.__node.get_logger().info(f"Found the 'Manipulation' action server for {self.__robot_name}.")
         else:
-            self.__node.get_logger().info("Robot has no arm.")
+            self.__node.get_logger().info(
+                f"No 'Manipulation' action server for {self.__robot_name} found. Assuming it has no arm."
+            )
 
         self.__spin_thread.start()
 
