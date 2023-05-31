@@ -31,7 +31,17 @@ from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.impl.rcutils_logger import RcutilsLogger
 from rclpy.task import Future
 from spot_msgs.action import Manipulation, RobotCommand
-from spot_msgs.srv import ClearBehaviorFault, ListGraph, ListWorldObjects, SetLocomotion, SetVelocity
+from spot_msgs.srv import (
+    ClearBehaviorFault,
+    GraphNavClearGraph,
+    GraphNavGetLocalizationPose,
+    GraphNavSetLocalization,
+    GraphNavUploadGraph,
+    ListGraph,
+    ListWorldObjects,
+    SetLocomotion,
+    SetVelocity,
+)
 from std_msgs.msg import ColorRGBA as Color
 from std_srvs.srv import SetBool, Trigger
 from visualization_msgs.msg import Marker
@@ -281,6 +291,23 @@ class SpotBasic(object):
         )
         self.__get_parameters_client = self.__node.create_client(
             GetParameters, f"/{self.__robot_name}/spot_ros2/get_parameters", callback_group=self.__callback_group
+        )
+        self.__graph_nav_upload_graph_client = self.__node.create_client(
+            GraphNavUploadGraph, f"/{self.__robot_name}/graph_nav_upload_graph", callback_group=self.__callback_group
+        )
+
+        self.__graph_nav_clear_graph_client = self.__node.create_client(
+            GraphNavClearGraph, f"/{self.__robot_name}/graph_nav_clear_graph", callback_group=self.__callback_group
+        )
+        self.__graph_nav_set_localization_client = self.__node.create_client(
+            GraphNavSetLocalization,
+            f"/{self.__robot_name}/graph_nav_set_localization",
+            callback_group=self.__callback_group,
+        )
+        self.__graph_nav_get_localization_pose_client = self.__node.create_client(
+            GraphNavGetLocalizationPose,
+            f"/{self.__robot_name}/graph_nav_get_localization_pose",
+            callback_group=self.__callback_group,
         )
 
         self.__robot_command_action_client = ActionClient(self.__node, RobotCommand, "robot_command")
@@ -564,6 +591,56 @@ class SpotBasic(object):
             )
             return False
         return True
+
+    def set_localization(self, method: str, waypoint_id: str = None):
+        """Calls the SetLocalization RPC through spot_ros2.
+        The 'waypoint_id' is only necessary if 'method'
+        is 'waypoint'"""
+        self.__node.get_logger().info("Set localization")
+        method_choices = {"fiducial", "waypoint"}
+        if method not in method_choices:
+            raise ValueError(f"Invalid localization method {method}.Must be in {method_choices}")
+        request = GraphNavSetLocalization.Request()
+        request.method = method
+        if request.method == "waypoint":
+            request.waypoint_id = waypoint_id
+        future = self.__graph_nav_set_localization_client.call_async(request)
+        if not self.__wait_for_future(future):
+            return []
+        response = future.result()
+        return response.success
+
+    def get_localization_pose(self):
+        self.__node.get_logger().info("Get localization pose")
+        request = GraphNavGetLocalizationPose.Request()
+        future = self.__graph_nav_get_localization_pose_client.call_async(request)
+        if not self.__wait_for_future(future):
+            return []
+        response = future.result()
+        if not response.success:
+            raise RuntimeError(f"Failed to get localization pose. Reason: {response.message}")
+        return response.pose
+
+    get_localization = get_localization_pose
+
+    def upload_graph(self, upload_filepath: str) -> bool:
+        self.__node.get_logger().info("Upload graph")
+        request = GraphNavUploadGraph.Request()
+        request.upload_filepath = upload_filepath
+        future = self.__graph_nav_upload_graph_client.call_async(request)
+        if not self.__wait_for_future(future):
+            return []
+        response = future.result()
+        return response.success
+
+    def clear_graph(self) -> bool:
+        self.__node.get_logger().info("Clear graph")
+        request = GraphNavClearGraph.Request()
+        future = self.__graph_nav_clear_graph_client.call_async(request)
+        if not self.__wait_for_future(future):
+            return []
+        response = future.result()
+        return response.success
 
     def list_graph(self, upload_filepath: str) -> List[str]:
         """Request a list of waypoint ids"""
