@@ -4,6 +4,7 @@
 
 import argparse
 import time
+from typing import Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -17,12 +18,12 @@ from bosdyn.client.frame_helpers import BODY_FRAME_NAME, VISION_FRAME_NAME
 from spot_utilities.spot_basic import SpotBasic
 
 
-def plot_trajectory(ax, trajectory):
-    draw_shape(ax, trajectory, BODY_SHAPE)
+def plot_trajectory(ax: plt.Axes, trajectory: SE2Trajectory) -> None:
+    draw_shape(ax, trajectory, BODY_SHAPE)  # type: ignore
     ax.axis("equal")
 
 
-def get_vision_t_body(robot_name):
+def get_vision_t_body(robot_name: str) -> SE2Pose:
     body_frame_name = f"{robot_name}/{BODY_FRAME_NAME}"
     vision_frame_name = f"{robot_name}/{VISION_FRAME_NAME}"
     tf_listener_wrapper = TFListenerWrapper(
@@ -31,7 +32,7 @@ def get_vision_t_body(robot_name):
     return tf_listener_wrapper.lookup_a_tform_b_se2(vision_frame_name, body_frame_name)
 
 
-def run_example(example_name, robot_name=None):
+def run_example(example_name: str, robot_name: Optional[str] = None) -> None:
     if example_name == "first":
         # Create trajectory to move 2 meters forward and turned 90 degrees ccw
         xf = SE2Pose(1, 2, -np.pi / 2)
@@ -72,10 +73,10 @@ def run_example(example_name, robot_name=None):
     spot_basic.shutdown()
     rclpy.shutdown()
 
-    return 0
+    return
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("robot_name", help="Name of robot to use.  Enter 'preview' to simply plot the trajectory")
     parser.add_argument("example_name", help="Name of example to run")

@@ -14,7 +14,7 @@ from spot_utilities.spot_basic import SpotBasic
 class Test6DPoseCommand(Node):
     """A node that tests Spot 6D walk to pose commands"""
 
-    def __init__(self, args):
+    def __init__(self, args: argparse.Namespace) -> None:
         super().__init__("Test6DPoseCommandNode")
         self.__robot_name = args.robot
         self.__relative = args.relative
@@ -31,7 +31,7 @@ class Test6DPoseCommand(Node):
 
         self.test_walk_6d()
 
-    def test_walk_6d(self):
+    def test_walk_6d(self) -> None:
         if len(self.__goal) == 3:
             x, y, z = self.__goal
             quaternion = Quaternion(w=1.0, x=0.0, y=0.0, z=0.0)
@@ -68,16 +68,16 @@ class Test6DPoseCommand(Node):
             self.__spot.stop()
 
     @staticmethod
-    def test_result_callback(feedback: RobotCommandFeedback):
+    def test_result_callback(feedback: RobotCommandFeedback) -> None:
         print("Test result_callback: Move to 6D pose test done.")
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         self.__spot.shutdown()
         self.__tf.shutdown()
         self.destroy_node()
 
 
-def test():
+def test() -> None:
     parser = argparse.ArgumentParser(description="Command spot body")
     parser.add_argument("robot", type=str, help="name of the robot")
     parser.add_argument(

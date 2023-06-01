@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 #  Copyright [2023] Boston Dynamics AI Institute, Inc.
+import argparse
 from enum import Enum, IntEnum
 from functools import partial
 from threading import Event, Thread
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple, TypeVar, Union
 
+import geometry_msgs
 import numpy as np
 import py_trees
 import rclpy
@@ -28,6 +30,7 @@ from bosdyn_msgs.msg import (
 from geometry_msgs.msg import Twist
 from rcl_interfaces.srv import GetParameters
 from rclpy.action import ActionClient
+from rclpy.action.client import ClientGoalHandle
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.impl.rcutils_logger import RcutilsLogger
@@ -51,6 +54,8 @@ from visualization_msgs.msg import Marker
 
 from spot_utilities.robot_command_helpers import timestamped_se2_vecs_to_robot_command_proto
 
+Proto = TypeVar("Proto")
+
 
 class RobotCommandHandle(object):
     """Handle for an asynchronous RobotCommand sent via an action client"""
@@ -66,7 +71,7 @@ class RobotCommandHandle(object):
         self.__command_name = command_name
 
         self.__send_goal_future: Optional[Future] = None
-        self.__goal_handle = None
+        self.__goal_handle: Optional[ClientGoalHandle] = None
         self.__get_result_future: Optional[Future] = None
         self.__feedback_callback_internal: Optional[Callable[[RobotCommandFeedback], None]] = None
         self.__result_callback_internal: Optional[Callable[[RobotCommandFeedback], None]] = None
@@ -160,7 +165,9 @@ class RobotCommandHandle(object):
 class RobotComposeCommandHandle(object):
     """Handle for sequentially composing multiple asynchronous RobotCommand sent via an action client"""
 
-    def __init__(self, actions: List[partial], result_callback):
+    def __init__(
+        self, actions: List[partial], result_callback: Optional[Callable[[RobotCommandFeedback], None]]
+    ) -> None:
         self._index = 0
         self._number_actions = len(actions)
         self._action_list = actions
@@ -168,7 +175,7 @@ class RobotComposeCommandHandle(object):
         self._action_list[self._index].keywords["result_callback"] = self.result_callback
         self._action_list[self._index]()
 
-    def result_callback(self, feedback: RobotCommandFeedback):
+    def result_callback(self, feedback: RobotCommandFeedback) -> None:
         if self._index < self._number_actions - 1:
             self._index += 1
             self._action_list[self._index].keywords["result_callback"] = self.result_callback
@@ -184,14 +191,20 @@ class RobotCommandBehavior(py_trees.behaviour.Behaviour):
         self._action_handle: Optional[RobotCommandHandle] = None
         self._status: py_trees.common.Status = py_trees.common.Status.INVALID
 
-    def setup(self, **kwargs: Dict[str, Any]) -> None:
-        self._spot = kwargs.get("spot")
+    def setup(self, **kwargs: dict[str, Any]) -> None:
+        spot: Union[None, Any, SpotBasic] = kwargs.get("spot", None)
+        if isinstance(spot, SpotBasic):
+            self._spot = spot
 
     def update(self) -> py_trees.common.Status:
         return self._status
 
     def terminate(self, new_status: py_trees.common.Status) -> None:
-        if self._status == py_trees.common.Status.RUNNING and new_status == py_trees.common.Status.INVALID:
+        if (
+            self._status == py_trees.common.Status.RUNNING
+            and new_status == py_trees.common.Status.INVALID
+            and self._action_handle is not None
+        ):
             self._action_handle.cancel()
 
     # pylint: disable=unused-argument
@@ -355,19 +368,19 @@ class SpotBasic(object):
         self.__spin_thread.start()
 
     @property
-    def robot_name(self):
+    def robot_name(self) -> str:
         return self.__robot_name
 
     @property
-    def body_frame_name(self):
+    def body_frame_name(self) -> str:
         return self.__body_frame_name
 
     @property
-    def hand_frame_name(self):
+    def hand_frame_name(self) -> str:
         return self.__hand_frame_name
 
     @property
-    def vision_frame_name(self):
+    def vision_frame_name(self) -> str:
         return self.__vision_frame_name
 
     @staticmethod
@@ -390,7 +403,7 @@ class SpotBasic(object):
         """
         event = Event()
 
-        def done_callback(_):
+        def done_callback(_: Any) -> None:
             nonlocal event
             event.set()
 
@@ -639,7 +652,7 @@ class SpotBasic(object):
             return False
         return True
 
-    def set_localization(self, method: str, waypoint_id: str = None):
+    def set_localization(self, method: str, waypoint_id: Optional[str] = None) -> bool:
         """Calls the SetLocalization RPC through spot_ros2.
         The 'waypoint_id' is only necessary if 'method'
         is 'waypoint'"""
@@ -653,16 +666,16 @@ class SpotBasic(object):
             request.waypoint_id = waypoint_id
         future = self.__graph_nav_set_localization_client.call_async(request)
         if not self.__wait_for_future(future):
-            return []
-        response = future.result()
+            return False
+        response: GraphNavSetLocalization.Response = future.result()
         return response.success
 
-    def get_localization_pose(self):
+    def get_localization_pose(self) -> Optional[geometry_msgs.msg.Pose]:
         self.__node.get_logger().info("Get localization pose")
         request = GraphNavGetLocalizationPose.Request()
         future = self.__graph_nav_get_localization_pose_client.call_async(request)
         if not self.__wait_for_future(future):
-            return []
+            return None
         response = future.result()
         if not response.success:
             raise RuntimeError(f"Failed to get localization pose. Reason: {response.message}")
@@ -676,7 +689,7 @@ class SpotBasic(object):
         request.upload_filepath = upload_filepath
         future = self.__graph_nav_upload_graph_client.call_async(request)
         if not self.__wait_for_future(future):
-            return []
+            return False
         response = future.result()
         return response.success
 
@@ -685,7 +698,7 @@ class SpotBasic(object):
         request = GraphNavClearGraph.Request()
         future = self.__graph_nav_clear_graph_client.call_async(request)
         if not self.__wait_for_future(future):
-            return []
+            return False
         response = future.result()
         return response.success
 
@@ -700,7 +713,7 @@ class SpotBasic(object):
         response = future.result()
         return response.waypoint_ids
 
-    def list_world_objects(self, p_request: ListWorldObjectRequest) -> ListWorldObjectResponse:
+    def list_world_objects(self, p_request: ListWorldObjectRequest) -> Optional[ListWorldObjectResponse]:
         """Requests a list of world objects
 
         TODO: not use ROS msgs
@@ -731,7 +744,7 @@ class SpotBasic(object):
         return param.bool_value
 
     def __send_robot_command_goal_and_wait(
-        self, command_name: str, goal: RobotCommand.Goal, timeout_sec=None
+        self, command_name: str, goal: RobotCommand.Goal, timeout_sec: Optional[float] = None
     ) -> Optional[RobotCommandFeedback]:
         """Sends a goal to the robot command action server and waits for it to be done
 
@@ -765,7 +778,9 @@ class SpotBasic(object):
         self.__node.get_logger().info(f"Received response for RobotCommand [{self.__robot_name}.{command_name}]")
         return future.result()
 
-    def __send_manipulation_goal_and_wait(self, goal: Manipulation.Goal, timeout_sec=None):
+    def __send_manipulation_goal_and_wait(
+        self, goal: Manipulation.Goal, timeout_sec: Optional[float] = None
+    ) -> Optional[Manipulation.Goal]:
         """Sends a goal to the manipulation action server and waits for it to be done
 
         Args:
@@ -803,7 +818,9 @@ class SpotBasic(object):
         self.__node.get_logger().info(f"Received response for Manipulation request to [{self.__robot_name}]")
         return future.result()
 
-    def command(self, command_name: str, goal: RobotCommand.Goal, timeout_sec=None) -> Optional[RobotCommandFeedback]:
+    def command(
+        self, command_name: str, goal: RobotCommand.Goal, timeout_sec: Optional[float] = None
+    ) -> Optional[RobotCommandFeedback]:
         """Runs the `RobotCommand` action
 
         Args:
@@ -874,7 +891,7 @@ class SpotBasic(object):
         # TODO: What to return on a dry run? Just success?
         return None
 
-    def manipulation(self, goal: Manipulation.Goal, timeout_sec=None) -> None:  # Optional[ManipulationFeedback]:
+    def manipulation(self, goal: Manipulation.Goal, timeout_sec: Optional[float] = None) -> Optional[Manipulation.Goal]:
         if goal is None:
             self.__node.get_logger.warn("Cannot send NULL ActionGoal")
             # TODO: Is there something better that we can return with information about the failure?
@@ -912,18 +929,18 @@ class SpotBasic(object):
         self.__vis_pub.publish(marker)
 
     @staticmethod
-    def __convert_proto_to_robot_cmd_action_goal(proto) -> RobotCommand.Goal:
+    def __convert_proto_to_robot_cmd_action_goal(proto: Proto) -> RobotCommand.Goal:
         action_goal = RobotCommand.Goal()
         conv.convert_proto_to_bosdyn_msgs_robot_command(proto, action_goal.command)
         return action_goal
 
     @staticmethod
-    def __convert_proto_to_manip_cmd_action_goal(proto) -> RobotCommand.Goal:
+    def __convert_proto_to_manip_cmd_action_goal(proto: Proto) -> RobotCommand.Goal:
         action_goal = Manipulation.Goal()
         conv.convert_proto_to_bosdyn_msgs_manipulation_api_request(proto, action_goal.command)
         return action_goal
 
-    def __get_battery_change_pose(self, dir_hint: BatteryChangeDirHint):
+    def __get_battery_change_pose(self, dir_hint: BatteryChangeDirHint) -> RobotCommand.Goal:
         proto = RobotCommandBuilder.battery_change_pose_command(int(dir_hint))
         return self.__convert_proto_to_robot_cmd_action_goal(proto)
 
@@ -1270,7 +1287,7 @@ class SpotBasic(object):
             on_failure_callback=on_failure_callback,
         )
 
-    def __get_arm_stow_action_goal(self):
+    def __get_arm_stow_action_goal(self) -> RobotCommand.Goal:
         """Create the ROS msg to stow the arm"""
         proto = RobotCommandBuilder.arm_stow_command()
         return self.__convert_proto_to_robot_cmd_action_goal(proto)
@@ -1314,7 +1331,7 @@ class SpotBasic(object):
             on_failure_callback=on_failure_callback,
         )
 
-    def __get_arm_ready_action_goal(self):
+    def __get_arm_ready_action_goal(self) -> RobotCommand.Goal:
         """Create the ROS msg to move the arm to the ready position"""
         proto = RobotCommandBuilder.arm_ready_command()
         return self.__convert_proto_to_robot_cmd_action_goal(proto)
@@ -1364,7 +1381,7 @@ class SpotBasic(object):
     # Alias
     unstow_arm_async = ready_arm_async
 
-    def __get_arm_carry_action_goal(self):
+    def __get_arm_carry_action_goal(self) -> RobotCommand.Goal:
         """Create the ROS msg to move the arm to the carry position"""
         proto = RobotCommandBuilder.arm_carry_command()
         return self.__convert_proto_to_robot_cmd_action_goal(proto)
@@ -1513,10 +1530,10 @@ class SpotBasic(object):
         root_frame_name: FrameHint,
         root_t_task: SE3Pose,
         wrist_t_tool: SE3Pose,
-        trajectory: List[Tuple[SE3Pose, float]],
-        stiffness: List[float] = None,
-        damping: List[float] = None,
-        wrench_nm: List[float] = None,
+        trajectory: list[Tuple[SE3Pose, float]],
+        stiffness: Optional[list[float]] = None,
+        damping: Optional[list[float]] = None,
+        wrench_nm: Optional[list[float]] = None,
     ) -> RobotCommand.Goal:
         """Create the ROS Msg for moving the end effector to specific
         pose using hybrid position/impedance control.
@@ -1575,10 +1592,10 @@ class SpotBasic(object):
         root_frame_name: FrameHint,
         root_t_task: SE3Pose,
         wrist_t_tool: SE3Pose,
-        trajectory: List[Tuple[SE3Pose, float]],
-        stiffness: List[float] = None,
-        damping: List[float] = None,
-        wrench_nm: List[float] = None,
+        trajectory: list[Tuple[SE3Pose, float]],
+        stiffness: Optional[list[float]] = None,
+        damping: Optional[list[float]] = None,
+        wrench_nm: Optional[list[float]] = None,
         timeout_sec: Optional[float] = 5.0,
     ) -> Optional[RobotCommandFeedback]:
         """Impedance control as variable stiffness/damping position control combined with a
@@ -1609,10 +1626,10 @@ class SpotBasic(object):
         root_frame_name: FrameHint,
         root_t_task: SE3Pose,
         wrist_t_tool: SE3Pose,
-        trajectory: List[Tuple[SE3Pose, float]],
-        stiffness: List[float] = None,
-        damping: List[float] = None,
-        wrench_nm: List[float] = None,
+        trajectory: list[Tuple[SE3Pose, float]],
+        stiffness: Optional[list[float]] = None,
+        damping: Optional[list[float]] = None,
+        wrench_nm: Optional[list[float]] = None,
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
@@ -1728,7 +1745,7 @@ class SpotBasic(object):
         )
 
     @staticmethod
-    def set_tight_top_down_grasp(grasp):
+    def set_tight_top_down_grasp(grasp: manipulation_api_pb2.PickObjectInImage) -> None:
         """A helper method to add constraints to the grasp such that the object
         is grasped from the top, moving down along the vertical axis, with high accuracy
         relative to the user requested position and constraints.
@@ -1763,7 +1780,7 @@ class SpotBasic(object):
         image_data: Any,
         palm_placement_ratio: float,
         apply_grasp_params_func: Optional[Callable] = None,
-    ):
+    ) -> RobotCommand.Goal:
         """Grasp an item in an image taken with a camera on spot.
 
         Args:
@@ -1801,7 +1818,7 @@ class SpotBasic(object):
         self,
         pixel_xy: List[float],
         image_data: Any,
-    ):
+    ) -> RobotCommand.Goal:
         """Grasp an item in an image taken with a camera on spot with the palm
         pressed into the object.
 
@@ -1818,8 +1835,8 @@ class SpotBasic(object):
         task_frame_t_ray_end: Vec3,
         task_frame_name: str,
         palm_placement_ratio: float,
-        apply_grasp_params_func=None,
-    ):
+        apply_grasp_params_func: Optional[Callable] = None,
+    ) -> Optional[Manipulation.Goal]:
         """Cast a ray in the world and pick the first object found along the ray.
         This is the lowest-level grasping message; all other grasp options internally
         use this message to trigger a grasp.
@@ -1864,9 +1881,8 @@ class SpotBasic(object):
         # TODO: Is there anything else that we should shutdown?
 
 
-def main():
+def main() -> None:
     rclpy.init()
-    import argparse
 
     parser = argparse.ArgumentParser()
     parser.add_argument("robot_name", help="Name of the robot if the ROS driver is inside that namespace")
