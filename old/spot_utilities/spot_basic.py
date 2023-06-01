@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 #  Copyright [2023] Boston Dynamics AI Institute, Inc.
 from enum import Enum, IntEnum
+from functools import partial
 from threading import Event, Thread
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -9,13 +10,14 @@ import py_trees
 import rclpy
 import spot_driver.conversions as conv
 from bdai.trajectory.se2_trajectory import SE2Trajectory
-from bdai.utilities.math_helpers import SE2Pose, SE2Velocity, SE3Pose, Vec3
+from bdai.utilities.math_helpers import SE2Pose, SE2Velocity, SE3Pose, Vec3, quaternion_to_euler_zyx
 from bdai_ros.utilities.manual_conversions import se3pose_to_proto, to_ros_pose
 from bosdyn.api import geometry_pb2, manipulation_api_pb2, robot_command_pb2
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.api.trajectory_pb2 import POS_INTERP_CUBIC, PositionalInterpolation
 from bosdyn.client.frame_helpers import BODY_FRAME_NAME, HAND_FRAME_NAME, ODOM_FRAME_NAME, VISION_FRAME_NAME
 from bosdyn.client.robot_command import RobotCommandBuilder
+from bosdyn.geometry import EulerZXY
 from bosdyn.util import seconds_to_duration
 from bosdyn_msgs.msg import (
     ListWorldObjectRequest,
@@ -152,6 +154,26 @@ class RobotCommandHandle(object):
     def __failure(self) -> None:
         if self.__on_failure_callback is not None:
             self.__on_failure_callback()
+
+
+class RobotComposeCommandHandle(object):
+    """Handle for sequentially composing multiple asynchronous RobotCommand sent via an action client"""
+
+    def __init__(self, actions: List[partial], result_callback):
+        self._index = 0
+        self._number_actions = len(actions)
+        self._action_list = actions
+        self._result_callback = result_callback
+        self._action_list[self._index].keywords["result_callback"] = self.result_callback
+        self._action_list[self._index]()
+
+    def result_callback(self, feedback: RobotCommandFeedback):
+        if self._index < self._number_actions - 1:
+            self._index += 1
+            self._action_list[self._index].keywords["result_callback"] = self.result_callback
+            self._action_list[self._index]()
+        elif self._result_callback is not None:
+            self._result_callback(feedback)
 
 
 class RobotCommandBehavior(py_trees.behaviour.Behaviour):
@@ -1009,6 +1031,133 @@ class SpotBasic(object):
             feedback_callback=feedback_callback,
             on_failure_callback=on_failure_callback,
         )
+
+    def __get_stand_to_action_goal(self, vision_r_goal: EulerZXY, height: float) -> RobotCommand.Goal:
+        """TODO
+
+        Args:
+            vision_r_goal: A SO3 rotation, expressed as EulerZXY object (yaw, pitch, roll, in radians) from the vision
+                frame to where the user wants the spot to rotate to
+            height: The height of the body
+
+        Returns:
+            An Action.Goal representing the command for a spot to walk to a specific goal location
+        """
+        self.__node.get_logger().info("Moving to goal orientation...")
+
+        proto_goal = RobotCommandBuilder.synchro_stand_command(body_height=height, footprint_R_body=vision_r_goal)
+        return self.__convert_proto_to_robot_cmd_action_goal(proto_goal)
+
+    def stand_with_orientation(
+        self, vision_r_goal: EulerZXY, height: float, timeout_sec: Optional[float] = None
+    ) -> Optional[RobotCommandFeedback]:
+        """Send the command to stand in a specific SO3 rotation
+
+        Args:
+            vision_r_goal: A SO3 rotation, expressed as EulerZXY object (yaw, pitch, roll, in radians) from the vision
+                frame to where the user wants the spot to rotate to
+            height: The height of the body
+            timeout_sec: A timeout for waiting on a response/result from the action server. Setting to None creates no
+                timeout
+
+        Returns:
+            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+        """
+        action_goal_stand = self.__get_stand_to_action_goal(vision_r_goal, height=height)
+        return self.command("orient", action_goal_stand, timeout_sec)
+
+    def stand_with_orientation_async(
+        self,
+        vision_r_goal: EulerZXY,
+        height: float,
+        *,
+        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Optional[RobotCommandHandle]:
+        """Send the command to stand in a specific SO3 rotation
+
+        Args:
+            vision_r_goal: A SO3 rotation, expressed as EulerZXY object (yaw, pitch, roll, in radians) from the vision
+                frame to where the user wants the spot to rotate to
+            height: The height of the body
+            result_callback: A callback to process/handle the resulting feedback from executing the command
+            feedback_callback: A callback to process/handle the feedback received during the execution of the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
+
+        Returns:
+            TODO
+        """
+        action_goal_stand = self.__get_stand_to_action_goal(vision_r_goal, height=height)
+        return self.command_async(
+            "orient",
+            action_goal_stand,
+            result_callback=result_callback,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
+
+    def walk_and_orient(
+        self, vision_t_goal: SE3Pose, timeout_sec: Optional[float] = None
+    ) -> Optional[RobotCommandFeedback]:
+        """Send the command to walk and rotate to a specific SE3 pose
+
+        Args:
+            vision_t_goal: A SE3 transform from the vision frame to where the user wants the spot to walk to
+            timeout_sec: A timeout for waiting on a response/result from the action server. The timeout arg is used
+                on each command, so max duration is 2x timeout. Setting to None creates no timeout.
+
+        Returns:
+            The feedback from the SpotDriver about the result of the commands if it was accepted, None otherwise
+        """
+        euler_zyx = quaternion_to_euler_zyx(vision_t_goal.rotation)  # yaw, pitch, roll in radians
+        if not self.walk_to(
+            SE2Pose(x=vision_t_goal.x, y=vision_t_goal.y, yaw=euler_zyx[0]),
+            height=vision_t_goal.z,
+            timeout_sec=timeout_sec,
+        ):
+            return None
+        return self.stand_with_orientation(
+            EulerZXY(yaw=0, pitch=euler_zyx[1], roll=euler_zyx[2]), height=vision_t_goal.z, timeout_sec=timeout_sec
+        )
+
+    def walk_and_orient_async(
+        self,
+        vision_t_goal: SE3Pose,
+        *,
+        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Optional[RobotComposeCommandHandle]:
+        """Send the command to walk and rotate to a specific SE3 pose
+
+        Args:
+            vision_t_goal: A SE3 transform from the vision frame to where the user wants the spot to walk to
+            result_callback: A callback to process/handle the resulting feedback from executing each of the commands
+            feedback_callback: A callback to process/handle the feedback received during the execution of any of the
+                commands
+            on_failure_callback: A callback to process/handle when any of actions fail for various reasons
+
+        Returns:
+            RobotComposeCommandHandle: A class to handle a list with multiple async RobotCommand (actions). The actions
+                are sent sequentially to SpotDriver via an action client
+        """
+        euler_zyx = quaternion_to_euler_zyx(vision_t_goal.rotation)
+        walk_partial = partial(
+            self.walk_to_async,
+            SE2Pose(x=vision_t_goal.x, y=vision_t_goal.y, yaw=euler_zyx[0]),
+            height=vision_t_goal.z,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
+        stand_partial = partial(
+            self.stand_with_orientation_async,
+            EulerZXY(yaw=0, pitch=euler_zyx[1], roll=euler_zyx[2]),
+            height=vision_t_goal.z,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
+        return RobotComposeCommandHandle([walk_partial, stand_partial], result_callback)
 
     def walk_velocity(self, body_velocity: SE2Velocity) -> None:
         """Send the command to walk/turn in a specific body-frame direction at a specific speed
