@@ -35,7 +35,7 @@ from rclpy.task import Future
 from spot_msgs.action import Manipulation, RobotCommand
 from spot_msgs.srv import (
     ClearBehaviorFault,
-    ExecuteDance,
+    # ExecuteDance,
     GraphNavClearGraph,
     GraphNavGetLocalizationPose,
     GraphNavSetLocalization,
@@ -300,11 +300,11 @@ class SpotBasic(object):
         self.__locomotion_mode_client = self.__node.create_client(
             SetLocomotion, f"/{self.__robot_name}/locomotion_mode", callback_group=self.__callback_group
         )
-        self.__execute_dance_client = self.__node.create_client(
-            ExecuteDance,
-            f"/{self.__robot_name}/execute_dance",
-            callback_group=self.__callback_group,
-        )
+        # self.__execute_dance_client = self.__node.create_client(
+        #     ExecuteDance,
+        #     f"/{self.__robot_name}/execute_dance",
+        #     callback_group=self.__callback_group,
+        # )
         self.__max_velocity_client = self.__node.create_client(
             SetVelocity, f"/{self.__robot_name}/max_velocity", callback_group=self.__callback_group
         )
@@ -559,24 +559,24 @@ class SpotBasic(object):
             return False
         return True
 
-    def execute_dance(self, path: str) -> tuple[bool, str]:
-        """Upload and execute dance file (found at path) through Spot Driver
-        Returns:
-            (True, "success") if the command succeeded, (False, <error_message>) otherwise
-        """
-        self.__node.get_logger().info(f"Uploading dance at '{path}' to {self.robot_name}")
-        request = ExecuteDance.Request()
-        request.upload_filepath = path
-        future = self.__execute_dance_client.call_async(request)
-        if not self.__wait_for_future(future):
-            return False, "Call to __wait_for_future timed out"
-        response = future.result()
-        if not response.success:
-            self.__node.get_logger().debug(
-                f"Uploading dance '{path}' to '{self.robot_name}' failed. Msg: {response.message}."
-            )
-            return False, response.message
-        return True, "success"
+    # def execute_dance(self, path: str) -> tuple[bool, str]:
+    #     """Upload and execute dance file (found at path) through Spot Driver
+    #     Returns:
+    #         (True, "success") if the command succeeded, (False, <error_message>) otherwise
+    #     """
+    #     self.__node.get_logger().info(f"Uploading dance at '{path}' to {self.robot_name}")
+    #     request = ExecuteDance.Request()
+    #     request.upload_filepath = path
+    #     future = self.__execute_dance_client.call_async(request)
+    #     if not self.__wait_for_future(future):
+    #         return False, "Call to __wait_for_future timed out"
+    #     response = future.result()
+    #     if not response.success:
+    #         self.__node.get_logger().debug(
+    #             f"Uploading dance '{path}' to '{self.robot_name}' failed. Msg: {response.message}."
+    #         )
+    #         return False, response.message
+    #     return True, "success"
 
     def set_locomotion_mode(self, l_hint: LocomotionHint) -> bool:
         """Set the locomotion mode on the SpotDriver
