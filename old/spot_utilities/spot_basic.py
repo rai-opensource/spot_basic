@@ -4,11 +4,10 @@ import argparse
 from enum import Enum, IntEnum
 from functools import partial
 from threading import Thread
-from typing import Any, Callable, List, Optional, Tuple, TypeVar, Union
+from typing import Any, Callable, List, Optional, Tuple, TypeVar
 
 import geometry_msgs
 import numpy as np
-import py_trees
 import rclpy
 import spot_driver.conversions as conv
 from bdai.trajectory.se2_trajectory import SE2Trajectory
@@ -121,40 +120,6 @@ class RobotComposeCommandHandle(object):
             self._result_callback(feedback)
 
 
-class RobotCommandBehavior(py_trees.behaviour.Behaviour):
-    def __init__(self, name: str):
-        super().__init__(name)
-        self._spot: Optional[SpotBasic] = None
-        self._action_handle: Optional[SpotActionHandle] = None
-        self._status: py_trees.common.Status = py_trees.common.Status.INVALID
-
-    def setup(self, **kwargs: dict[str, Any]) -> None:
-        # TODO(Andrew)
-        spot: Union[None, Any, SpotBasic] = kwargs.get("spot", None)
-        if isinstance(spot, SpotBasic):
-            self._spot = spot
-
-    def update(self) -> py_trees.common.Status:
-        return self._status
-
-    def terminate(self, new_status: py_trees.common.Status) -> None:
-        if (
-            self._status == py_trees.common.Status.RUNNING
-            and new_status == py_trees.common.Status.INVALID
-            and self._action_handle is not None
-        ):
-            self._action_handle.cancel()
-
-    # pylint: disable=unused-argument
-    def _get_result_callback(self, feedback: RobotCommandFeedback) -> None:
-        self._status = py_trees.common.Status.SUCCESS
-
-    # pylint: enable=unused-argument
-
-    def _on_failure_callback(self) -> None:
-        self._status = py_trees.common.Status.FAILURE
-
-
 class SpotBasic(object):
     """Base ROS2 Node that provides interfaces to calling various commands"""
 
@@ -218,111 +183,116 @@ class SpotBasic(object):
             dry: True if this is a dry run and commands should not actually be sent, False otherwise
             rviz: True if visuals should be published, False otherwise
         """
-        self.__node = rclpy.create_node(node_name=f"{parent_node_name}_spot_basic", namespace=robot_name)
+        self._node = rclpy.create_node(node_name=f"{parent_node_name}_spot_basic", namespace=robot_name)
 
-        self.__robot_name = robot_name
-        self.__disable_collisions = disable_collisions
-        self.__dry = dry
-        self.__rviz = rviz
+        self._robot_name = robot_name
+        self._disable_collisions = disable_collisions
+        self._dry = dry
+        self._rviz = rviz
 
         # TODO: are there other frame names to grab?
-        self.__body_frame_name = f"{self.robot_name}/{BODY_FRAME_NAME}"
-        self.__hand_frame_name = f"{self.robot_name}/{HAND_FRAME_NAME}"
-        self.__vision_frame_name = f"{self.robot_name}/{VISION_FRAME_NAME}"
+        self._body_frame_name = f"{self._robot_name}/{BODY_FRAME_NAME}"
+        self._hand_frame_name = f"{self._robot_name}/{HAND_FRAME_NAME}"
+        self._vision_frame_name = f"{self._robot_name}/{VISION_FRAME_NAME}"
+        self._odom_frame_name = f"{self._robot_name}/{ODOM_FRAME_NAME}"
 
-        self.__executor = SingleThreadedExecutor()
-        self.__executor.add_node(self.__node)
-        self.__spin_thread = Thread(target=self.__spin_executor, args=(self.__executor,), daemon=True)
-        self.__callback_group = ReentrantCallbackGroup()
+        self._executor = SingleThreadedExecutor()
+        self._executor.add_node(self._node)
+        self._spin_thread = Thread(target=self._spin_executor, args=(self._executor,), daemon=True)
+        self._callback_group = ReentrantCallbackGroup()
 
-        if self.__rviz:
-            self.__vis_pub = self.__node.create_publisher(Marker, "/visualization_marker", 10)
+        if self._rviz:
+            self._vis_pub = self._node.create_publisher(Marker, "/visualization_marker", 10)
 
-        self.__velocity_cmd_publisher = self.__node.create_publisher(Twist, f"/{self.__robot_name}/cmd_vel", 10)
+        self._velocity_cmd_publisher = self._node.create_publisher(Twist, f"/{self.robot_name}/cmd_vel", 10)
 
-        self.__trigger_clients = {}
+        self._trigger_clients = {}
         for command_name in self.TRIGGER_SERVICES:
-            self.__trigger_clients[command_name] = self.__node.create_client(
-                Trigger, f"/{self.__robot_name}/{command_name}", callback_group=self.__callback_group
+            self._trigger_clients[command_name] = self._node.create_client(
+                Trigger, f"/{self.robot_name}/{command_name}", callback_group=self._callback_group
             )
-        self.__stair_mode_client = self.__node.create_client(
-            SetBool, f"/{self.__robot_name}/stair_mode", callback_group=self.__callback_group
+        self._stair_mode_client = self._node.create_client(
+            SetBool, f"/{self.robot_name}/stair_mode", callback_group=self._callback_group
         )
-        self.__locomotion_mode_client = self.__node.create_client(
-            SetLocomotion, f"/{self.__robot_name}/locomotion_mode", callback_group=self.__callback_group
+        self._locomotion_mode_client = self._node.create_client(
+            SetLocomotion, f"/{self.robot_name}/locomotion_mode", callback_group=self._callback_group
         )
-        self.__execute_dance_client = self.__node.create_client(
+        self._execute_dance_client = self._node.create_client(
             ExecuteDance,
-            f"/{self.__robot_name}/execute_dance",
-            callback_group=self.__callback_group,
+            f"/{self.robot_name}/execute_dance",
+            callback_group=self._callback_group,
         )
-        self.__max_velocity_client = self.__node.create_client(
-            SetVelocity, f"/{self.__robot_name}/max_velocity", callback_group=self.__callback_group
+        self._max_velocity_client = self._node.create_client(
+            SetVelocity, f"/{self.robot_name}/max_velocity", callback_group=self._callback_group
         )
-        self.__clear_behavior_fault_client = self.__node.create_client(
-            ClearBehaviorFault, f"/{self.__robot_name}/clear_behavior_fault", callback_group=self.__callback_group
+        self._clear_behavior_fault_client = self._node.create_client(
+            ClearBehaviorFault, f"/{self.robot_name}/clear_behavior_fault", callback_group=self._callback_group
         )
-        self.__list_graph_client = self.__node.create_client(
-            ListGraph, f"/{self.__robot_name}/list_graph", callback_group=self.__callback_group
+        self._list_graph_client = self._node.create_client(
+            ListGraph, f"/{self.robot_name}/list_graph", callback_group=self._callback_group
         )
-        self.__list_world_objects_client = self.__node.create_client(
-            ListWorldObjects, f"/{self.__robot_name}/list_world_objects", callback_group=self.__callback_group
+        self._list_world_objects_client = self._node.create_client(
+            ListWorldObjects, f"/{self.robot_name}/list_world_objects", callback_group=self._callback_group
         )
-        self.__get_parameters_client = self.__node.create_client(
-            GetParameters, f"/{self.__robot_name}/spot_ros2/get_parameters", callback_group=self.__callback_group
+        self._get_parameters_client = self._node.create_client(
+            GetParameters, f"/{self.robot_name}/spot_ros2/get_parameters", callback_group=self._callback_group
         )
-        self.__graph_nav_upload_graph_client = self.__node.create_client(
-            GraphNavUploadGraph, f"/{self.__robot_name}/graph_nav_upload_graph", callback_group=self.__callback_group
+        self._graph_nav_upload_graph_client = self._node.create_client(
+            GraphNavUploadGraph, f"/{self.robot_name}/graph_nav_upload_graph", callback_group=self._callback_group
         )
 
-        self.__graph_nav_clear_graph_client = self.__node.create_client(
-            GraphNavClearGraph, f"/{self.__robot_name}/graph_nav_clear_graph", callback_group=self.__callback_group
+        self._graph_nav_clear_graph_client = self._node.create_client(
+            GraphNavClearGraph, f"/{self.robot_name}/graph_nav_clear_graph", callback_group=self._callback_group
         )
-        self.__graph_nav_set_localization_client = self.__node.create_client(
+        self._graph_nav_set_localization_client = self._node.create_client(
             GraphNavSetLocalization,
-            f"/{self.__robot_name}/graph_nav_set_localization",
-            callback_group=self.__callback_group,
+            f"/{self.robot_name}/graph_nav_set_localization",
+            callback_group=self._callback_group,
         )
-        self.__graph_nav_get_localization_pose_client = self.__node.create_client(
+        self._graph_nav_get_localization_pose_client = self._node.create_client(
             GraphNavGetLocalizationPose,
-            f"/{self.__robot_name}/graph_nav_get_localization_pose",
-            callback_group=self.__callback_group,
+            f"/{self._robot_name}/graph_nav_get_localization_pose",
+            callback_group=self._callback_group,
         )
 
-        self.__robot_command_action_client = ActionClient(self.__node, RobotCommand, "robot_command")
-        self.__node.get_logger().info(f"Waiting for the 'RobotCommand' action server for {self.__robot_name} ...")
-        self.__robot_command_action_client.wait_for_server()
-        self.__node.get_logger().info(f"Found the 'RobotCommand' action server for {self.__robot_name}.")
+        self._robot_command_action_client = ActionClient(self._node, RobotCommand, "robot_command")
+        self._node.get_logger().info(f"Waiting for the 'RobotCommand' action server for {self.robot_name} ...")
+        self._robot_command_action_client.wait_for_server()
+        self._node.get_logger().info(f"Found the 'RobotCommand' action server for {self.robot_name}.")
 
-        self.__manipulation_action_client = ActionClient(self.__node, Manipulation, "manipulation")
-        self.__node.get_logger().info(f"Waiting for the 'Manipulation' action server for {self.__robot_name} ...")
-        if self.__manipulation_action_client.wait_for_server(1.0):
-            self.__node.get_logger().info(f"Found the 'Manipulation' action server for {self.__robot_name}.")
+        self._manipulation_action_client = ActionClient(self._node, Manipulation, "manipulation")
+        self._node.get_logger().info(f"Waiting for the 'Manipulation' action server for {self.robot_name} ...")
+        if self._manipulation_action_client.wait_for_server(1.0):
+            self._node.get_logger().info(f"Found the 'Manipulation' action server for {self.robot_name}.")
         else:
-            self.__node.get_logger().info(
-                f"No 'Manipulation' action server for {self.__robot_name} found. Assuming it has no arm."
+            self._node.get_logger().info(
+                f"No 'Manipulation' action server for {self.robot_name} found. Assuming it has no arm."
             )
 
-        self.__spin_thread.start()
+        self._spin_thread.start()
 
     @property
     def robot_name(self) -> str:
-        return self.__robot_name
+        return self._robot_name
 
     @property
     def body_frame_name(self) -> str:
-        return self.__body_frame_name
+        return self._body_frame_name
 
     @property
     def hand_frame_name(self) -> str:
-        return self.__hand_frame_name
+        return self._hand_frame_name
 
     @property
     def vision_frame_name(self) -> str:
-        return self.__vision_frame_name
+        return self._vision_frame_name
+
+    @property
+    def odom_frame_name(self) -> str:
+        return self._odom_frame_name
 
     @staticmethod
-    def __spin_executor(executor: SingleThreadedExecutor) -> None:
+    def _spin_executor(executor: SingleThreadedExecutor) -> None:
         try:
             executor.spin()
         except ExternalShutdownException:
@@ -345,12 +315,12 @@ class SpotBasic(object):
         Returns:
             True if the command succeeded, False otherwise
         """
-        self.__node.get_logger().info(f"Trigger command '{command_name}' for {self.robot_name}")
+        self._node.get_logger().info(f"Trigger command '{command_name}' for {self.robot_name}")
         request = Trigger.Request()
         try:
-            future = self.__trigger_clients[command_name].call_async(request)
+            future = self._trigger_clients[command_name].call_async(request)
         except KeyError:
-            self.__node.get_logger().error(f"No trigger command {command_name}")
+            self._node.get_logger().error(f"No trigger command {command_name}")
             return False
 
         if not wait_for_future(future):
@@ -358,7 +328,7 @@ class SpotBasic(object):
 
         response = future.result()
         if not response.success:
-            self.__node.get_logger().error(
+            self._node.get_logger().error(
                 f"Trigger command '{command_name}' for {self.robot_name} failed. Msg: {response.message}"
             )
             return False
@@ -473,15 +443,15 @@ class SpotBasic(object):
         Returns:
             True if the command succeeded, False otherwise
         """
-        self.__node.get_logger().info(f"Setting stair_mode to '{value}' for {self.robot_name}")
+        self._node.get_logger().info(f"Setting stair_mode to '{value}' for {self.robot_name}")
         request = SetBool.Request()
         request.data = value
-        future = self.__stair_mode_client.call_async(request)
+        future = self._stair_mode_client.call_async(request)
         if not wait_for_future(future):
             return False
         response = future.result()
         if not response.success:
-            self.__node.get_logger().debug(
+            self._node.get_logger().debug(
                 f"Setting stair_mode to '{value}' for {self.robot_name} failed. Msg: {response.message}."
             )
             return False
@@ -492,15 +462,15 @@ class SpotBasic(object):
         Returns:
             (True, "success") if the command succeeded, (False, <error_message>) otherwise
         """
-        self.__node.get_logger().info(f"Uploading dance at '{path}' to {self.robot_name}")
+        self._node.get_logger().info(f"Uploading dance at '{path}' to {self.robot_name}")
         request = ExecuteDance.Request()
         request.upload_filepath = path
-        future = self.__execute_dance_client.call_async(request)
+        future = self._execute_dance_client.call_async(request)
         if not wait_for_future(future):
-            return False, "Call to __wait_for_future timed out"
+            return False, "Call to wait_for_future timed out"
         response = future.result()
         if not response.success:
-            self.__node.get_logger().debug(
+            self._node.get_logger().debug(
                 f"Uploading dance '{path}' to '{self.robot_name}' failed. Msg: {response.message}."
             )
             return False, response.message
@@ -512,15 +482,15 @@ class SpotBasic(object):
         Returns:
             True if the command succeeded, False otherwise
         """
-        self.__node.get_logger().info(f"Setting locomotion_mode to '{l_hint}' for {self.robot_name}")
+        self._node.get_logger().info(f"Setting locomotion_mode to '{l_hint}' for {self.robot_name}")
         request = SetLocomotion.Request()
         request.locomotion_mode = int(l_hint)
-        future = self.__locomotion_mode_client.call_async(request)
+        future = self._locomotion_mode_client.call_async(request)
         if not wait_for_future(future):
             return False
         response = future.result()
         if not response.success:
-            self.__node.get_logger().debug(
+            self._node.get_logger().debug(
                 f"Setting locomotion_mode to '{l_hint}' for {self.robot_name} failed. Msg: {response.message}."
             )
             return False
@@ -532,15 +502,15 @@ class SpotBasic(object):
         Returns:
             True if the command succeeded, False otherwise
         """
-        self.__node.get_logger().info(f"Setting max_velocity to '{velocity_limit}' for {self.robot_name}")
+        self._node.get_logger().info(f"Setting max_velocity to '{velocity_limit}' for {self.robot_name}")
         request = SetVelocity.Request()
         request.velocity = velocity_limit
-        future = self.__max_velocity_client.call_async(request)
+        future = self._max_velocity_client.call_async(request)
         if not wait_for_future(future):
             return False
         response = future.result()
         if not response.success:
-            self.__node.get_logger().debug(
+            self._node.get_logger().debug(
                 f"Setting stair_mode to '{velocity_limit}' for {self.robot_name} failed. Msg: {response.message}."
             )
             return False
@@ -552,16 +522,15 @@ class SpotBasic(object):
         Returns:
             True if the command succeeded, False otherwise
         """
-        # TODO: how to set the bid?
-        self.__node.get_logger().info(f"Clearing behavior fault {bid} for {self.robot_name}")
+        self._node.get_logger().info(f"Clearing behavior fault {bid} for {self.robot_name}")
         request = ClearBehaviorFault.Request()
         request.id = bid
-        future = self.__clear_behavior_fault_client.call_async(request)
+        future = self._clear_behavior_fault_client.call_async(request)
         if not wait_for_future(future):
             return False
         response = future.result()
         if not response.success:
-            self.__node.get_logger().debug(
+            self._node.get_logger().debug(
                 f"Clearing behavior fault {bid} for {self.robot_name} failed. Msg: {response.message}"
             )
             return False
@@ -571,7 +540,7 @@ class SpotBasic(object):
         """Calls the SetLocalization RPC through spot_ros2.
         The 'waypoint_id' is only necessary if 'method'
         is 'waypoint'"""
-        self.__node.get_logger().info("Set localization")
+        self._node.get_logger().info("Set localization")
         method_choices = {"fiducial", "waypoint"}
         if method not in method_choices:
             raise ValueError(f"Invalid localization method {method}.Must be in {method_choices}")
@@ -579,16 +548,16 @@ class SpotBasic(object):
         request.method = method
         if request.method == "waypoint":
             request.waypoint_id = waypoint_id
-        future = self.__graph_nav_set_localization_client.call_async(request)
+        future = self._graph_nav_set_localization_client.call_async(request)
         if not wait_for_future(future):
             return False
         response: GraphNavSetLocalization.Response = future.result()
         return response.success
 
     def get_localization_pose(self) -> Optional[geometry_msgs.msg.Pose]:
-        self.__node.get_logger().info("Get localization pose")
+        self._node.get_logger().info("Get localization pose")
         request = GraphNavGetLocalizationPose.Request()
-        future = self.__graph_nav_get_localization_pose_client.call_async(request)
+        future = self._graph_nav_get_localization_pose_client.call_async(request)
         if not wait_for_future(future):
             return None
         response = future.result()
@@ -599,19 +568,19 @@ class SpotBasic(object):
     get_localization = get_localization_pose
 
     def upload_graph(self, upload_filepath: str) -> bool:
-        self.__node.get_logger().info("Upload graph")
+        self._node.get_logger().info("Upload graph")
         request = GraphNavUploadGraph.Request()
         request.upload_filepath = upload_filepath
-        future = self.__graph_nav_upload_graph_client.call_async(request)
+        future = self._graph_nav_upload_graph_client.call_async(request)
         if not wait_for_future(future):
             return False
         response = future.result()
         return response.success
 
     def clear_graph(self) -> bool:
-        self.__node.get_logger().info("Clear graph")
+        self._node.get_logger().info("Clear graph")
         request = GraphNavClearGraph.Request()
-        future = self.__graph_nav_clear_graph_client.call_async(request)
+        future = self._graph_nav_clear_graph_client.call_async(request)
         if not wait_for_future(future):
             return False
         response = future.result()
@@ -619,10 +588,10 @@ class SpotBasic(object):
 
     def list_graph(self, upload_filepath: str) -> List[str]:
         """Request a list of waypoint ids"""
-        self.__node.get_logger().info(f"List graph {upload_filepath} for {self.robot_name}")
+        self._node.get_logger().info(f"List graph {upload_filepath} for {self.robot_name}")
         request = ListGraph.Request()
         request.upload_filepath = upload_filepath
-        future = self.__list_graph_client.call_async(request)
+        future = self._list_graph_client.call_async(request)
         if not wait_for_future(future):
             return []
         response = future.result()
@@ -633,10 +602,10 @@ class SpotBasic(object):
 
         TODO: not use ROS msgs
         """
-        self.__node.get_logger().info(f"List world objects for {self.robot_name}")
+        self._node.get_logger().info(f"List world objects for {self.robot_name}")
         request = ListWorldObjects.Request()
         request.request = p_request
-        future = self.__list_world_objects_client.call_async(request)
+        future = self._list_world_objects_client.call_async(request)
         if not wait_for_future(future):
             return None
         response = future.result()
@@ -648,17 +617,17 @@ class SpotBasic(object):
         Returns:
             True if the spot has an arm, False if it does not, and None if the query failed
         """
-        self.__node.get_logger().info(f"Checking if {self.robot_name} has an arm")
+        self._node.get_logger().info(f"Checking if {self.robot_name} has an arm")
         request = GetParameters.Request()
         request.names = ["has_arm"]
-        future = self.__get_parameters_client.call_async(request)
+        future = self._get_parameters_client.call_async(request)
         if not wait_for_future(future):
             return None
         response = future.result()
         param = response.values[0]
         return param.bool_value
 
-    def __send_action_goal_and_wait(
+    def _send_action_goal_and_wait(
         self, command_name: str, goal: Action.Goal, action_client: ActionClient, timeout_sec: Optional[float] = None
     ) -> Optional[Action.Result]:
         """Sends an action goal to one of the action servers and waits for it to be done
@@ -675,16 +644,16 @@ class SpotBasic(object):
         Note: This is a blocking call
         """
         if goal is None:
-            self.__node.get_logger.warn("Cannot send NULL ActionGoal")
+            self._node.get_logger.warn("Cannot send NULL ActionGoal")
             # TODO: Is there something better that we can return with information about the failure?
             # maybe a ActionType.Result that represents failure?
             return None
 
-        if self.__dry:
+        if self._dry:
             # TODO: What to return on a dry run? Just success?
             return None
 
-        self.__node.get_logger().info(f"Sending Action [{self.__robot_name}.{command_name}]")
+        self._node.get_logger().info(f"Sending Action [{self._robot_name}.{command_name}]")
 
         future = action_client.send_goal_async(goal)
         if not wait_for_future(future, timeout_sec=timeout_sec):
@@ -692,18 +661,18 @@ class SpotBasic(object):
 
         goal_handle = future.result()
         if not goal_handle.accepted:
-            self.__node.get_logger().error(f"Action [{self.__robot_name}.{command_name}] was not accepted")
+            self._node.get_logger().error(f"Action [{self._robot_name}.{command_name}] was not accepted")
             return None
 
-        self.__node.get_logger().info(f"Action [{self.__robot_name}.{command_name}] accepted")
+        self._node.get_logger().info(f"Action [{self._robot_name}.{command_name}] accepted")
         future = goal_handle.get_result_async()
         if not wait_for_future(future, timeout_sec=timeout_sec):
             return None
 
-        self.__node.get_logger().info(f"Received response for Action [{self.__robot_name}.{command_name}]")
+        self._node.get_logger().info(f"Received response for Action [{self._robot_name}.{command_name}]")
         return future.result()
 
-    def __send_action_goal_async(
+    def _send_action_goal_async(
         self,
         command_name: str,
         goal: Action.Goal,
@@ -716,11 +685,11 @@ class SpotBasic(object):
         if goal is None:
             # Is there something better that we can return with information about the failure?
             return None
-        if self.__dry:
+        if self._dry:
             # TODO: What to return on a dry run? Just success?
             return None
 
-        handle = SpotActionHandle(robot_name=self.__robot_name, command_name=command_name)
+        handle = SpotActionHandle(robot_name=self._robot_name, command_name=command_name)
         if result_callback is not None:
             handle.set_result_callback(result_callback)
 
@@ -752,7 +721,7 @@ class SpotBasic(object):
 
         See https://github.com/bdaiinstitute/spot_ros2/blob/main/spot_msgs/action/RobotCommand.action
         """
-        return self.__send_action_goal_and_wait(command_name, goal, self.__robot_command_action_client, timeout_sec)
+        return self._send_action_goal_and_wait(command_name, goal, self._robot_command_action_client, timeout_sec)
 
     def command_async(
         self,
@@ -777,10 +746,10 @@ class SpotBasic(object):
 
         See https://github.com/bdaiinstitute/spot_ros2/blob/main/spot_msgs/action/RobotCommand.action
         """
-        return self.__send_action_goal_async(
+        return self._send_action_goal_async(
             command_name,
             goal,
-            self.__robot_command_action_client,
+            self._robot_command_action_client,
             result_callback=result_callback,
             feedback_callback=feedback_callback,
             on_failure_callback=on_failure_callback,
@@ -800,9 +769,9 @@ class SpotBasic(object):
 
         """
         if not self.has_arm():
-            self.__node.get_logger().error("Cannot send Manipulation api request, robot has no arm.")
+            self._node.get_logger().error("Cannot send Manipulation api request, robot has no arm.")
             return None
-        return self.__send_action_goal_and_wait(command_name, goal, self.__manipulation_action_client, timeout_sec)
+        return self._send_action_goal_and_wait(command_name, goal, self._manipulation_action_client, timeout_sec)
 
     def manipulation_async(
         self,
@@ -814,21 +783,21 @@ class SpotBasic(object):
         on_failure_callback: Optional[Callable[[None], None]] = None,
     ) -> Optional[SpotActionHandle]:
         if not self.has_arm():
-            self.__node.get_logger().error("Cannot send Manipulation api request, robot has no arm.")
+            self._node.get_logger().error("Cannot send Manipulation api request, robot has no arm.")
             return None
-        return self.__send_action_goal_async(
+        return self._send_action_goal_async(
             command_name,
             goal,
-            self.__manipulation_action_client,
+            self._manipulation_action_client,
             result_callback=result_callback,
             feedback_callback=feedback_callback,
             on_failure_callback=on_failure_callback,
         )
 
-    def __draw_arrow(self, frame_id: str, ns: str, frame_t_arrow: SE2Pose | SE3Pose, color: Color) -> None:
+    def _draw_arrow(self, frame_id: str, ns: str, frame_t_arrow: SE2Pose | SE3Pose, color: Color) -> None:
         """Draw an arrow in RVIZ"""
         marker = Marker()
-        marker.header.stamp = self.__node.get_clock().now().to_msg()
+        marker.header.stamp = self._node.get_clock().now().to_msg()
         marker.header.frame_id = frame_id
         marker.id = 0
         marker.ns = ns
@@ -839,23 +808,23 @@ class SpotBasic(object):
         marker.scale.x = 0.3
         marker.scale.y = 0.1
         marker.scale.z = 0.1
-        self.__vis_pub.publish(marker)
+        self._vis_pub.publish(marker)
 
     @staticmethod
-    def __convert_proto_to_robot_cmd_action_goal(proto: Proto) -> RobotCommand.Goal:
+    def _convert_proto_to_robot_cmd_action_goal(proto: Proto) -> RobotCommand.Goal:
         action_goal = RobotCommand.Goal()
         conv.convert_proto_to_bosdyn_msgs_robot_command(proto, action_goal.command)
         return action_goal
 
     @staticmethod
-    def __convert_proto_to_manip_cmd_action_goal(proto: Proto) -> RobotCommand.Goal:
+    def _convert_proto_to_manip_cmd_action_goal(proto: Proto) -> RobotCommand.Goal:
         action_goal = Manipulation.Goal()
         conv.convert_proto_to_bosdyn_msgs_manipulation_api_request(proto, action_goal.command)
         return action_goal
 
-    def __get_battery_change_pose(self, dir_hint: BatteryChangeDirHint) -> RobotCommand.Goal:
+    def _get_battery_change_pose(self, dir_hint: BatteryChangeDirHint) -> RobotCommand.Goal:
         proto = RobotCommandBuilder.battery_change_pose_command(int(dir_hint))
-        return self.__convert_proto_to_robot_cmd_action_goal(proto)
+        return self._convert_proto_to_robot_cmd_action_goal(proto)
 
     def go_to_battery_change_pose(
         self, dir_hint: BatteryChangeDirHint = BatteryChangeDirHint.RIGHT, timeout_sec: Optional[float] = None
@@ -871,7 +840,7 @@ class SpotBasic(object):
             The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
 
         """
-        action_goal = self.__get_battery_change_pose(dir_hint)
+        action_goal = self._get_battery_change_pose(dir_hint)
         return self.command("go_to_battery_change_pose", action_goal, timeout_sec)
 
     def go_to_battery_change_pose_async(
@@ -893,7 +862,7 @@ class SpotBasic(object):
         Returns:
             TODO
         """
-        action_goal = self.__get_battery_change_pose(dir_hint)
+        action_goal = self._get_battery_change_pose(dir_hint)
         return self.command_async(
             "go_to_battery_change_pose",
             action_goal,
@@ -902,20 +871,20 @@ class SpotBasic(object):
             on_failure_callback=on_failure_callback,
         )
 
-    def __get_mobility_params(self) -> spot_command_pb2.MobilityParams:
+    def _get_mobility_params(self) -> spot_command_pb2.MobilityParams:
         """Create the MobilityParams object for use when building robot commands"""
 
-        # NOTE so far there is no way to change this and it might as well be set as an attribute during init.
+        # NOTE so far there is no way to change this, and it might as well be set as an attribute during init.
         # but possibly we'll want to change some of these parameters on the fly someday
         obstacles = spot_command_pb2.ObstacleParams(
-            disable_vision_body_obstacle_avoidance=self.__disable_collisions,
-            disable_vision_foot_obstacle_avoidance=self.__disable_collisions,
-            disable_vision_foot_constraint_avoidance=self.__disable_collisions,
+            disable_vision_body_obstacle_avoidance=self._disable_collisions,
+            disable_vision_foot_obstacle_avoidance=self._disable_collisions,
+            disable_vision_foot_constraint_avoidance=self._disable_collisions,
             obstacle_avoidance_padding=0.001,
         )
         return spot_command_pb2.MobilityParams(obstacle_params=obstacles)
 
-    def __get_walk_to_action_goal(self, vision_t_goal: SE2Pose, height: float) -> RobotCommand.Goal:
+    def _get_walk_to_action_goal(self, vision_t_goal: SE2Pose, height: float) -> RobotCommand.Goal:
         """TODO
 
         Args:
@@ -925,10 +894,10 @@ class SpotBasic(object):
         Returns:
             An Action.Goal representing the command for a spot to walk to a specific goal location
         """
-        self.__node.get_logger().info("Walking to goal...")
+        self._node.get_logger().info("Walking to goal...")
 
-        if self.__rviz:
-            self.__draw_arrow(self.vision_frame_name, self.body_frame_name, vision_t_goal, color=Color(g=1.0, a=1.0))
+        if self._rviz:
+            self._draw_arrow(self.vision_frame_name, self.body_frame_name, vision_t_goal, color=Color(g=1.0, a=1.0))
 
         proto_goal = RobotCommandBuilder.synchro_se2_trajectory_point_command(
             goal_x=vision_t_goal.x,
@@ -936,9 +905,9 @@ class SpotBasic(object):
             goal_heading=vision_t_goal.yaw,
             frame_name=VISION_FRAME_NAME,
             body_height=height,
-            params=self.__get_mobility_params(),
+            params=self._get_mobility_params(),
         )
-        return self.__convert_proto_to_robot_cmd_action_goal(proto_goal)
+        return self._convert_proto_to_robot_cmd_action_goal(proto_goal)
 
     def walk_to(
         self, vision_t_goal: SE2Pose, height: float = 0, timeout_sec: Optional[float] = None
@@ -954,7 +923,7 @@ class SpotBasic(object):
         Returns:
             The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
         """
-        action_goal = self.__get_walk_to_action_goal(vision_t_goal, height)
+        action_goal = self._get_walk_to_action_goal(vision_t_goal, height)
         return self.command("walk_to", action_goal, timeout_sec)
 
     def walk_to_async(
@@ -978,7 +947,7 @@ class SpotBasic(object):
         Returns:
             TODO
         """
-        action_goal = self.__get_walk_to_action_goal(vision_t_goal, height)
+        action_goal = self._get_walk_to_action_goal(vision_t_goal, height)
         return self.command_async(
             "walk_to",
             action_goal,
@@ -987,7 +956,7 @@ class SpotBasic(object):
             on_failure_callback=on_failure_callback,
         )
 
-    def __get_stand_to_action_goal(self, vision_r_goal: EulerZXY, height: float) -> RobotCommand.Goal:
+    def _get_stand_to_action_goal(self, vision_r_goal: EulerZXY, height: float) -> RobotCommand.Goal:
         """TODO
 
         Args:
@@ -998,10 +967,10 @@ class SpotBasic(object):
         Returns:
             An Action.Goal representing the command for a spot to walk to a specific goal location
         """
-        self.__node.get_logger().info("Moving to goal orientation...")
+        self._node.get_logger().info("Moving to goal orientation...")
 
         proto_goal = RobotCommandBuilder.synchro_stand_command(body_height=height, footprint_R_body=vision_r_goal)
-        return self.__convert_proto_to_robot_cmd_action_goal(proto_goal)
+        return self._convert_proto_to_robot_cmd_action_goal(proto_goal)
 
     def stand_with_orientation(
         self, vision_r_goal: EulerZXY, height: float, timeout_sec: Optional[float] = None
@@ -1018,7 +987,7 @@ class SpotBasic(object):
         Returns:
             The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
         """
-        action_goal_stand = self.__get_stand_to_action_goal(vision_r_goal, height=height)
+        action_goal_stand = self._get_stand_to_action_goal(vision_r_goal, height=height)
         return self.command("orient", action_goal_stand, timeout_sec)
 
     def stand_with_orientation_async(
@@ -1043,7 +1012,7 @@ class SpotBasic(object):
         Returns:
             TODO
         """
-        action_goal_stand = self.__get_stand_to_action_goal(vision_r_goal, height=height)
+        action_goal_stand = self._get_stand_to_action_goal(vision_r_goal, height=height)
         return self.command_async(
             "orient",
             action_goal_stand,
@@ -1124,9 +1093,9 @@ class SpotBasic(object):
         velocity_cmd_msg.linear.x = body_velocity.linear_velocity_x
         velocity_cmd_msg.linear.y = body_velocity.linear_velocity_y
         velocity_cmd_msg.angular.z = body_velocity.angular_velocity
-        self.__velocity_cmd_publisher.publish(velocity_cmd_msg)
+        self._velocity_cmd_publisher.publish(velocity_cmd_msg)
 
-    def __get_walk_trajectory_action_goal(
+    def _get_walk_trajectory_action_goal(
         self,
         vision_t_trajectory: SE2Trajectory,
         timestep_sec: float = 0.1,
@@ -1139,15 +1108,15 @@ class SpotBasic(object):
             timestep_sec: time step used to sample poses from the trajectory
             interpolation: method used to interpolate between sampled poses (0 = none, 1 = linear, 2 = cubic)
         """
-        self.__node.get_logger().info("Walking along commanded trajectory...")
+        self._node.get_logger().info("Walking along commanded trajectory...")
 
         proto_goal = timestamped_se2_vecs_to_robot_command_proto(
             *vision_t_trajectory(timestep_sec=timestep_sec, with_timestamps=True),
             interpolation=interpolation,
-            mobility_params=self.__get_mobility_params(),
+            mobility_params=self._get_mobility_params(),
             base_frame=VISION_FRAME_NAME,
         )
-        return self.__convert_proto_to_robot_cmd_action_goal(proto_goal)
+        return self._convert_proto_to_robot_cmd_action_goal(proto_goal)
 
     def walk_trajectory(
         self,
@@ -1165,7 +1134,7 @@ class SpotBasic(object):
             timeout_sec: A timeout for waiting on a response/result from the action server. Setting to None creates no
                 timeout
         """
-        action_goal = self.__get_walk_trajectory_action_goal(vision_t_trajectory, timestep_sec, interpolation)
+        action_goal = self._get_walk_trajectory_action_goal(vision_t_trajectory, timestep_sec, interpolation)
         return self.command("walk_trajectory", action_goal, timeout_sec)
 
     def walk_trajectory_async(
@@ -1191,7 +1160,7 @@ class SpotBasic(object):
         Returns:
             TODO
         """
-        action_goal = self.__get_walk_trajectory_action_goal(vision_t_trajectory, timestep_sec, interpolation)
+        action_goal = self._get_walk_trajectory_action_goal(vision_t_trajectory, timestep_sec, interpolation)
         return self.command_async(
             "walk_trajectory",
             action_goal,
@@ -1200,10 +1169,10 @@ class SpotBasic(object):
             on_failure_callback=on_failure_callback,
         )
 
-    def __get_arm_stow_action_goal(self) -> RobotCommand.Goal:
+    def _get_arm_stow_action_goal(self) -> RobotCommand.Goal:
         """Create the ROS msg to stow the arm"""
         proto = RobotCommandBuilder.arm_stow_command()
-        return self.__convert_proto_to_robot_cmd_action_goal(proto)
+        return self._convert_proto_to_robot_cmd_action_goal(proto)
 
     def stow_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
         """Send a command to stow the arm synchronously
@@ -1215,7 +1184,7 @@ class SpotBasic(object):
         Returns:
             The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
         """
-        action_goal = self.__get_arm_stow_action_goal()
+        action_goal = self._get_arm_stow_action_goal()
         return self.command("stow_arm", action_goal, timeout_sec)
 
     def stow_arm_async(
@@ -1235,7 +1204,7 @@ class SpotBasic(object):
         Returns:
             TODO
         """
-        action_goal = self.__get_arm_stow_action_goal()
+        action_goal = self._get_arm_stow_action_goal()
         return self.command_async(
             "stow_arm",
             action_goal,
@@ -1244,10 +1213,10 @@ class SpotBasic(object):
             on_failure_callback=on_failure_callback,
         )
 
-    def __get_arm_ready_action_goal(self) -> RobotCommand.Goal:
+    def _get_arm_ready_action_goal(self) -> RobotCommand.Goal:
         """Create the ROS msg to move the arm to the ready position"""
         proto = RobotCommandBuilder.arm_ready_command()
-        return self.__convert_proto_to_robot_cmd_action_goal(proto)
+        return self._convert_proto_to_robot_cmd_action_goal(proto)
 
     def ready_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
         """Send a command to move the arm to the ready position synchronously
@@ -1259,7 +1228,7 @@ class SpotBasic(object):
         Returns:
             The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
         """
-        action_goal = self.__get_arm_ready_action_goal()
+        action_goal = self._get_arm_ready_action_goal()
         return self.command("ready_arm", action_goal, timeout_sec)
 
     # Alias
@@ -1282,7 +1251,7 @@ class SpotBasic(object):
         Returns:
             TODO
         """
-        action_goal = self.__get_arm_ready_action_goal()
+        action_goal = self._get_arm_ready_action_goal()
         return self.command_async(
             "ready_arm",
             action_goal,
@@ -1294,10 +1263,10 @@ class SpotBasic(object):
     # Alias
     unstow_arm_async = ready_arm_async
 
-    def __get_arm_carry_action_goal(self) -> RobotCommand.Goal:
+    def _get_arm_carry_action_goal(self) -> RobotCommand.Goal:
         """Create the ROS msg to move the arm to the carry position"""
         proto = RobotCommandBuilder.arm_carry_command()
-        return self.__convert_proto_to_robot_cmd_action_goal(proto)
+        return self._convert_proto_to_robot_cmd_action_goal(proto)
 
     def carry_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
         """Move the arm to the carry position synchronously
@@ -1309,7 +1278,7 @@ class SpotBasic(object):
         Returns:
             The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
         """
-        action_goal = self.__get_arm_carry_action_goal()
+        action_goal = self._get_arm_carry_action_goal()
         return self.command("carry_arm", action_goal, timeout_sec)
 
     def carry_arm_async(
@@ -1329,7 +1298,7 @@ class SpotBasic(object):
         Returns:
             TODO
         """
-        action_goal = self.__get_arm_carry_action_goal()
+        action_goal = self._get_arm_carry_action_goal()
         return self.command_async(
             "carry_arm",
             action_goal,
@@ -1338,7 +1307,7 @@ class SpotBasic(object):
             on_failure_callback=on_failure_callback,
         )
 
-    def __get_arm_pose_action_goal(self, vision_t_goal: SE3Pose, move_duration_sec: float) -> RobotCommand.Goal:
+    def _get_arm_pose_action_goal(self, vision_t_goal: SE3Pose, move_duration_sec: float) -> RobotCommand.Goal:
         """Create the ROS Msg for moving the end effector to specific pose"""
         proto = RobotCommandBuilder.arm_pose_command(
             x=vision_t_goal.x,
@@ -1352,7 +1321,7 @@ class SpotBasic(object):
             seconds=move_duration_sec,
         )
 
-        return self.__convert_proto_to_robot_cmd_action_goal(proto)
+        return self._convert_proto_to_robot_cmd_action_goal(proto)
 
     def move_end_effector_cartesian(
         self, vision_t_goal: SE3Pose, move_duration_sec: float = 5.0, timeout_sec: Optional[float] = None
@@ -1371,7 +1340,7 @@ class SpotBasic(object):
         See:
         https://github.com/boston-dynamics/spot-sdk/blob/master/python/bosdyn-client/src/bosdyn/client/robot_command.py#L1224
         """
-        action_goal = self.__get_arm_pose_action_goal(vision_t_goal, move_duration_sec)
+        action_goal = self._get_arm_pose_action_goal(vision_t_goal, move_duration_sec)
         return self.command("move_end_effector_cartesian", action_goal, timeout_sec)
 
     def move_end_effector_cartesian_async(
@@ -1398,7 +1367,7 @@ class SpotBasic(object):
         Returns:
             TODO
         """
-        action_goal = self.__get_arm_pose_action_goal(vision_t_goal, move_duration_sec)
+        action_goal = self._get_arm_pose_action_goal(vision_t_goal, move_duration_sec)
         return self.command_async(
             "move_end_effector_cartesian",
             action_goal,
@@ -1417,7 +1386,7 @@ class SpotBasic(object):
         Returns:
             The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
         """
-        pass
+        raise NotImplementedError()
 
     def move_end_effector_force_async(
         self,
@@ -1436,9 +1405,9 @@ class SpotBasic(object):
         Returns:
             TODO
         """
-        pass
+        raise NotImplementedError()
 
-    def __get_arm_impedance_action_goal(
+    def _get_arm_impedance_action_goal(
         self,
         root_frame_name: FrameHint,
         root_t_task: SE3Pose,
@@ -1498,7 +1467,7 @@ class SpotBasic(object):
             point.time_since_reference.CopyFrom(seconds_to_duration(duration))
             point.pose.CopyFrom(se3pose_to_proto(pose))
 
-        return self.__convert_proto_to_robot_cmd_action_goal(robot_cmd)
+        return self._convert_proto_to_robot_cmd_action_goal(robot_cmd)
 
     def move_end_effector_impedance(
         self,
@@ -1529,7 +1498,7 @@ class SpotBasic(object):
         Returns:
             The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
         """
-        action_goal = self.__get_arm_impedance_action_goal(
+        action_goal = self._get_arm_impedance_action_goal(
             root_frame_name, root_t_task, wrist_t_tool, trajectory, stiffness, damping, wrench_nm
         )
         return self.command("move_end_effector_impedance", action_goal, timeout_sec)
@@ -1568,7 +1537,7 @@ class SpotBasic(object):
         Returns:
             TODO
         """
-        action_goal = self.__get_arm_impedance_action_goal(
+        action_goal = self._get_arm_impedance_action_goal(
             root_frame_name, root_t_task, wrist_t_tool, trajectory, stiffness, damping, wrench_nm
         )
         return self.command_async(
@@ -1589,7 +1558,7 @@ class SpotBasic(object):
         Returns:
             The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
         """
-        action_goal = self.__convert_proto_to_robot_cmd_action_goal(RobotCommandBuilder.claw_gripper_open_command())
+        action_goal = self._convert_proto_to_robot_cmd_action_goal(RobotCommandBuilder.claw_gripper_open_command())
         return self.command("claw_gripper_open", action_goal, timeout_sec)
 
     def claw_gripper_open_async(
@@ -1609,7 +1578,7 @@ class SpotBasic(object):
         Returns:
             TODO
         """
-        action_goal = self.__convert_proto_to_robot_cmd_action_goal(RobotCommandBuilder.claw_gripper_open_command())
+        action_goal = self._convert_proto_to_robot_cmd_action_goal(RobotCommandBuilder.claw_gripper_open_command())
         return self.command_async(
             "claw_gripper_open",
             action_goal,
@@ -1628,7 +1597,7 @@ class SpotBasic(object):
         Returns:
             The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
         """
-        action_goal = self.__convert_proto_to_robot_cmd_action_goal(RobotCommandBuilder.claw_gripper_close_command())
+        action_goal = self._convert_proto_to_robot_cmd_action_goal(RobotCommandBuilder.claw_gripper_close_command())
         return self.command("claw_gripper_close", action_goal, timeout_sec)
 
     def claw_gripper_close_async(
@@ -1648,7 +1617,7 @@ class SpotBasic(object):
         Returns:
             TODO
         """
-        action_goal = self.__convert_proto_to_robot_cmd_action_goal(RobotCommandBuilder.claw_gripper_close_command())
+        action_goal = self._convert_proto_to_robot_cmd_action_goal(RobotCommandBuilder.claw_gripper_close_command())
         return self.command_async(
             "claw_gripper_close",
             action_goal,
@@ -1725,7 +1694,7 @@ class SpotBasic(object):
         # Build the proto
         grasp_request = manipulation_api_pb2.ManipulationApiRequest(pick_object_in_image=grasp)
 
-        return self.__convert_proto_to_robot_cmd_action_goal(grasp_request)
+        return self._convert_proto_to_robot_cmd_action_goal(grasp_request)
 
     def palm_grasp_in_image_top_down(
         self,
@@ -1778,16 +1747,16 @@ class SpotBasic(object):
         # Build the proto
         grasp_request = manipulation_api_pb2.ManipulationApiRequest(pick_object=grasp)
 
-        action_goal = self.__convert_proto_to_manip_cmd_action_goal(grasp_request)
+        action_goal = self._convert_proto_to_manip_cmd_action_goal(grasp_request)
         return self.manipulation("grasp_long_ray", action_goal, 10.0)
 
     def shutdown(self) -> None:
         """Shutdown all the internal components"""
-        self.__executor.shutdown()
-        self.__node.destroy_node()
+        self._executor.shutdown()
+        self._node.destroy_node()
         try:
             # seconds
-            self.__spin_thread.join(1)
+            self._spin_thread.join(1)
         except KeyboardInterrupt:
             pass
 
