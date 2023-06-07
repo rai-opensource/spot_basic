@@ -3,7 +3,7 @@
 import argparse
 from enum import Enum, IntEnum
 from functools import partial
-from threading import Event, Thread
+from threading import Thread
 from typing import Any, Callable, List, Optional, Tuple, TypeVar, Union
 
 import geometry_msgs
@@ -13,6 +13,9 @@ import rclpy
 import spot_driver.conversions as conv
 from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai.utilities.math_helpers import SE2Pose, SE2Velocity, SE3Pose, Vec3, quaternion_to_euler_zyx
+from bdai_ros.utilities.action_handle import ActionHandle
+from bdai_ros.utilities.custom_types import Action
+from bdai_ros.utilities.futures import wait_for_future
 from bdai_ros.utilities.manual_conversions import se3pose_to_proto, to_ros_pose
 from bosdyn.api import geometry_pb2, manipulation_api_pb2, robot_command_pb2
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
@@ -30,11 +33,9 @@ from bosdyn_msgs.msg import (
 from geometry_msgs.msg import Twist
 from rcl_interfaces.srv import GetParameters
 from rclpy.action import ActionClient
-from rclpy.action.client import ClientGoalHandle
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.impl.rcutils_logger import RcutilsLogger
-from rclpy.task import Future
 from spot_msgs.action import Manipulation, RobotCommand
 from spot_msgs.srv import (
     ClearBehaviorFault,
@@ -50,6 +51,7 @@ from spot_msgs.srv import (
 )
 from std_msgs.msg import ColorRGBA as Color
 from std_srvs.srv import SetBool, Trigger
+from typing_extensions import override
 from visualization_msgs.msg import Marker
 
 from spot_utilities.robot_command_helpers import timestamped_se2_vecs_to_robot_command_proto
@@ -57,109 +59,44 @@ from spot_utilities.robot_command_helpers import timestamped_se2_vecs_to_robot_c
 Proto = TypeVar("Proto")
 
 
-class RobotCommandHandle(object):
-    """Handle for an asynchronous RobotCommand sent via an action client"""
+class SpotActionHandle(ActionHandle):
+    def __init__(self, robot_name: str, command_name: str, logger: Optional[RcutilsLogger] = None):
+        super().__init__(action_name=f"{robot_name}.{command_name}", logger=logger)
+        self._result_callback = self._result_callback_intermediate
+        self._result_callback_internal: Optional[Callable[[RobotCommandFeedback], None]] = None
+        self._result_internal: Optional[RobotCommandFeedback] = None
+        self._feedback_callback = self._feedback_callback_intermediate
+        self._feedback_callback_internal: Optional[Callable[[RobotCommandFeedback], None]] = None
 
-    def __init__(self, robot_name: str, command_name: str):
-        """Constructor
+    @property
+    def result(self) -> Optional[RobotCommandFeedback]:
+        return self._result_internal
 
-        Arg:
-            robot_name: Name of the robot
-            command_name: representative name of the command used for logging
-        """
-        self.__robot_name = robot_name
-        self.__command_name = command_name
-
-        self.__send_goal_future: Optional[Future] = None
-        self.__goal_handle: Optional[ClientGoalHandle] = None
-        self.__get_result_future: Optional[Future] = None
-        self.__feedback_callback_internal: Optional[Callable[[RobotCommandFeedback], None]] = None
-        self.__result_callback_internal: Optional[Callable[[RobotCommandFeedback], None]] = None
-        self.__on_failure_callback: Optional[Callable] = None
-        self.result: Optional[RobotCommandFeedback] = None
-
-        self.__logger = RcutilsLogger(name=f"{self.__robot_name}.{self.__command_name}")
-
-    def set_send_goal_future(self, send_goal_future: Future) -> None:
-        """Sets the future received from sending the Action.Goal and sets up the callback for when a response is
-        received
-        """
-        self.__send_goal_future = send_goal_future
-        self.__send_goal_future.add_done_callback(self.__goal_response_callback)
-
-    def set_feedback_callback(self, feedback_callback: Callable[[RobotCommandFeedback], None]) -> None:
-        """Sets the callback used to process feedback received while a RobotCommand is being executed"""
-        self.__feedback_callback_internal = feedback_callback
-
+    @override
     def set_result_callback(self, result_callback: Callable[[RobotCommandFeedback], None]) -> None:
-        """Sets the callback for processing the resulting feedback from executing a RobotCommand"""
-        self.__result_callback_internal = result_callback
+        """Sets the callback for processing the result from executing an Action"""
+        self._result_callback_internal = result_callback
 
-    def set_on_failure_callback(self, on_failure_callback: Callable) -> None:
-        """ """
-        self.__on_failure_callback = on_failure_callback
-
-    def __goal_response_callback(self, future: Future) -> None:
-        """Callback that handles receiving a response from the ActionServer
-
-        Note: This does not handle receiving a result directly
-        """
-        if future.result() is None:
-            self.__logger.error(f"RobotCommand request failed: {future.exception():!r}")
-            self.__failure()
-            return
-        self.__goal_handle = future.result()
-        if not self.__goal_handle.accepted:
-            self.__logger.error("RobotCommand rejected")
-            self.__failure()
-            return
-
-        self.__logger.info("RobotCommand accepted")
-
-        self.__get_result_future = self.__goal_handle.get_result_async()
-        self.__get_result_future.add_done_callback(self.__get_result_callback)
-
-    def get_feedback_callback(self, feedback: RobotCommand.Feedback) -> None:
-        """Public feedback callback given to the ActionClient
-
-        Currently just pulls the feedback from the future and passes it to the user provided callback
-        """
-        if self.__feedback_callback_internal is not None:
-            self.__feedback_callback_internal(feedback.feedback)
-
-    def __get_result_callback(self, future: Future) -> None:
-        """Callback for pulling the resulting feedback out of the future and passing it to a user provided callback"""
-        result = future.result().result
+    def _result_callback_intermediate(self, result: RobotCommand.Result) -> None:
+        """Callback for pulling the result out of the result and passing it to a user provided callback"""
         if not result.success:
-            self.__logger.error(f"RobotCommand resulted in failure. Msg: {result.message}")
-            self.__failure()
+            self._logger.error(f"Action resulted in failure. Msg: {result.message}")
+            self._failure()
             return
 
-        self.result = result.result
-        if self.__result_callback_internal is not None:
-            self.__result_callback_internal(self.result)
-        # TODO: cleanup
+        self._result_internal = result.result
+        if self._result_callback_internal is not None:
+            self._result_callback_internal(self._result_internal)
 
-    def cancel(self) -> None:
-        """Send the desire to cancel a command"""
-        self.__logger.debug("Canceling RobotCommand")
+    @override
+    def set_feedback_callback(self, feedback_callback: Callable[[RobotCommandFeedback], None]) -> None:
+        """Sets the callback for processing the feedback during execution of an Action"""
+        self._feedback_callback_internal = feedback_callback
 
-        if self.__goal_handle is not None:
-            future = self.__goal_handle.cancel_goal_async()
-            future.add_done_callback(self.cancel_response_callback)
-
-    def cancel_response_callback(self, future: Future) -> None:
-        """Callback for handling the response to attempting to cancel a command"""
-        cancel_response = future.result()
-        if len(cancel_response.goals_canceling) > 0:
-            self.__logger.debug("RobotCommand successfully canceled")
-        else:
-            self.__logger.debug("RobotCommand failed to canceled")
-        # TODO: cleanup
-
-    def __failure(self) -> None:
-        if self.__on_failure_callback is not None:
-            self.__on_failure_callback()
+    def _feedback_callback_intermediate(self, feedback: RobotCommand.Feedback) -> None:
+        """Intermediate step to pull the feedback out of the feedback"""
+        if self._feedback_callback_internal is not None:
+            self._feedback_callback_internal(feedback.feedback)
 
 
 class RobotComposeCommandHandle(object):
@@ -188,10 +125,11 @@ class RobotCommandBehavior(py_trees.behaviour.Behaviour):
     def __init__(self, name: str):
         super().__init__(name)
         self._spot: Optional[SpotBasic] = None
-        self._action_handle: Optional[RobotCommandHandle] = None
+        self._action_handle: Optional[SpotActionHandle] = None
         self._status: py_trees.common.Status = py_trees.common.Status.INVALID
 
     def setup(self, **kwargs: dict[str, Any]) -> None:
+        # TODO(Andrew)
         spot: Union[None, Any, SpotBasic] = kwargs.get("spot", None)
         if isinstance(spot, SpotBasic):
             self._spot = spot
@@ -390,29 +328,6 @@ class SpotBasic(object):
         except ExternalShutdownException:
             pass
 
-    @staticmethod
-    def __wait_for_future(future: Future, timeout_sec: Optional[float] = None) -> bool:
-        """Blocks while waiting for a future to become done
-
-        Args:
-            future: The future to be waited on
-            timeout_sec: An optional timeout for who long to wait
-
-        Returns:
-            True if successful, False if the timeout was triggered
-        """
-        event = Event()
-
-        def done_callback(_: Any) -> None:
-            nonlocal event
-            event.set()
-
-        future.add_done_callback(done_callback)
-        if timeout_sec is None:
-            return event.wait()
-        else:
-            return event.wait(timeout_sec)
-
     def initialize_robot(self) -> bool:
         """Returns true/false based on success of claiming and powering up Spot."""
         # Claim robot.
@@ -438,7 +353,7 @@ class SpotBasic(object):
             self.__node.get_logger().error(f"No trigger command {command_name}")
             return False
 
-        if not self.__wait_for_future(future):
+        if not wait_for_future(future):
             return False
 
         response = future.result()
@@ -562,7 +477,7 @@ class SpotBasic(object):
         request = SetBool.Request()
         request.data = value
         future = self.__stair_mode_client.call_async(request)
-        if not self.__wait_for_future(future):
+        if not wait_for_future(future):
             return False
         response = future.result()
         if not response.success:
@@ -581,7 +496,7 @@ class SpotBasic(object):
         request = ExecuteDance.Request()
         request.upload_filepath = path
         future = self.__execute_dance_client.call_async(request)
-        if not self.__wait_for_future(future):
+        if not wait_for_future(future):
             return False, "Call to __wait_for_future timed out"
         response = future.result()
         if not response.success:
@@ -601,7 +516,7 @@ class SpotBasic(object):
         request = SetLocomotion.Request()
         request.locomotion_mode = int(l_hint)
         future = self.__locomotion_mode_client.call_async(request)
-        if not self.__wait_for_future(future):
+        if not wait_for_future(future):
             return False
         response = future.result()
         if not response.success:
@@ -621,7 +536,7 @@ class SpotBasic(object):
         request = SetVelocity.Request()
         request.velocity = velocity_limit
         future = self.__max_velocity_client.call_async(request)
-        if not self.__wait_for_future(future):
+        if not wait_for_future(future):
             return False
         response = future.result()
         if not response.success:
@@ -642,7 +557,7 @@ class SpotBasic(object):
         request = ClearBehaviorFault.Request()
         request.id = bid
         future = self.__clear_behavior_fault_client.call_async(request)
-        if not self.__wait_for_future(future):
+        if not wait_for_future(future):
             return False
         response = future.result()
         if not response.success:
@@ -665,7 +580,7 @@ class SpotBasic(object):
         if request.method == "waypoint":
             request.waypoint_id = waypoint_id
         future = self.__graph_nav_set_localization_client.call_async(request)
-        if not self.__wait_for_future(future):
+        if not wait_for_future(future):
             return False
         response: GraphNavSetLocalization.Response = future.result()
         return response.success
@@ -674,7 +589,7 @@ class SpotBasic(object):
         self.__node.get_logger().info("Get localization pose")
         request = GraphNavGetLocalizationPose.Request()
         future = self.__graph_nav_get_localization_pose_client.call_async(request)
-        if not self.__wait_for_future(future):
+        if not wait_for_future(future):
             return None
         response = future.result()
         if not response.success:
@@ -688,7 +603,7 @@ class SpotBasic(object):
         request = GraphNavUploadGraph.Request()
         request.upload_filepath = upload_filepath
         future = self.__graph_nav_upload_graph_client.call_async(request)
-        if not self.__wait_for_future(future):
+        if not wait_for_future(future):
             return False
         response = future.result()
         return response.success
@@ -697,7 +612,7 @@ class SpotBasic(object):
         self.__node.get_logger().info("Clear graph")
         request = GraphNavClearGraph.Request()
         future = self.__graph_nav_clear_graph_client.call_async(request)
-        if not self.__wait_for_future(future):
+        if not wait_for_future(future):
             return False
         response = future.result()
         return response.success
@@ -708,7 +623,7 @@ class SpotBasic(object):
         request = ListGraph.Request()
         request.upload_filepath = upload_filepath
         future = self.__list_graph_client.call_async(request)
-        if not self.__wait_for_future(future):
+        if not wait_for_future(future):
             return []
         response = future.result()
         return response.waypoint_ids
@@ -722,7 +637,7 @@ class SpotBasic(object):
         request = ListWorldObjects.Request()
         request.request = p_request
         future = self.__list_world_objects_client.call_async(request)
-        if not self.__wait_for_future(future):
+        if not wait_for_future(future):
             return None
         response = future.result()
         return response.response
@@ -737,16 +652,16 @@ class SpotBasic(object):
         request = GetParameters.Request()
         request.names = ["has_arm"]
         future = self.__get_parameters_client.call_async(request)
-        if not self.__wait_for_future(future):
+        if not wait_for_future(future):
             return None
         response = future.result()
         param = response.values[0]
         return param.bool_value
 
-    def __send_robot_command_goal_and_wait(
-        self, command_name: str, goal: RobotCommand.Goal, timeout_sec: Optional[float] = None
-    ) -> Optional[RobotCommandFeedback]:
-        """Sends a goal to the robot command action server and waits for it to be done
+    def __send_action_goal_and_wait(
+        self, command_name: str, goal: Action.Goal, action_client: ActionClient, timeout_sec: Optional[float] = None
+    ) -> Optional[Action.Result]:
+        """Sends an action goal to one of the action servers and waits for it to be done
 
         Args:
             command_name: A representative name of the command for logging
@@ -759,64 +674,67 @@ class SpotBasic(object):
 
         Note: This is a blocking call
         """
-        self.__node.get_logger().info(f"Sending RobotCommand [{self.__robot_name}.{command_name}]")
+        if goal is None:
+            self.__node.get_logger.warn("Cannot send NULL ActionGoal")
+            # TODO: Is there something better that we can return with information about the failure?
+            # maybe a ActionType.Result that represents failure?
+            return None
 
-        future = self.__robot_command_action_client.send_goal_async(goal)
-        if not self.__wait_for_future(future, timeout_sec=timeout_sec):
+        if self.__dry:
+            # TODO: What to return on a dry run? Just success?
+            return None
+
+        self.__node.get_logger().info(f"Sending Action [{self.__robot_name}.{command_name}]")
+
+        future = action_client.send_goal_async(goal)
+        if not wait_for_future(future, timeout_sec=timeout_sec):
             return None
 
         goal_handle = future.result()
         if not goal_handle.accepted:
-            self.__node.get_logger().error(f"RobotCommand [{self.__robot_name}.{command_name}] was not accepted")
+            self.__node.get_logger().error(f"Action [{self.__robot_name}.{command_name}] was not accepted")
             return None
 
-        self.__node.get_logger().info(f"RobotCommand [{self.__robot_name}.{command_name}] accepted")
+        self.__node.get_logger().info(f"Action [{self.__robot_name}.{command_name}] accepted")
         future = goal_handle.get_result_async()
-        if not self.__wait_for_future(future, timeout_sec=timeout_sec):
+        if not wait_for_future(future, timeout_sec=timeout_sec):
             return None
 
-        self.__node.get_logger().info(f"Received response for RobotCommand [{self.__robot_name}.{command_name}]")
+        self.__node.get_logger().info(f"Received response for Action [{self.__robot_name}.{command_name}]")
         return future.result()
 
-    def __send_manipulation_goal_and_wait(
-        self, goal: Manipulation.Goal, timeout_sec: Optional[float] = None
-    ) -> Optional[Manipulation.Goal]:
-        """Sends a goal to the manipulation action server and waits for it to be done
-
-        Args:
-            command_name: A representative name of the command for logging
-            goal: The Action Goal sent to the action server
-            timeout_sec: A timeout for waiting on a response/result from the action server.
-            Setting to None creates no timeout
-
-        Returns:
-            The feedback from the SpotDriver about the result of the manipulation request if it was accepted,
-            None otherwise
-
-        Note: This is a blocking call
-        """
-        if not self.has_arm():
-            self.__node.get_logger().error("Cannot send Manipulation api request, robot has no arm.")
+    def __send_action_goal_async(
+        self,
+        command_name: str,
+        goal: Action.Goal,
+        action_client: ActionClient,
+        *,
+        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Optional[SpotActionHandle]:
+        if goal is None:
+            # Is there something better that we can return with information about the failure?
+            return None
+        if self.__dry:
+            # TODO: What to return on a dry run? Just success?
             return None
 
-        self.__node.get_logger().info(f"Sending Manipulation request to [{self.__robot_name}]")
+        handle = SpotActionHandle(robot_name=self.__robot_name, command_name=command_name)
+        if result_callback is not None:
+            handle.set_result_callback(result_callback)
 
-        future = self.__manipulation_action_client.send_goal_async(goal)
-        if not self.__wait_for_future(future, timeout_sec=timeout_sec):
-            return None
+        if feedback_callback is None:
+            send_goal_future = action_client.send_goal_async(goal)
+        else:
+            handle.set_feedback_callback(feedback_callback)
+            send_goal_future = action_client.send_goal_async(goal, feedback_callback=handle.get_feedback_callback)
+        handle.set_send_goal_future(send_goal_future)
 
-        goal_handle = future.result()
-        if not goal_handle.accepted:
-            self.__node.get_logger().error(f"Manipulation request to [{self.__robot_name}] was not accepted")
-            return None
+        if on_failure_callback is not None:
+            handle.set_on_failure_callback(on_failure_callback)
 
-        self.__node.get_logger().info(f"Manipulation request to [{self.__robot_name}] accepted")
-        future = goal_handle.get_result_async()
-        if not self.__wait_for_future(future, timeout_sec=timeout_sec):
-            return None
-
-        self.__node.get_logger().info(f"Received response for Manipulation request to [{self.__robot_name}]")
-        return future.result()
+        return handle
 
     def command(
         self, command_name: str, goal: RobotCommand.Goal, timeout_sec: Optional[float] = None
@@ -834,15 +752,7 @@ class SpotBasic(object):
 
         See https://github.com/bdaiinstitute/spot_ros2/blob/main/spot_msgs/action/RobotCommand.action
         """
-        if goal is None:
-            self.__node.get_logger.warn("Cannot send NULL ActionGoal")
-            # TODO: Is there something better that we can return with information about the failure?
-            # maybe a RobotCommand.Result that represents failure?
-            return None
-        if not self.__dry:
-            return self.__send_robot_command_goal_and_wait(command_name, goal, timeout_sec)
-        # TODO: What to return on a dry run? Just success?
-        return None
+        return self.__send_action_goal_and_wait(command_name, goal, self.__robot_command_action_client, timeout_sec)
 
     def command_async(
         self,
@@ -852,7 +762,7 @@ class SpotBasic(object):
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Optional[RobotCommandHandle]:
+    ) -> Optional[SpotActionHandle]:
         """Runs the `RobotCommand` action asynchronously
 
         Args:
@@ -867,50 +777,53 @@ class SpotBasic(object):
 
         See https://github.com/bdaiinstitute/spot_ros2/blob/main/spot_msgs/action/RobotCommand.action
         """
-        if goal is None:
-            # Is there something better that we can return with information about the failure?
+        return self.__send_action_goal_async(
+            command_name,
+            goal,
+            self.__robot_command_action_client,
+            result_callback=result_callback,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
+
+    def manipulation(
+        self, command_name: str, goal: Manipulation.Goal, timeout_sec: Optional[float] = None
+    ) -> Optional[ManipulationApiFeedbackResponse]:
+        """Synchronously run a manipulation request
+
+        Args:
+            command_name
+            goal
+            timeout_sec
+
+        Returns:
+
+        """
+        if not self.has_arm():
+            self.__node.get_logger().error("Cannot send Manipulation api request, robot has no arm.")
             return None
-        if not self.__dry:
-            handle = RobotCommandHandle(robot_name=self.__robot_name, command_name=command_name)
-            if result_callback is not None:
-                handle.set_result_callback(result_callback)
-
-            if feedback_callback is None:
-                send_goal_future = self.__robot_command_action_client.send_goal_async(goal)
-            else:
-                handle.set_feedback_callback(feedback_callback)
-                send_goal_future = self.__robot_command_action_client.send_goal_async(
-                    goal, feedback_callback=handle.get_feedback_callback
-                )
-            handle.set_send_goal_future(send_goal_future)
-
-            if on_failure_callback is not None:
-                handle.set_on_failure_callback(on_failure_callback)
-
-            return handle
-        # TODO: What to return on a dry run? Just success?
-        return None
-
-    def manipulation(self, goal: Manipulation.Goal, timeout_sec: Optional[float] = None) -> Optional[Manipulation.Goal]:
-        if goal is None:
-            self.__node.get_logger.warn("Cannot send NULL ActionGoal")
-            # TODO: Is there something better that we can return with information about the failure?
-            # maybe a RobotCommand.Result that represents failure?
-            return None
-        if not self.__dry:
-            return self.__send_manipulation_goal_and_wait(goal, timeout_sec)
-        # TODO: What to return on a dry run? Just success?
-        return None
+        return self.__send_action_goal_and_wait(command_name, goal, self.__manipulation_action_client, timeout_sec)
 
     def manipulation_async(
         self,
+        command_name: str,
         goal: Manipulation.Goal,
         *,
         result_callback: Optional[Callable[[ManipulationApiFeedbackResponse], None]] = None,
         feedback_callback: Optional[Callable[[ManipulationApiFeedbackResponse], None]] = None,
         on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> None:  # Optional[ManipulationHandle]:
-        pass
+    ) -> Optional[SpotActionHandle]:
+        if not self.has_arm():
+            self.__node.get_logger().error("Cannot send Manipulation api request, robot has no arm.")
+            return None
+        return self.__send_action_goal_async(
+            command_name,
+            goal,
+            self.__manipulation_action_client,
+            result_callback=result_callback,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
 
     def __draw_arrow(self, frame_id: str, ns: str, frame_t_arrow: SE2Pose | SE3Pose, color: Color) -> None:
         """Draw an arrow in RVIZ"""
@@ -968,7 +881,7 @@ class SpotBasic(object):
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Optional[RobotCommandHandle]:
+    ) -> Optional[SpotActionHandle]:
         """Send command to go to the battery change pose asynchronously
 
         Args:
@@ -1052,7 +965,7 @@ class SpotBasic(object):
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Optional[RobotCommandHandle]:
+    ) -> Optional[SpotActionHandle]:
         """Send the command to walk to a specific SE2 pose
 
         Args:
@@ -1116,7 +1029,7 @@ class SpotBasic(object):
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Optional[RobotCommandHandle]:
+    ) -> Optional[SpotActionHandle]:
         """Send the command to stand in a specific SO3 rotation
 
         Args:
@@ -1264,7 +1177,7 @@ class SpotBasic(object):
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Optional[RobotCommandHandle]:
+    ) -> Optional[SpotActionHandle]:
         """Send the command to walk along a trajectory asynchronously
 
         Args:
@@ -1311,7 +1224,7 @@ class SpotBasic(object):
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Optional[RobotCommandHandle]:
+    ) -> Optional[SpotActionHandle]:
         """Send a command to stow the arm asynchronously
 
         Args:
@@ -1358,7 +1271,7 @@ class SpotBasic(object):
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Optional[RobotCommandHandle]:
+    ) -> Optional[SpotActionHandle]:
         """Send a command to move the arm to the ready position asynchronously
 
         Args:
@@ -1405,7 +1318,7 @@ class SpotBasic(object):
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Optional[RobotCommandHandle]:
+    ) -> Optional[SpotActionHandle]:
         """Move the arm to the carry position asynchronously
 
         Args:
@@ -1469,7 +1382,7 @@ class SpotBasic(object):
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Optional[RobotCommandHandle]:
+    ) -> Optional[SpotActionHandle]:
         """Send command to move the end effector to a specific pose asynchronously
 
         Args:
@@ -1512,7 +1425,7 @@ class SpotBasic(object):
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Optional[RobotCommandHandle]:
+    ) -> Optional[SpotActionHandle]:
         """TODO
 
         Args:
@@ -1634,7 +1547,7 @@ class SpotBasic(object):
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Optional[RobotCommandHandle]:
+    ) -> Optional[SpotActionHandle]:
         """Impedance control as variable stiffness/damping position control combined with a
             feed-forward force control as a wrench.
 
@@ -1685,7 +1598,7 @@ class SpotBasic(object):
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Optional[RobotCommandHandle]:
+    ) -> Optional[SpotActionHandle]:
         """Send a command to open the gripper asynchronously
 
         Args:
@@ -1724,7 +1637,7 @@ class SpotBasic(object):
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Optional[RobotCommandHandle]:
+    ) -> Optional[SpotActionHandle]:
         """Send a command to close the gripper asynchronously
 
         Args:
@@ -1836,7 +1749,7 @@ class SpotBasic(object):
         task_frame_name: str,
         palm_placement_ratio: float,
         apply_grasp_params_func: Optional[Callable] = None,
-    ) -> Optional[Manipulation.Goal]:
+    ) -> Optional[ManipulationApiFeedbackResponse]:
         """Cast a ray in the world and pick the first object found along the ray.
         This is the lowest-level grasping message; all other grasp options internally
         use this message to trigger a grasp.
@@ -1866,15 +1779,15 @@ class SpotBasic(object):
         grasp_request = manipulation_api_pb2.ManipulationApiRequest(pick_object=grasp)
 
         action_goal = self.__convert_proto_to_manip_cmd_action_goal(grasp_request)
-        return self.manipulation(action_goal, 10.0)
+        return self.manipulation("grasp_long_ray", action_goal, 10.0)
 
     def shutdown(self) -> None:
         """Shutdown all the internal components"""
-        self.__robot_command_action_client.destroy()
-        self.__node.destroy_node()
         self.__executor.shutdown()
+        self.__node.destroy_node()
         try:
-            self.__spin_thread.join()
+            # seconds
+            self.__spin_thread.join(1)
         except KeyboardInterrupt:
             pass
 
