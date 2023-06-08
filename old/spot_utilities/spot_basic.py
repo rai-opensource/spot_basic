@@ -1677,24 +1677,25 @@ class SpotBasic(object):
                 to modify default grasping behavior.
                 (see https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html?highlight=pickobjectinimage#graspparams)
         """  # noqa: E501
-        pick_vec = geometry_pb2.Vec2(x=pixel_xy[0], y=pixel_xy[1])
-        grasp = manipulation_api_pb2.PickObjectInImage(
-            pixel_xy=pick_vec,
-            transforms_snapshot_for_camera=image_data.shot.transforms_snapshot,
-            frame_name_image_sensor=image_data.shot.frame_name_image_sensor,
-            camera_model=image_data.source.pinhole,
-        )
+        raise NotImplementedError()
+        # pick_vec = geometry_pb2.Vec2(x=pixel_xy[0], y=pixel_xy[1])
+        # grasp = manipulation_api_pb2.PickObjectInImage(
+        #     pixel_xy=pick_vec,
+        #     transforms_snapshot_for_camera=image_data.shot.transforms_snapshot,
+        #     frame_name_image_sensor=image_data.shot.frame_name_image_sensor,
+        #     camera_model=image_data.source.pinhole,
+        # )
 
-        # We can specify where in the gripper we want to grasp.
-        grasp.grasp_params.grasp_palm_to_fingertip = palm_placement_ratio
+        # # We can specify where in the gripper we want to grasp.
+        # grasp.grasp_params.grasp_palm_to_fingertip = palm_placement_ratio
 
-        if apply_grasp_params_func is not None:
-            apply_grasp_params_func(grasp)
+        # if apply_grasp_params_func is not None:
+        #     apply_grasp_params_func(grasp)
 
-        # Build the proto
-        grasp_request = manipulation_api_pb2.ManipulationApiRequest(pick_object_in_image=grasp)
+        # # Build the proto
+        # grasp_request = manipulation_api_pb2.ManipulationApiRequest(pick_object_in_image=grasp)
 
-        return self._convert_proto_to_robot_cmd_action_goal(grasp_request)
+        # return self._convert_proto_to_robot_cmd_action_goal(grasp_request)
 
     def palm_grasp_in_image_top_down(
         self,
@@ -1709,7 +1710,8 @@ class SpotBasic(object):
                 and then grasp the object.
             image_data: Image data taken using spot (need to figure out data type).
         """
-        return self.grasp_in_image(pixel_xy, image_data, 0.0, self.set_tight_top_down_grasp)
+        raise NotImplementedError()
+        # return self.grasp_in_image(pixel_xy, image_data, 0.0, self.set_tight_top_down_grasp)
 
     def grasp_along_ray(
         self,
