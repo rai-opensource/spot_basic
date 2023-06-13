@@ -38,15 +38,21 @@ from rclpy.impl.rcutils_logger import RcutilsLogger
 from spot_msgs.action import Manipulation, RobotCommand
 from spot_msgs.srv import (
     ClearBehaviorFault,
+    DeleteSound,
     ExecuteDance,
+    GetVolume,
     GraphNavClearGraph,
     GraphNavGetLocalizationPose,
     GraphNavSetLocalization,
     GraphNavUploadGraph,
     ListGraph,
+    ListSounds,
     ListWorldObjects,
+    LoadSound,
+    PlaySound,
     SetLocomotion,
     SetVelocity,
+    SetVolume,
 )
 from std_msgs.msg import ColorRGBA as Color
 from std_srvs.srv import SetBool, Trigger
@@ -253,6 +259,24 @@ class SpotBasic(object):
             GraphNavGetLocalizationPose,
             f"/{self._robot_name}/graph_nav_get_localization_pose",
             callback_group=self._callback_group,
+        )
+        self._list_sounds_client = self._node.create_client(
+            ListSounds, f"/{self.robot_name}/list_sounds", callback_group=self._callback_group
+        )
+        self._load_sound_client = self._node.create_client(
+            LoadSound, f"/{self.robot_name}/load_sound", callback_group=self._callback_group
+        )
+        self._play_sound_client = self._node.create_client(
+            PlaySound, f"/{self.robot_name}/play_sound", callback_group=self._callback_group
+        )
+        self._delete_sound_client = self._node.create_client(
+            DeleteSound, f"/{self.robot_name}/delete_sound", callback_group=self._callback_group
+        )
+        self._get_volume_client = self._node.create_client(
+            GetVolume, f"/{self.robot_name}/get_volume", callback_group=self._callback_group
+        )
+        self._set_volume_client = self._node.create_client(
+            SetVolume, f"/{self.robot_name}/set_volume", callback_group=self._callback_group
         )
 
         self._robot_command_action_client = ActionClient(self._node, RobotCommand, "robot_command")
@@ -475,6 +499,102 @@ class SpotBasic(object):
             )
             return False, response.message
         return True, "success"
+
+    def list_sounds(self) -> tuple[bool, str, list[str]]:
+        """
+        List sounds loaded on Spot CAM.
+
+        Returns:
+            (True, 'Success', [<sound names>]) on success
+            (False, <error message>, <ignore>) on failure
+        """
+        request = ListSounds.Request()
+        future = self._list_sounds_client.call_async(request)
+        if not wait_for_future(future):
+            return False, "Call to wait_for_future timed out", []
+        response = future.result()
+        return response.success, response.message, response.names
+
+    def load_sound(self, name: str, wav_path: str) -> tuple[bool, str]:
+        """
+        Upload wav file sound from this machine to Spot CAM.
+
+        Returns:
+            (True, 'Success') on success
+            (False, <error message>) on failure
+        """
+        request = LoadSound.Request()
+        request.name = name
+        request.wav_path = wav_path
+        future = self._load_sound_client.call_async(request)
+        if not wait_for_future(future):
+            return False, "Call to wait_for_future timed out"
+        response = future.result()
+        return response.success, response.message
+
+    def play_sound(self, name: str, volume_multiplier: float) -> tuple[bool, str]:
+        """
+        Play sound loaded on Spot CAM. Volume should be between 0 and 1. # TODO(tchemel): Is this true?
+
+        Returns:
+            (True, 'Success') on success
+            (False, <error message>) on failure
+        """
+        request = PlaySound.Request()
+        request.name = name
+        request.volume_multiplier = volume_multiplier
+        future = self._play_sound_client.call_async(request)
+        if not wait_for_future(future):
+            return False, "Call to wait_for_future timed out"
+        response = future.result()
+        return response.success, response.message
+
+    def delete_sound(self, name: str) -> tuple[bool, str]:
+        """
+        Delete sound loaded on Spot CAM.
+
+        Returns:
+            (True, 'Success') on success
+            (False, <error message>) on failure
+        """
+        request = DeleteSound.Request()
+        request.name = name
+        future = self._delete_sound_client.call_async(request)
+        if not wait_for_future(future):
+            return False, "Call to wait_for_future timed out"
+        response = future.result()
+        return response.success, response.message
+
+    def get_volume(self) -> tuple[bool, str, float]:
+        """
+        Get volume of sound playback on Spot CAM.
+
+        Returns:
+            (True, 'Success', <volume between 0 and 1>) on success
+            (False, <error message>, <ignore>) on failure
+        """
+        request = GetVolume.Request()
+        future = self._get_volume_client.call_async(request)
+        if not wait_for_future(future):
+            return False, "Call to wait_for_future timed out", 0
+        response = future.result()
+        return response.success, response.message, response.volume
+
+    def set_volume(self, volume: float) -> tuple[bool, str]:
+        """
+        Set volume of sound playback on Spot CAM. Volume should be between 0 and 1.
+
+        Returns:
+            (True, 'Success') on success
+            (False, <error message>) on failure
+        """
+        request = SetVolume.Request()
+        request.volume = volume
+        future = self._set_volume_client.call_async(request)
+        if not wait_for_future(future):
+            return False, "Call to wait_for_future timed out"
+        response = future.result()
+        return response.success, response.message
 
     def set_locomotion_mode(self, l_hint: LocomotionHint) -> bool:
         """Set the locomotion mode on the SpotDriver
