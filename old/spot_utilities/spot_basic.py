@@ -45,6 +45,8 @@ from spot_msgs.srv import (
     GraphNavGetLocalizationPose,
     GraphNavSetLocalization,
     GraphNavUploadGraph,
+    ListAllDances,
+    ListAllMoves,
     ListGraph,
     ListSounds,
     ListWorldObjects,
@@ -53,6 +55,7 @@ from spot_msgs.srv import (
     SetLocomotion,
     SetVelocity,
     SetVolume,
+    UploadAnimation,
 )
 from std_msgs.msg import ColorRGBA as Color
 from std_srvs.srv import SetBool, Trigger
@@ -226,6 +229,21 @@ class SpotBasic(object):
         self._execute_dance_client = self._node.create_client(
             ExecuteDance,
             f"/{self.robot_name}/execute_dance",
+            callback_group=self._callback_group,
+        )
+        self._upload_animation_client = self._node.create_client(
+            UploadAnimation,
+            f"/{self.robot_name}/upload_animation",
+            callback_group=self._callback_group,
+        )
+        self._list_all_dances_client = self._node.create_client(
+            ListAllDances,
+            f"/{self.robot_name}/list_all_dances",
+            callback_group=self._callback_group,
+        )
+        self._list_all_moves_client = self._node.create_client(
+            ListAllMoves,
+            f"/{self.robot_name}/list_all_moves",
             callback_group=self._callback_group,
         )
         self._max_velocity_client = self._node.create_client(
@@ -488,7 +506,13 @@ class SpotBasic(object):
         """
         self._node.get_logger().info(f"Uploading dance at '{path}' to {self.robot_name}")
         request = ExecuteDance.Request()
-        request.upload_filepath = path
+        try:
+            dance_file = open(path, "r")
+            request.choreo_file_content = dance_file.read()
+            dance_file.close()
+        except FileNotFoundError:
+            return False, "Specified filepath does not exist!"
+
         future = self._execute_dance_client.call_async(request)
         if not wait_for_future(future):
             return False, "Call to wait_for_future timed out"
@@ -499,6 +523,62 @@ class SpotBasic(object):
             )
             return False, response.message
         return True, "success"
+
+    def upload_animation(self, move_name: str, path: str) -> tuple[bool, str]:
+        """Upload an animation file through spot driver
+        Returns:
+            (True, "success") if the command succeeded, (False, <error_message>) otherwise
+        """
+        self._node.get_logger().info(f"Uploading animation at '{path}' to {self.robot_name}")
+        request = UploadAnimation.Request()
+        try:
+            dance_file = open(path, "r")
+            request.animation_file_content = dance_file.read()
+            request.animation_name = move_name
+            dance_file.close()
+        except FileNotFoundError:
+            return False, "Specified filepath does not exist!"
+
+        future = self._upload_animation_client.call_async(request)
+        if not wait_for_future(future):
+            return False, "Call to wait_for_future timed out"
+        response = future.result()
+        if not response.success:
+            self._node.get_logger().debug(
+                f"Uploading animation '{path}' to '{self.robot_name}' failed. Msg: {response.message}."
+            )
+            return False, response.message
+        return True, "success"
+
+    def list_all_dances(self) -> tuple[bool, str, list[str]]:
+        """Get list of all the dances uploaded on Spot"""
+        self._node.get_logger().info(f"Sending list dances request to {self.robot_name}")
+        request = ListAllDances.Request()
+        future = self._list_all_dances_client.call_async(request)
+        if not wait_for_future(future):
+            return False, "Call to wait_for_future timed out", []
+        response = future.result()
+        if not response.success:
+            self._node.get_logger().debug(
+                f"Request to list dances at '{self.robot_name}' failed. Msg: {response.message}."
+            )
+            return False, response.message, []
+        return True, "success", response.dances
+
+    def list_all_moves(self) -> tuple[bool, str, list[str]]:
+        """Get list of all the moves uploaded on Spot"""
+        self._node.get_logger().info(f"Sending list moves request to {self.robot_name}")
+        request = ListAllMoves.Request()
+        future = self._list_all_moves_client.call_async(request)
+        if not wait_for_future(future):
+            return False, "Call to wait_for_future timed out", []
+        response = future.result()
+        if not response.success:
+            self._node.get_logger().debug(
+                f"Request to list moves at '{self.robot_name}' failed. Msg: {response.message}."
+            )
+            return False, response.message, []
+        return True, "success", response.moves
 
     def list_sounds(self) -> tuple[bool, str, list[str]]:
         """
