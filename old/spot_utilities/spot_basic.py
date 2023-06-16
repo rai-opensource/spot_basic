@@ -1283,12 +1283,31 @@ class SpotBasic(object):
         )
         return RobotComposeCommandHandle([walk_partial, stand_partial], result_callback)
 
-    def walk_velocity(self, body_velocity: SE2Velocity) -> None:
+    def walk_velocity(
+        self, body_velocity: SE2Velocity, duration: Optional[float] = None, rate: Optional[float] = 50.0
+    ) -> None:
         """Send the command to walk/turn in a specific body-frame direction at a specific speed
 
         Args:
             body_velocity: the desired SE2 in the body frame
+            duration: the time (in seconds) to maintain the desired velocity
+                setting to None (default) means the robot would walk for
+                a minimum duration set by the "cmd_duration" parameter for in spot_ros2.
+            rate: Rate (hz) at which velocity command is sent for the given duration.
+                No effect if duration is None.
         """
+        if duration is None:
+            self._publish_velocity_cmd(body_velocity)
+        else:
+            rate_timer = self._node.create_rate(rate)
+            start_time = self._node.get_clock().now()
+            dt = self._node.get_clock().now() - start_time
+            while dt.nanoseconds * 1e-9 < duration:
+                self._publish_velocity_cmd(body_velocity)
+                rate_timer.sleep()
+                dt = self._node.get_clock().now() - start_time
+
+    def _publish_velocity_cmd(self, body_velocity: SE2Velocity) -> None:
         velocity_cmd_msg = Twist()
         velocity_cmd_msg.linear.x = body_velocity.linear_velocity_x
         velocity_cmd_msg.linear.y = body_velocity.linear_velocity_y
