@@ -1526,9 +1526,11 @@ class SpotBasic(object):
             on_failure_callback=on_failure_callback,
         )
 
-    def _get_arm_pose_action_goal(self, vision_t_goal: SE3Pose, move_duration_sec: float) -> RobotCommand.Goal:
+    def _get_arm_pose_action_goal(
+        self, vision_t_goal: SE3Pose, move_duration_sec: float, body_follow: bool = False
+    ) -> RobotCommand.Goal:
         """Create the ROS Msg for moving the end effector to specific pose"""
-        proto = RobotCommandBuilder.arm_pose_command(
+        arm_pose_command = RobotCommandBuilder.arm_pose_command(
             x=vision_t_goal.x,
             y=vision_t_goal.y,
             z=vision_t_goal.z,
@@ -1539,11 +1541,19 @@ class SpotBasic(object):
             frame_name=VISION_FRAME_NAME,
             seconds=move_duration_sec,
         )
-
-        return self._convert_proto_to_robot_cmd_action_goal(proto)
+        if body_follow:
+            follow_arm_command = RobotCommandBuilder.follow_arm_command()
+            synchro_command = RobotCommandBuilder.build_synchro_command(follow_arm_command, arm_pose_command)
+            return self._convert_proto_to_robot_cmd_action_goal(synchro_command)
+        else:
+            return self._convert_proto_to_robot_cmd_action_goal(arm_pose_command)
 
     def move_end_effector_cartesian(
-        self, vision_t_goal: SE3Pose, move_duration_sec: float = 5.0, timeout_sec: Optional[float] = None
+        self,
+        vision_t_goal: SE3Pose,
+        move_duration_sec: float = 5.0,
+        body_follow: bool = False,
+        timeout_sec: Optional[float] = None,
     ) -> Optional[RobotCommandFeedback]:
         """Send command to move the end effector to a specific pose synchronously
 
@@ -1552,6 +1562,7 @@ class SpotBasic(object):
             move_duration_sec: The duration of the move
             timeout_sec: A timeout for waiting on a response/result from the action server. Setting to None creates no
                 timeout
+            body_follow: If True, the robot's body would automatically follow the arm to achieve the goal
 
         Returns:
             The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
@@ -1559,13 +1570,14 @@ class SpotBasic(object):
         See:
         https://github.com/boston-dynamics/spot-sdk/blob/master/python/bosdyn-client/src/bosdyn/client/robot_command.py#L1224
         """
-        action_goal = self._get_arm_pose_action_goal(vision_t_goal, move_duration_sec)
+        action_goal = self._get_arm_pose_action_goal(vision_t_goal, move_duration_sec, body_follow=body_follow)
         return self.command("move_end_effector_cartesian", action_goal, timeout_sec)
 
     def move_end_effector_cartesian_async(
         self,
         vision_t_goal: SE3Pose,
         move_duration_sec: float = 5.0,
+        body_follow: bool = False,
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
@@ -1586,7 +1598,7 @@ class SpotBasic(object):
         Returns:
             TODO
         """
-        action_goal = self._get_arm_pose_action_goal(vision_t_goal, move_duration_sec)
+        action_goal = self._get_arm_pose_action_goal(vision_t_goal, move_duration_sec, body_follow=body_follow)
         return self.command_async(
             "move_end_effector_cartesian",
             action_goal,
