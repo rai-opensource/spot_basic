@@ -7,6 +7,7 @@ from bdai.utilities.math_helpers import SE2Pose
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 from bosdyn.client.frame_helpers import BODY_FRAME_NAME, VISION_FRAME_NAME
 from rclpy.node import Node
+from spatialmath import SE2
 from spot_utilities.spot_basic import SpotBasic
 
 # Where we want the robot to walk to relative to itself
@@ -47,6 +48,9 @@ class WalkForward(Node):
         self.get_logger().info("Walking forward")
         world_t_robot = self._tf_listener.lookup_a_tform_b_se2(self._vision_frame_name, self._body_frame_name)
         world_t_goal = world_t_robot * ROBOT_T_GOAL
+        world_t_goal = SE2(x=world_t_goal.x, y=world_t_goal.y)
+        print(f"Going to \n{world_t_goal}.\nx={world_t_goal.x}, y={world_t_goal.y}, theta={world_t_goal.theta()}")
+
         self._robot.walk_to(world_t_goal)
         self.get_logger().info("Successfully walked forward")
 

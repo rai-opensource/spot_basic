@@ -10,11 +10,9 @@ import math
 import threading
 
 import rclpy
-from bdai.utilities.math_helpers import (
-    SE2Velocity,
-)
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 from bdai_ros2_wrappers.action_client import ActionClientWrapper
+from spatialmath.twist import Twist2
 from spot_msgs.action import RobotCommand
 from spot_utilities.spot_basic import SpotBasic
 
@@ -52,7 +50,7 @@ def main() -> None:
         raise ValueError(f"invalid body_velocity: {args.body_velocity}")
 
     try:
-        body_velocity = SE2Velocity(vx, vy, vyaw)
+        body_velocity = Twist2([vx, vy], vyaw)
         spot_basic.walk_velocity(body_velocity, duration=args.duration)
     except KeyboardInterrupt:
         spot_basic.stop()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-#  Copyright [2023] Boston Dynamics AI Institute, Inc.
+# Copyright (c) 2023 Boston Dynamics AI Institute, Inc. All rights reserved.
 import argparse
 from enum import Enum, IntEnum
 from functools import partial
@@ -11,17 +11,16 @@ import numpy as np
 import rclpy
 import spot_driver.conversions as conv
 from bdai.trajectory.se2_trajectory import SE2Trajectory
-from bdai.utilities.math_helpers import SE2Pose, SE2Velocity, SE3Pose, Vec3, quaternion_to_euler_zyx
 from bdai_ros.utilities.action_handle import ActionHandle
 from bdai_ros.utilities.custom_types import Action
 from bdai_ros.utilities.futures import wait_for_future
-from bdai_ros.utilities.manual_conversions import se3pose_to_proto, to_ros_pose
+from bdai_ros.utilities.manual_conversions import se3_to_se3pose_proto, to_ros_pose
 from bosdyn.api import geometry_pb2, manipulation_api_pb2, robot_command_pb2
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.api.trajectory_pb2 import POS_INTERP_CUBIC, PositionalInterpolation
 from bosdyn.client.frame_helpers import BODY_FRAME_NAME, HAND_FRAME_NAME, ODOM_FRAME_NAME, VISION_FRAME_NAME
 from bosdyn.client.robot_command import RobotCommandBuilder
-from bosdyn.geometry import EulerZXY
+from bosdyn.geometry import Quaternion, to_euler_zxy
 from bosdyn.util import seconds_to_duration
 from bosdyn_msgs.msg import (
     ListWorldObjectRequest,
@@ -35,6 +34,10 @@ from rclpy.action import ActionClient
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.impl.rcutils_logger import RcutilsLogger
+from spatialmath import SE2, SE3, SO3, SpatialForce, UnitQuaternion
+from spatialmath.base.types import R3
+from spatialmath.spatialvector import SpatialVector
+from spatialmath.twist import Twist2
 from spot_msgs.action import Manipulation, RobotCommand
 from spot_msgs.srv import (
     ClearBehaviorFault,
@@ -994,7 +997,7 @@ class SpotBasic(object):
             on_failure_callback=on_failure_callback,
         )
 
-    def _draw_arrow(self, frame_id: str, ns: str, frame_t_arrow: SE2Pose | SE3Pose, color: Color) -> None:
+    def _draw_arrow(self, frame_id: str, ns: str, frame_t_arrow: SE2 | SE3, color: Color) -> None:
         """Draw an arrow in RVIZ"""
         marker = Marker()
         marker.header.stamp = self._node.get_clock().now().to_msg()
@@ -1084,7 +1087,7 @@ class SpotBasic(object):
         )
         return spot_command_pb2.MobilityParams(obstacle_params=obstacles)
 
-    def _get_walk_to_action_goal(self, vision_t_goal: SE2Pose, height: float) -> RobotCommand.Goal:
+    def _get_walk_to_action_goal(self, vision_t_goal: SE2, height: float) -> RobotCommand.Goal:
         """TODO
 
         Args:
@@ -1102,7 +1105,7 @@ class SpotBasic(object):
         proto_goal = RobotCommandBuilder.synchro_se2_trajectory_point_command(
             goal_x=vision_t_goal.x,
             goal_y=vision_t_goal.y,
-            goal_heading=vision_t_goal.yaw,
+            goal_heading=vision_t_goal.theta(),
             frame_name=VISION_FRAME_NAME,
             body_height=height,
             params=self._get_mobility_params(),
@@ -1110,7 +1113,7 @@ class SpotBasic(object):
         return self._convert_proto_to_robot_cmd_action_goal(proto_goal)
 
     def walk_to(
-        self, vision_t_goal: SE2Pose, height: float = 0, timeout_sec: Optional[float] = None
+        self, vision_t_goal: SE2, height: float = 0, timeout_sec: Optional[float] = None
     ) -> Optional[RobotCommandFeedback]:
         """Send the command to walk to a specific SE2 goal
 
@@ -1128,7 +1131,7 @@ class SpotBasic(object):
 
     def walk_to_async(
         self,
-        vision_t_goal: SE2Pose,
+        vision_t_goal: SE2,
         height: float = 0,
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
@@ -1156,12 +1159,10 @@ class SpotBasic(object):
             on_failure_callback=on_failure_callback,
         )
 
-    def _get_stand_to_action_goal(self, vision_r_goal: EulerZXY, height: float) -> RobotCommand.Goal:
-        """TODO
-
+    def _get_stand_to_action_goal(self, vision_r_goal: SO3, height: float) -> RobotCommand.Goal:
+        """
         Args:
-            vision_r_goal: A SO3 rotation, expressed as EulerZXY object (yaw, pitch, roll, in radians) from the vision
-                frame to where the user wants the spot to rotate to
+            vision_r_goal: A SO3 rotation from the vision frame to goal orientation.
             height: The height of the body
 
         Returns:
@@ -1169,17 +1170,25 @@ class SpotBasic(object):
         """
         self._node.get_logger().info("Moving to goal orientation...")
 
-        proto_goal = RobotCommandBuilder.synchro_stand_command(body_height=height, footprint_R_body=vision_r_goal)
+        vision_r_goal = UnitQuaternion(vision_r_goal)
+        footprint_R_body = to_euler_zxy(
+            Quaternion(
+                w=vision_r_goal.A[0],
+                x=vision_r_goal.A[1],
+                y=vision_r_goal.A[2],
+                z=vision_r_goal.A[3],
+            )
+        )
+        proto_goal = RobotCommandBuilder.synchro_stand_command(body_height=height, footprint_R_body=footprint_R_body)
         return self._convert_proto_to_robot_cmd_action_goal(proto_goal)
 
     def stand_with_orientation(
-        self, vision_r_goal: EulerZXY, height: float, timeout_sec: Optional[float] = None
+        self, vision_r_goal: SO3, height: float, timeout_sec: Optional[float] = None
     ) -> Optional[RobotCommandFeedback]:
         """Send the command to stand in a specific SO3 rotation
 
         Args:
-            vision_r_goal: A SO3 rotation, expressed as EulerZXY object (yaw, pitch, roll, in radians) from the vision
-                frame to where the user wants the spot to rotate to
+            vision_r_goal: A SO3 rotation from the vision frame to goal orientation.
             height: The height of the body
             timeout_sec: A timeout for waiting on a response/result from the action server. Setting to None creates no
                 timeout
@@ -1192,7 +1201,7 @@ class SpotBasic(object):
 
     def stand_with_orientation_async(
         self,
-        vision_r_goal: EulerZXY,
+        vision_r_goal: SO3,
         height: float,
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
@@ -1222,7 +1231,7 @@ class SpotBasic(object):
         )
 
     def walk_and_orient(
-        self, vision_t_goal: SE3Pose, timeout_sec: Optional[float] = None
+        self, vision_t_goal: SE3, timeout_sec: Optional[float] = None
     ) -> Optional[RobotCommandFeedback]:
         """Send the command to walk and rotate to a specific SE3 pose
 
@@ -1234,20 +1243,18 @@ class SpotBasic(object):
         Returns:
             The feedback from the SpotDriver about the result of the commands if it was accepted, None otherwise
         """
-        euler_zyx = quaternion_to_euler_zyx(vision_t_goal.rotation)  # yaw, pitch, roll in radians
         if not self.walk_to(
-            SE2Pose(x=vision_t_goal.x, y=vision_t_goal.y, yaw=euler_zyx[0]),
+            vision_t_goal.yaw_SE2(),
             height=vision_t_goal.z,
             timeout_sec=timeout_sec,
         ):
             return None
-        return self.stand_with_orientation(
-            EulerZXY(yaw=0, pitch=euler_zyx[1], roll=euler_zyx[2]), height=vision_t_goal.z, timeout_sec=timeout_sec
-        )
+
+        return self.stand_with_orientation(SO3(vision_t_goal), height=vision_t_goal.z, timeout_sec=timeout_sec)
 
     def walk_and_orient_async(
         self,
-        vision_t_goal: SE3Pose,
+        vision_t_goal: SE3,
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
@@ -1266,17 +1273,16 @@ class SpotBasic(object):
             RobotComposeCommandHandle: A class to handle a list with multiple async RobotCommand (actions). The actions
                 are sent sequentially to SpotDriver via an action client
         """
-        euler_zyx = quaternion_to_euler_zyx(vision_t_goal.rotation)
         walk_partial = partial(
             self.walk_to_async,
-            SE2Pose(x=vision_t_goal.x, y=vision_t_goal.y, yaw=euler_zyx[0]),
+            vision_t_goal.yaw_SE2(),
             height=vision_t_goal.z,
             feedback_callback=feedback_callback,
             on_failure_callback=on_failure_callback,
         )
         stand_partial = partial(
             self.stand_with_orientation_async,
-            EulerZXY(yaw=0, pitch=euler_zyx[1], roll=euler_zyx[2]),
+            SO3(vision_t_goal),
             height=vision_t_goal.z,
             feedback_callback=feedback_callback,
             on_failure_callback=on_failure_callback,
@@ -1284,12 +1290,13 @@ class SpotBasic(object):
         return RobotComposeCommandHandle([walk_partial, stand_partial], result_callback)
 
     def walk_velocity(
-        self, body_velocity: SE2Velocity, duration: Optional[float] = None, rate: Optional[float] = 50.0
+        self, body_velocity: Twist2, duration: Optional[float] = None, rate: Optional[float] = 50.0
     ) -> None:
         """Send the command to walk/turn in a specific body-frame direction at a specific speed
 
         Args:
-            body_velocity: the desired SE2 in the body frame
+            body_velocity: the desired body velocity
+            (twist2 is a member of se2, which can be viewed as SE2 velocities, see Twist2.skewa)
             duration: the time (in seconds) to maintain the desired velocity
                 setting to None (default) means the robot would walk for
                 a minimum duration set by the "cmd_duration" parameter for in spot_ros2.
@@ -1307,11 +1314,11 @@ class SpotBasic(object):
                 rate_timer.sleep()
                 dt = self._node.get_clock().now() - start_time
 
-    def _publish_velocity_cmd(self, body_velocity: SE2Velocity) -> None:
+    def _publish_velocity_cmd(self, body_velocity: Twist2) -> None:
         velocity_cmd_msg = Twist()
-        velocity_cmd_msg.linear.x = body_velocity.linear_velocity_x
-        velocity_cmd_msg.linear.y = body_velocity.linear_velocity_y
-        velocity_cmd_msg.angular.z = body_velocity.angular_velocity
+        velocity_cmd_msg.linear.x = body_velocity.v[0]
+        velocity_cmd_msg.linear.y = body_velocity.v[1]
+        velocity_cmd_msg.angular.z = body_velocity.w
         self._velocity_cmd_publisher.publish(velocity_cmd_msg)
 
     def _get_walk_trajectory_action_goal(
@@ -1527,17 +1534,18 @@ class SpotBasic(object):
         )
 
     def _get_arm_pose_action_goal(
-        self, vision_t_goal: SE3Pose, move_duration_sec: float, body_follow: bool = False
+        self, vision_t_goal: SE3, move_duration_sec: float, body_follow: bool = False
     ) -> RobotCommand.Goal:
         """Create the ROS Msg for moving the end effector to specific pose"""
+        quat = UnitQuaternion(vision_t_goal)
         arm_pose_command = RobotCommandBuilder.arm_pose_command(
             x=vision_t_goal.x,
             y=vision_t_goal.y,
             z=vision_t_goal.z,
-            qw=vision_t_goal.rotation.w,
-            qx=vision_t_goal.rotation.x,
-            qy=vision_t_goal.rotation.y,
-            qz=vision_t_goal.rotation.z,
+            qw=quat.A[0],
+            qx=quat.A[1],
+            qy=quat.A[2],
+            qz=quat.A[3],
             frame_name=VISION_FRAME_NAME,
             seconds=move_duration_sec,
         )
@@ -1550,7 +1558,7 @@ class SpotBasic(object):
 
     def move_end_effector_cartesian(
         self,
-        vision_t_goal: SE3Pose,
+        vision_t_goal: SE3,
         move_duration_sec: float = 5.0,
         body_follow: bool = False,
         timeout_sec: Optional[float] = None,
@@ -1575,7 +1583,7 @@ class SpotBasic(object):
 
     def move_end_effector_cartesian_async(
         self,
-        vision_t_goal: SE3Pose,
+        vision_t_goal: SE3,
         move_duration_sec: float = 5.0,
         body_follow: bool = False,
         *,
@@ -1641,12 +1649,12 @@ class SpotBasic(object):
     def _get_arm_impedance_action_goal(
         self,
         root_frame_name: FrameHint,
-        root_t_task: SE3Pose,
-        wrist_t_tool: SE3Pose,
-        trajectory: list[Tuple[SE3Pose, float]],
-        stiffness: Optional[list[float]] = None,
-        damping: Optional[list[float]] = None,
-        wrench_nm: Optional[list[float]] = None,
+        root_t_task: SE3,
+        wrist_t_tool: SE3,
+        trajectory: list[Tuple[SE3, float]],
+        stiffness: Optional[SpatialVector] = None,
+        damping: Optional[SpatialVector] = None,
+        wrench_nm: Optional[SpatialForce] = None,
     ) -> RobotCommand.Goal:
         """Create the ROS Msg for moving the end effector to specific
         pose using hybrid position/impedance control.
@@ -1658,11 +1666,11 @@ class SpotBasic(object):
         """  # noqa: E501
 
         if stiffness is None:
-            stiffness = [500, 500, 500, 60, 60, 60]
+            stiffness = SpatialVector([500, 500, 500, 60, 60, 60])
         if damping is None:
-            damping = [2.5, 2.5, 2.5, 1.0, 1.0, 1.0]
+            damping = SpatialVector([2.5, 2.5, 2.5, 1.0, 1.0, 1.0])
         if wrench_nm is None:
-            wrench_nm = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            wrench_nm = SpatialForce([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
         # Make sure we keep adjusting the body for the arm
         body_control = spot_command_pb2.BodyControlParams(
@@ -1679,16 +1687,16 @@ class SpotBasic(object):
         impedance_cmd = robot_cmd.synchronized_command.arm_command.arm_impedance_command
         impedance_cmd.root_frame_name = root_frame_name.value
 
-        impedance_cmd.root_tform_task.CopyFrom(se3pose_to_proto(root_t_task))
-        impedance_cmd.wrist_tform_tool.CopyFrom(se3pose_to_proto(wrist_t_tool))
+        impedance_cmd.root_tform_task.CopyFrom(se3_to_se3pose_proto(root_t_task))
+        impedance_cmd.wrist_tform_tool.CopyFrom(se3_to_se3pose_proto(wrist_t_tool))
         impedance_cmd.diagonal_stiffness_matrix.CopyFrom(geometry_pb2.Vector(values=stiffness))
         impedance_cmd.diagonal_damping_matrix.CopyFrom(geometry_pb2.Vector(values=damping))
-        impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.force.x = wrench_nm[0]
-        impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.force.y = wrench_nm[1]
-        impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.force.z = wrench_nm[2]
-        impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.torque.x = wrench_nm[3]
-        impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.torque.y = wrench_nm[4]
-        impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.torque.z = wrench_nm[5]
+        impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.force.x = wrench_nm.A[0]
+        impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.force.y = wrench_nm.A[1]
+        impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.force.z = wrench_nm.A[2]
+        impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.torque.x = wrench_nm.A[3]
+        impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.torque.y = wrench_nm.A[4]
+        impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.torque.z = wrench_nm.A[5]
 
         # Set up our `desired_tool` trajectory. This is where we want the tool to be with respect
         # to the task frame. The stiffness we set will drag the tool towards `desired_tool`.
@@ -1696,19 +1704,19 @@ class SpotBasic(object):
         for pose, duration in trajectory:
             point = cmd_trajectory.points.add()
             point.time_since_reference.CopyFrom(seconds_to_duration(duration))
-            point.pose.CopyFrom(se3pose_to_proto(pose))
+            point.pose.CopyFrom(se3_to_se3pose_proto(pose))
 
         return self._convert_proto_to_robot_cmd_action_goal(robot_cmd)
 
     def move_end_effector_impedance(
         self,
         root_frame_name: FrameHint,
-        root_t_task: SE3Pose,
-        wrist_t_tool: SE3Pose,
-        trajectory: list[Tuple[SE3Pose, float]],
-        stiffness: Optional[list[float]] = None,
-        damping: Optional[list[float]] = None,
-        wrench_nm: Optional[list[float]] = None,
+        root_t_task: SE3,
+        wrist_t_tool: SE3,
+        trajectory: list[Tuple[SE3, float]],
+        stiffness: Optional[SpatialVector] = None,
+        damping: Optional[SpatialVector] = None,
+        wrench_nm: Optional[SpatialForce] = None,
         timeout_sec: Optional[float] = 5.0,
     ) -> Optional[RobotCommandFeedback]:
         """Impedance control as variable stiffness/damping position control combined with a
@@ -1737,12 +1745,12 @@ class SpotBasic(object):
     def move_end_effector_impedance_async(
         self,
         root_frame_name: FrameHint,
-        root_t_task: SE3Pose,
-        wrist_t_tool: SE3Pose,
-        trajectory: list[Tuple[SE3Pose, float]],
-        stiffness: Optional[list[float]] = None,
-        damping: Optional[list[float]] = None,
-        wrench_nm: Optional[list[float]] = None,
+        root_t_task: SE3,
+        wrist_t_tool: SE3,
+        trajectory: list[Tuple[SE3, float]],
+        stiffness: Optional[SpatialVector] = None,
+        damping: Optional[SpatialVector] = None,
+        wrench_nm: Optional[SpatialForce] = None,
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
@@ -1946,8 +1954,8 @@ class SpotBasic(object):
 
     def grasp_along_ray(
         self,
-        task_frame_t_ray_start: Vec3,
-        task_frame_t_ray_end: Vec3,
+        task_frame_t_ray_start: R3,
+        task_frame_t_ray_end: R3,
         task_frame_name: str,
         palm_placement_ratio: float,
         apply_grasp_params_func: Optional[Callable] = None,

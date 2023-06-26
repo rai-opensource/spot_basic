@@ -12,9 +12,9 @@ import rclpy
 from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai.trajectory.se2_trajectory_plotting import draw_shape
 from bdai.trajectory.spot_se2_properties import BODY_SHAPE, MAX_SPEED_FORWARD, MAX_SPEED_VEC
-from bdai.utilities.math_helpers import SE2Pose
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 from bosdyn.client.frame_helpers import BODY_FRAME_NAME, VISION_FRAME_NAME
+from spatialmath import SE2
 from spot_utilities.spot_basic import SpotBasic
 
 
@@ -23,19 +23,25 @@ def plot_trajectory(ax: plt.Axes, trajectory: SE2Trajectory) -> None:
     ax.axis("equal")
 
 
-def get_vision_t_body(robot_name: str) -> SE2Pose:
+def get_vision_t_body(robot_name: str) -> SE2:
     body_frame_name = f"{robot_name}/{BODY_FRAME_NAME}"
     vision_frame_name = f"{robot_name}/{VISION_FRAME_NAME}"
     tf_listener_wrapper = TFListenerWrapper(
         "body_movement_examples", cache_time_s=30, wait_for_transform=[body_frame_name, vision_frame_name]
     )
-    return tf_listener_wrapper.lookup_a_tform_b_se2(vision_frame_name, body_frame_name)
+    pose = tf_listener_wrapper.lookup_a_tform_b_se2(vision_frame_name, body_frame_name)
+
+    # TODO remove this ad-hoc conversion once TFListenerWrapper is updated to use spatialmath
+    if hasattr(pose, "yaw"):
+        return SE2(pose.x, pose.y, pose.yaw)
+
+    return pose
 
 
 def run_example(example_name: str, robot_name: Optional[str] = None) -> None:
     if example_name == "first":
         # Create trajectory to move 2 meters forward and turned 90 degrees ccw
-        xf = SE2Pose(1, 2, -np.pi / 2)
+        xf = SE2(1, 2, -np.pi / 2)
         body_t_trajectory = SE2Trajectory.from_se2_pair(target=xf, skewness=0.5, se2_speed_vec=MAX_SPEED_VEC)
 
     elif example_name == "basic_circle":
