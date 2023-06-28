@@ -29,13 +29,7 @@ def get_vision_t_body(robot_name: str) -> SE2:
     tf_listener_wrapper = TFListenerWrapper(
         "body_movement_examples", cache_time_s=30, wait_for_transform=[body_frame_name, vision_frame_name]
     )
-    pose = tf_listener_wrapper.lookup_a_tform_b_se2(vision_frame_name, body_frame_name)
-
-    # TODO remove this ad-hoc conversion once TFListenerWrapper is updated to use spatialmath
-    if hasattr(pose, "yaw"):
-        return SE2(pose.x, pose.y, pose.yaw)
-
-    return pose
+    return tf_listener_wrapper.lookup_a_tform_b_se2(vision_frame_name, body_frame_name)
 
 
 def run_example(example_name: str, robot_name: Optional[str] = None) -> None:

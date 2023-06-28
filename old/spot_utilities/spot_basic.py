@@ -1973,7 +1973,7 @@ class SpotBasic(object):
 
         grasp = manipulation_api_pb2.PickObject(frame_name=task_frame_name)
         grasp.object_rt_frame.CopyFrom(
-            geometry_pb2.Vec3(x=task_frame_t_ray_end.x, y=task_frame_t_ray_end.y, z=task_frame_t_ray_end.z)
+            geometry_pb2.Vec3(x=task_frame_t_ray_end[0], y=task_frame_t_ray_end[1], z=task_frame_t_ray_end[2])
         )
         # grasp.frame_name = task_frame_name
         # Don't move the robot base, but automatically look at the grasp target with the hand camera.
