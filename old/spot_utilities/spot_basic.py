@@ -4,7 +4,7 @@ import argparse
 from enum import Enum, IntEnum
 from functools import partial
 from threading import Thread
-from typing import Any, Callable, List, Optional, Tuple, TypeVar
+from typing import Any, Callable, List, Optional, Tuple, TypeVar, Union
 
 import geometry_msgs
 import numpy as np
@@ -15,10 +15,18 @@ from bdai_ros.utilities.action_handle import ActionHandle
 from bdai_ros.utilities.custom_types import Action
 from bdai_ros.utilities.futures import wait_for_future
 from bdai_ros.utilities.manual_conversions import se3_to_se3pose_proto, to_ros_pose
-from bosdyn.api import geometry_pb2, manipulation_api_pb2, robot_command_pb2
+from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
+from bosdyn.api import geometry_pb2, image_pb2, manipulation_api_pb2, robot_command_pb2
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.api.trajectory_pb2 import POS_INTERP_CUBIC, PositionalInterpolation
-from bosdyn.client.frame_helpers import BODY_FRAME_NAME, HAND_FRAME_NAME, ODOM_FRAME_NAME, VISION_FRAME_NAME
+from bosdyn.client.frame_helpers import (
+    BODY_FRAME_NAME,
+    GRAV_ALIGNED_BODY_FRAME_NAME,
+    GROUND_PLANE_FRAME_NAME,
+    HAND_FRAME_NAME,
+    ODOM_FRAME_NAME,
+    VISION_FRAME_NAME,
+)
 from bosdyn.client.robot_command import RobotCommandBuilder
 from bosdyn.geometry import Quaternion, to_euler_zxy
 from bosdyn.util import seconds_to_duration
@@ -34,6 +42,8 @@ from rclpy.action import ActionClient
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.impl.rcutils_logger import RcutilsLogger
+from rclpy.time import Time
+from sensor_msgs.msg import CameraInfo
 from spatialmath import SE2, SE3, SO3, SpatialForce, UnitQuaternion
 from spatialmath.base.types import R3
 from spatialmath.spatialvector import SpatialVector
@@ -177,6 +187,21 @@ class SpotBasic(object):
         VISION = VISION_FRAME_NAME
         ODOM = ODOM_FRAME_NAME
         HAND = HAND_FRAME_NAME
+        GRAV_ALIGNED_BODY = GRAV_ALIGNED_BODY_FRAME_NAME
+        GROUND_PLANE = GROUND_PLANE_FRAME_NAME
+        WRIST = "link_wr1"
+        HEAD = "head"
+        BACK = "back"
+        LEFT = "left"
+        RIGHT = "right"
+        FRONT_LEFT = "frontleft"
+        FRONT_RIGHT = "frontright"
+        BACK_CAMERA = "back_fisheye"
+        FRONT_LEFT_CAMERA = "frontleft_fisheye"
+        FRONT_RIGHT_CAMERA = "frontright_fisheye"
+        LEFT_CAMERA = "left_fisheye"
+        RIGHT_CAMERA = "right_fisheye"
+        HAND_CAMERA = "hand_color_image_sensor"
 
     def __init__(
         self,
@@ -201,6 +226,9 @@ class SpotBasic(object):
         self._disable_collisions = disable_collisions
         self._dry = dry
         self._rviz = rviz
+
+        # A tf listener instance can be connected to the robot.
+        self._tf_listener: TFListenerWrapper = None
 
         # TODO: are there other frame names to grab?
         self._body_frame_name = f"{self._robot_name}/{BODY_FRAME_NAME}"
@@ -353,6 +381,14 @@ class SpotBasic(object):
         if not self.power_motors_on():
             return False
         return True
+
+    def set_tf_listener(self, tf_listener: TFListenerWrapper) -> None:
+        """Attaches a TFListenerWrapper instance to the robot.
+
+        Args:
+            tf_listener: An instance of the TFListenerWrapper.
+        """
+        self._tf_listener = tf_listener
 
     def trigger_service(self, command_name: str) -> bool:
         """Triggers a command service on the SpotDriver
@@ -1028,6 +1064,172 @@ class SpotBasic(object):
     def _get_battery_change_pose(self, dir_hint: BatteryChangeDirHint) -> RobotCommand.Goal:
         proto = RobotCommandBuilder.battery_change_pose_command(int(dir_hint))
         return self._convert_proto_to_robot_cmd_action_goal(proto)
+
+    def lookup_a_tform_b(
+        self,
+        frame_a: Union[FrameHint, str],
+        frame_b: Union[FrameHint, str],
+        transform_time: Optional[Union[Time, float]] = None,
+        timeout: Optional[float] = None,
+        wait_for_frames: bool = False,
+    ) -> SE3:
+        """A robot specific transform from frame_a to frame_b.
+
+        The transform returned will be frame_a_t_frame_b, which is robot robot specific.
+        So instead if frame_a is VISION, we internally append it to the robot name
+        s.t. "<Robot Name>/VISION", will be called.
+
+        Args:
+            frame_a: Base frame for transform.
+            frame_b: Tip frame for transform.
+            transform_time: Time the transform is to be published.
+            timeout: The time to wait for the transform to become available if the transform_time is beyond the most
+                recent transform in the buffer.
+            wait_for_frames: If true, waits timeout amount of time for a path to exist from frame_a to frame_b in the
+                buffer.  If false, this will return immediately if a path does not exist even if timeout is not
+                None.  Note that wait_for_transform can be used to wait indefinitely for a transform to become
+                available.
+        Returns:
+            The timestamp from the latest recorded transform frame_a_t_frame_b
+        Raises:
+            All the possible TransformExceptions. ValueError if no TFListenerWrapper instance is connected.
+        """
+        if self._tf_listener is None:
+            return ValueError("TFListenerWrapper is not connected. Use connect_tf_listener().")
+
+        if isinstance(frame_a, self.FrameHint):
+            frame_a = frame_a.value
+
+        if isinstance(frame_b, self.FrameHint):
+            frame_b = frame_b.value
+
+        return self._tf_listener.lookup_a_tform_b(
+            f"{self.robot_name}/{frame_a}", f"{self.robot_name}/{frame_b}", transform_time, timeout, wait_for_frames
+        )
+
+    def _get_basic_tform_tree_snapshot(
+        self, transform_time: Optional[Union[Time, float]] = None
+    ) -> geometry_pb2.FrameTreeSnapshot:
+        """A tree-based collection of transformation containing common frames.
+
+        Common frames include transformations to: BODY, VISION, ODOM, HAND, GRAV_ALIGNED_BODY, GROUND_PLANE and WRIST.
+        Camera sensor related frames are also included: HEAD, BACK, LEFT, RIGHT, FRONT_LEFT, FRONT_RIGHT, BACK_CAMERA,
+        FRONT_LEFT_CAMERA, FRONT_RIGHT_CAMERA, LEFT_CAMERA, RIGHT_CAMERA and HAND_CAMERA.
+
+        Returns:
+            A tree-based collection of transformation to common frames.
+        """
+
+        child_to_parent_edge_map = {}
+
+        # Add root frame.
+        child_to_parent_edge_map[self.FrameHint.BODY.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
+            parent_tform_child=se3_to_se3pose_proto(SE3())
+        )
+
+        # Add head frame.
+        child_to_parent_edge_map[self.FrameHint.HEAD.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
+            parent_frame_name=self.FrameHint.BODY.value, parent_tform_child=se3_to_se3pose_proto(SE3())
+        )
+
+        # The ground plane is relative to the odom frame.
+        child_to_parent_edge_map[self.FrameHint.GROUND_PLANE.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
+            parent_frame_name=self.FrameHint.ODOM.value,
+            parent_tform_child=se3_to_se3pose_proto(
+                self.lookup_a_tform_b(self.FrameHint.ODOM, self.FrameHint.GROUND_PLANE, transform_time)
+            ),
+        )
+
+        # Add frames relative to the body frame.
+        frames_relative_to_body = [
+            self.FrameHint.VISION,
+            self.FrameHint.ODOM,
+            self.FrameHint.GRAV_ALIGNED_BODY,
+            self.FrameHint.BACK,
+            self.FrameHint.LEFT,
+            self.FrameHint.RIGHT,
+        ]
+
+        if self.has_arm():
+            frames_relative_to_body += [self.FrameHint.WRIST]
+
+        for target_frame in frames_relative_to_body:
+            child_to_parent_edge_map[target_frame.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
+                parent_frame_name=self.FrameHint.BODY.value,
+                parent_tform_child=se3_to_se3pose_proto(
+                    self.lookup_a_tform_b(self.FrameHint.BODY, target_frame, transform_time)
+                ),
+            )
+
+        if self.has_arm():
+            # Add hand frame relative to wrist frame.
+            child_to_parent_edge_map[self.FrameHint.HAND.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
+                parent_frame_name=self.FrameHint.WRIST.value,
+                parent_tform_child=se3_to_se3pose_proto(
+                    self.lookup_a_tform_b(self.FrameHint.WRIST, self.FrameHint.HAND, transform_time)
+                ),
+            )
+
+            # Add hand camera frame.
+            child_to_parent_edge_map[self.FrameHint.HAND_CAMERA.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
+                parent_frame_name=self.FrameHint.WRIST.value,
+                parent_tform_child=se3_to_se3pose_proto(
+                    self.lookup_a_tform_b(self.FrameHint.WRIST, self.FrameHint.HAND_CAMERA, transform_time)
+                ),
+            )
+
+        # Add frames relative to head frame.
+        child_to_parent_edge_map[self.FrameHint.FRONT_LEFT.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
+            parent_frame_name=self.FrameHint.HEAD.value,
+            parent_tform_child=se3_to_se3pose_proto(
+                self.lookup_a_tform_b(self.FrameHint.HEAD, self.FrameHint.FRONT_LEFT, transform_time)
+            ),
+        )
+
+        child_to_parent_edge_map[self.FrameHint.FRONT_RIGHT.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
+            parent_frame_name=self.FrameHint.HEAD.value,
+            parent_tform_child=se3_to_se3pose_proto(
+                self.lookup_a_tform_b(self.FrameHint.HEAD, self.FrameHint.FRONT_RIGHT, transform_time)
+            ),
+        )
+
+        # Add camera sensor frames.
+        child_to_parent_edge_map[self.FrameHint.FRONT_LEFT_CAMERA.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
+            parent_frame_name=self.FrameHint.FRONT_LEFT.value,
+            parent_tform_child=se3_to_se3pose_proto(
+                self.lookup_a_tform_b(self.FrameHint.FRONT_LEFT, self.FrameHint.FRONT_LEFT_CAMERA, transform_time)
+            ),
+        )
+
+        child_to_parent_edge_map[self.FrameHint.FRONT_RIGHT_CAMERA.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
+            parent_frame_name=self.FrameHint.FRONT_RIGHT.value,
+            parent_tform_child=se3_to_se3pose_proto(
+                self.lookup_a_tform_b(self.FrameHint.FRONT_RIGHT, self.FrameHint.FRONT_RIGHT_CAMERA, transform_time)
+            ),
+        )
+
+        child_to_parent_edge_map[self.FrameHint.LEFT_CAMERA.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
+            parent_frame_name=self.FrameHint.LEFT.value,
+            parent_tform_child=se3_to_se3pose_proto(
+                self.lookup_a_tform_b(self.FrameHint.LEFT, self.FrameHint.LEFT_CAMERA, transform_time)
+            ),
+        )
+
+        child_to_parent_edge_map[self.FrameHint.RIGHT_CAMERA.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
+            parent_frame_name=self.FrameHint.RIGHT.value,
+            parent_tform_child=se3_to_se3pose_proto(
+                self.lookup_a_tform_b(self.FrameHint.RIGHT, self.FrameHint.RIGHT_CAMERA, transform_time)
+            ),
+        )
+
+        child_to_parent_edge_map[self.FrameHint.BACK_CAMERA.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
+            parent_frame_name=self.FrameHint.BACK.value,
+            parent_tform_child=se3_to_se3pose_proto(
+                self.lookup_a_tform_b(self.FrameHint.BACK, self.FrameHint.BACK_CAMERA, transform_time)
+            ),
+        )
+
+        return geometry_pb2.FrameTreeSnapshot(child_to_parent_edge_map=child_to_parent_edge_map)
 
     def go_to_battery_change_pose(
         self, dir_hint: BatteryChangeDirHint = BatteryChangeDirHint.RIGHT, timeout_sec: Optional[float] = None
@@ -1898,16 +2100,18 @@ class SpotBasic(object):
     def grasp_in_image(
         self,
         pixel_xy: List[float],
-        image_data: Any,
+        image_timestamp: Union[Time, float],
+        camera_data: CameraInfo,
         palm_placement_ratio: float,
         apply_grasp_params_func: Optional[Callable] = None,
-    ) -> RobotCommand.Goal:
+    ) -> Optional[ManipulationApiFeedbackResponse]:
         """Grasp an item in an image taken with a camera on spot.
 
         Args:
             pixel_xy: The point in the image where spot will do object detection,
                 and then grasp the object.
-            image_data: Image data taken using spot (need to figure out data type).
+            camera_data: Camera data associate with the image spot took.
+            image_timestamp: Uses the timestamp to get retrieve the associated transformation tree snapshot.
             palm_placement_ratio: a float [0.0, 1.0] that indicates how far
                 in the edge of the object is into the palm cavity.
                 (0.0 will place the base of palm with camera against the object,
@@ -1915,26 +2119,103 @@ class SpotBasic(object):
             apply_grasp_params_func: A helper function that will apply grasp parameters
                 to modify default grasping behavior.
                 (see https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html?highlight=pickobjectinimage#graspparams)
+
+        Returns:
+            An ManipulationApiFeedbackResponse if the robot has an arm.
         """  # noqa: E501
-        raise NotImplementedError()
-        # pick_vec = geometry_pb2.Vec2(x=pixel_xy[0], y=pixel_xy[1])
-        # grasp = manipulation_api_pb2.PickObjectInImage(
-        #     pixel_xy=pick_vec,
-        #     transforms_snapshot_for_camera=image_data.shot.transforms_snapshot,
-        #     frame_name_image_sensor=image_data.shot.frame_name_image_sensor,
-        #     camera_model=image_data.source.pinhole,
-        # )
 
-        # # We can specify where in the gripper we want to grasp.
-        # grasp.grasp_params.grasp_palm_to_fingertip = palm_placement_ratio
+        # Build manipulation command.
+        pinhole_model = image_pb2.ImageSource.PinholeModel()
+        pinhole_model.intrinsics.focal_length.x = camera_data.k[0]
+        pinhole_model.intrinsics.focal_length.y = camera_data.k[4]
+        pinhole_model.intrinsics.principal_point.x = camera_data.k[2]
+        pinhole_model.intrinsics.principal_point.y = camera_data.k[5]
 
-        # if apply_grasp_params_func is not None:
-        #     apply_grasp_params_func(grasp)
+        pick_vec = geometry_pb2.Vec2(x=pixel_xy[0], y=pixel_xy[1])
+        grasp = manipulation_api_pb2.PickObjectInImage(
+            pixel_xy=pick_vec,
+            transforms_snapshot_for_camera=self._get_basic_tform_tree_snapshot(image_timestamp),
+            frame_name_image_sensor=camera_data.header.frame_id,
+            camera_model=pinhole_model,
+        )
 
-        # # Build the proto
-        # grasp_request = manipulation_api_pb2.ManipulationApiRequest(pick_object_in_image=grasp)
+        # We can specify where in the gripper we want to grasp.
+        grasp.grasp_params.grasp_palm_to_fingertip = palm_placement_ratio
 
-        # return self._convert_proto_to_robot_cmd_action_goal(grasp_request)
+        if apply_grasp_params_func is not None:
+            apply_grasp_params_func(grasp)
+
+        # Build the proto.
+        grasp_request = manipulation_api_pb2.ManipulationApiRequest(pick_object_in_image=grasp)
+
+        action_goal = self._convert_proto_to_manip_cmd_action_goal(grasp_request)
+        return self.manipulation("grasp_in_image", action_goal, 10.0)
+
+    def grasp_in_image_async(
+        self,
+        pixel_xy: List[float],
+        image_timestamp: Union[Time, float],
+        camera_data: CameraInfo,
+        palm_placement_ratio: float,
+        apply_grasp_params_func: Optional[Callable] = None,
+        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Optional[SpotActionHandle]:
+        """Grasp an item in an image taken with a camera on spot asynchronously.
+
+        Args:
+            pixel_xy: The point in the image where spot will do object detection,
+                and then grasp the object.
+            camera_data: Camera data associate with the image spot took.
+            image_timestamp: Uses the timestamp to get retrieve the associated transformation tree snapshot.
+            palm_placement_ratio: a float [0.0, 1.0] that indicates how far
+                in the edge of the object is into the palm cavity.
+                (0.0 will place the base of palm with camera against the object,
+                1.0 will be a 'finger pinch')
+            apply_grasp_params_func: A helper function that will apply grasp parameters
+                to modify default grasping behavior.
+                (see https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html?highlight=pickobjectinimage#graspparams)
+            result_callback: A callback to process/handle the resulting feedback from executing the command
+            feedback_callback: A callback to process/handle the feedback received during the execution of the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
+
+        Returns:
+            An ManipulationApiFeedbackResponse if the robot has an arm.
+        """  # noqa: E501
+
+        # Build manipulation command.
+        pinhole_model = image_pb2.ImageSource.PinholeModel()
+        pinhole_model.intrinsics.focal_length.x = camera_data.k[0]
+        pinhole_model.intrinsics.focal_length.y = camera_data.k[4]
+        pinhole_model.intrinsics.principal_point.x = camera_data.k[2]
+        pinhole_model.intrinsics.principal_point.y = camera_data.k[5]
+
+        pick_vec = geometry_pb2.Vec2(x=pixel_xy[0], y=pixel_xy[1])
+        grasp = manipulation_api_pb2.PickObjectInImage(
+            pixel_xy=pick_vec,
+            transforms_snapshot_for_camera=self._get_basic_tform_tree_snapshot(image_timestamp),
+            frame_name_image_sensor=camera_data.header.frame_id,
+            camera_model=pinhole_model,
+        )
+
+        # We can specify where in the gripper we want to grasp.
+        grasp.grasp_params.grasp_palm_to_fingertip = palm_placement_ratio
+
+        if apply_grasp_params_func is not None:
+            apply_grasp_params_func(grasp)
+
+        # Build the proto.
+        grasp_request = manipulation_api_pb2.ManipulationApiRequest(pick_object_in_image=grasp)
+
+        action_goal = self._convert_proto_to_manip_cmd_action_goal(grasp_request)
+        return self.manipulation_async(
+            "grasp_in_image",
+            action_goal,
+            result_callback=result_callback,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
 
     def palm_grasp_in_image_top_down(
         self,
