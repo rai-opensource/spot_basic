@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2023 Boston Dynamics AI Institute, Inc. All rights reserved.
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 import argparse
 from enum import Enum, IntEnum
 from functools import partial
