@@ -909,7 +909,7 @@ class SpotBasic(object):
             return None
 
         self._node.get_logger().info(f"Received response for Action [{self._robot_name}.{command_name}]")
-        return future.result()
+        return future.result().result
 
     def _send_action_goal_async(
         self,
@@ -960,7 +960,13 @@ class SpotBasic(object):
 
         See https://github.com/bdaiinstitute/spot_ros2/blob/main/spot_msgs/action/RobotCommand.action
         """
-        return self._send_action_goal_and_wait(command_name, goal, self._robot_command_action_client, timeout_sec)
+        if (
+            action_result := self._send_action_goal_and_wait(
+                command_name, goal, self._robot_command_action_client, timeout_sec
+            )
+        ) is not None:
+            return action_result.result
+        return None
 
     def command_async(
         self,
@@ -1010,7 +1016,13 @@ class SpotBasic(object):
         if not self.has_arm():
             self._node.get_logger().error("Cannot send Manipulation api request, robot has no arm.")
             return None
-        return self._send_action_goal_and_wait(command_name, goal, self._manipulation_action_client, timeout_sec)
+        if (
+            action_result := self._send_action_goal_and_wait(
+                command_name, goal, self._manipulation_action_client, timeout_sec
+            )
+        ) is not None:
+            return action_result.result
+        return None
 
     def manipulation_async(
         self,
