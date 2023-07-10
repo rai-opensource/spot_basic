@@ -2179,25 +2179,15 @@ class SpotBasic(object):
         if wrench_nm is None:
             wrench_nm = SpatialForce([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
-        # Make sure we keep adjusting the body for the arm
-        body_control = spot_command_pb2.BodyControlParams(
-            body_assist_for_manipulation=spot_command_pb2.BodyControlParams.BodyAssistForManipulation(
-                enable_hip_height_assist=True, enable_body_yaw_assist=False
-            )
-        )
-        stand_command = RobotCommandBuilder.synchro_stand_command(
-            params=spot_command_pb2.MobilityParams(body_control=body_control)
-        )
         robot_cmd = robot_command_pb2.RobotCommand()
-        robot_cmd.CopyFrom(stand_command)
 
         impedance_cmd = robot_cmd.synchronized_command.arm_command.arm_impedance_command
         impedance_cmd.root_frame_name = root_frame_name.value
 
         impedance_cmd.root_tform_task.CopyFrom(se3_to_se3pose_proto(root_t_task))
         impedance_cmd.wrist_tform_tool.CopyFrom(se3_to_se3pose_proto(wrist_t_tool))
-        impedance_cmd.diagonal_stiffness_matrix.CopyFrom(geometry_pb2.Vector(values=stiffness))
-        impedance_cmd.diagonal_damping_matrix.CopyFrom(geometry_pb2.Vector(values=damping))
+        impedance_cmd.diagonal_stiffness_matrix.CopyFrom(geometry_pb2.Vector(values=stiffness.A.tolist()))
+        impedance_cmd.diagonal_damping_matrix.CopyFrom(geometry_pb2.Vector(values=damping.A.tolist()))
         impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.force.x = wrench_nm.A[0]
         impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.force.y = wrench_nm.A[1]
         impedance_cmd.feed_forward_wrench_at_tool_in_desired_tool.force.z = wrench_nm.A[2]
