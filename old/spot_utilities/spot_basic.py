@@ -60,6 +60,7 @@ from spot_msgs.action import Manipulation, RobotCommand
 from spot_msgs.srv import (
     ClearBehaviorFault,
     DeleteSound,
+    Dock,
     ExecuteDance,
     GetVolume,
     GraphNavClearGraph,
@@ -168,6 +169,7 @@ class SpotBasic(object):
         "estop/hard",
         "estop/gentle",
         "estop/release",
+        "undock",
     ]
 
     class LocomotionHint(IntEnum):
@@ -262,6 +264,9 @@ class SpotBasic(object):
             self._trigger_clients[command_name] = self._node.create_client(
                 Trigger, f"/{self.robot_name}/{command_name}", callback_group=self._callback_group
             )
+        self._dock_client = self._node.create_client(
+            Dock, f"/{self.robot_name}/dock", callback_group=self._callback_group
+        )
         self._stair_mode_client = self._node.create_client(
             SetBool, f"/{self.robot_name}/stair_mode", callback_group=self._callback_group
         )
@@ -449,6 +454,34 @@ class SpotBasic(object):
             True if the command succeeded, False otherwise
         """
         return self.trigger_service("stop")
+
+    def dock(self, dock_id: int) -> bool:
+        """Triggers the 'dock' service on the SpotDriver
+
+        Returns:
+            True if command succeeded, False otherwise
+        """
+        self._node.get_logger().info(f"Dock command for {self.robot_name}")
+        request = Dock.Request()
+        request.dock_id = dock_id
+        future = self._dock_client.call_async(request)
+
+        if not wait_for_future(future):
+            return False
+
+        response = future.result()
+        if not response.success:
+            self._node.get_logger().error(f"Dock command for {self.robot_name} failed. Msg: {response.message}")
+            return False
+        return True
+
+    def undock(self) -> bool:
+        """Triggers the 'undock' service on the SpotDriver
+
+        Returns:
+            True if the command succeeded, False otherwise
+        """
+        return self.trigger_service("undock")
 
     def self_right(self) -> bool:
         """Triggers the 'self_right' service on the SpotDriver
