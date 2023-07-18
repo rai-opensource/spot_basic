@@ -407,6 +407,9 @@ class SpotBasic(object):
         """
         self._tf_listener = tf_listener
 
+    def unset_tf_listener(self) -> None:
+        self._tf_listener = None
+
     def trigger_service(self, command_name: str) -> bool:
         """Triggers a command service on the SpotDriver
 
@@ -1152,7 +1155,7 @@ class SpotBasic(object):
             All the possible TransformExceptions. ValueError if no TFListenerWrapper instance is connected.
         """
         if self._tf_listener is None:
-            raise ValueError("TFListenerWrapper is not connected. Use connect_tf_listener().")
+            raise ValueError("TFListenerWrapper is not connected. Use set_tf_listener().")
 
         if isinstance(frame_a, self.FrameHint):
             frame_a = frame_a.value
@@ -1512,9 +1515,6 @@ class SpotBasic(object):
         angle = np.arccos(np.dot(x_axis, new_vec_norm))
         body_current_t_body_pointed_at_target = SE3.AngleAxis(angle, normal_axis)
 
-        import pdb
-
-        pdb.set_trace()
         if vision_t_body is None:
             vision_t_body = self.lookup_a_tform_b(
                 self.FrameHint.VISION.value, self.FrameHint.BODY.value, wait_for_frames=True
@@ -1569,12 +1569,14 @@ class SpotBasic(object):
         )
 
     def walk_and_orient(
-        self, vision_t_goal: SE3, timeout_sec: Optional[float] = None
+        self, vision_t_goal: SE3, body_height: Optional[float] = None, timeout_sec: Optional[float] = None
     ) -> Optional[RobotCommandFeedback]:
         """Send the command to walk and rotate to a specific SE3 pose
 
         Args:
             vision_t_goal: A SE3 transform from the vision frame to where the user wants the spot to walk to
+            body_height: desired height of the body relative to spot's normal height. Passed directly into
+                synchro_stand_command. If None, then height will be inferred based on vision_t_goal
             timeout_sec: A timeout for waiting on a response/result from the action server. The timeout arg is used
                 on each command, so max duration is 2x timeout. Setting to None creates no timeout.
 
@@ -1583,15 +1585,26 @@ class SpotBasic(object):
         """
         if not self.walk_to(
             vision_t_goal.yaw_SE2(),
-            height=vision_t_goal.z,
             timeout_sec=timeout_sec,
         ):
             return None
 
         rpy = vision_t_goal.rpy()
         new_pose_t_goal = SO3.RPY(rpy[0], rpy[1], 0)
+        if body_height is None:
+            if self._tf_listener is None:
+                raise ValueError(
+                    "unable to infer body height from vision_t_goal. "
+                    "Either pass in 'body_height' explicitly, or call set_tf_listener(tflistener) "
+                    "where tflistener should be a TFListenerWrapper"
+                )
+            body_t_vision = self.lookup_a_tform_b(
+                self.FrameHint.BODY.value, self.FrameHint.VISION.value, wait_for_frames=True
+            )
+            body_t_goal = body_t_vision * vision_t_goal
+            body_height = body_t_goal.z
 
-        return self.stand_with_orientation(new_pose_t_goal, height=vision_t_goal.z, timeout_sec=timeout_sec)
+        return self.stand_with_orientation(new_pose_t_goal, height=body_height, timeout_sec=timeout_sec)
 
     def walk_and_orient_async(
         self,

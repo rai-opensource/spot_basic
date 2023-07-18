@@ -28,6 +28,7 @@ class Test6DPoseCommand(Node):
             cache_time_s=30,
             wait_for_transform=[self.__spot.body_frame_name, self.__spot.vision_frame_name],
         )
+        self.__spot.set_tf_listener(self.__tf)
 
         self.test_walk_6d()
 
@@ -51,6 +52,7 @@ class Test6DPoseCommand(Node):
 
         if self.__relative:
             body_t_goal = SE3.Rt(R=quaternion.SO3(), t=[x, y, z])
+            self.get_logger().info(f"body_t_goal z: {str(body_t_goal.z)}")
             vision_t_body = self.__tf.lookup_a_tform_b(self.__spot.vision_frame_name, self.__spot.body_frame_name)
             vision_t_goal = vision_t_body * body_t_goal
         else:
