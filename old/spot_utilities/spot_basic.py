@@ -53,6 +53,7 @@ from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.impl.rcutils_logger import RcutilsLogger
 from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo
+from sklearn.preprocessing import normalize
 from spatialmath import SE2, SE3, SO3, SpatialForce, Twist2, Twist3, UnitQuaternion
 from spatialmath.base.types import R3
 from spatialmath.spatialvector import SpatialVector
@@ -1151,7 +1152,7 @@ class SpotBasic(object):
             All the possible TransformExceptions. ValueError if no TFListenerWrapper instance is connected.
         """
         if self._tf_listener is None:
-            return ValueError("TFListenerWrapper is not connected. Use connect_tf_listener().")
+            raise ValueError("TFListenerWrapper is not connected. Use connect_tf_listener().")
 
         if isinstance(frame_a, self.FrameHint):
             frame_a = frame_a.value
@@ -1420,7 +1421,8 @@ class SpotBasic(object):
     def _get_stand_to_action_goal(self, vision_r_goal: SO3, height: float) -> RobotCommand.Goal:
         """
         Args:
-            vision_r_goal: A SO3 rotation from the vision frame to goal orientation.
+            vision_r_goal: A SO3 rotation of the body frame with respect to the footprint frame
+                (gravity aligned framed with yaw computed from the stance feet)
             height: The height of the body
 
         Returns:
@@ -1488,6 +1490,84 @@ class SpotBasic(object):
             on_failure_callback=on_failure_callback,
         )
 
+    def _body_gaze_at_vision_t_body_desired(
+        self, body_t_target: SE3, vision_t_body: Optional[SE3] = None
+    ) -> Optional[RobotCommandFeedback]:
+        """
+        Args:
+            body_t_target: SE3 transform from the current body position to the target you want to gaze at
+            vision_t_body: SE3 transform from the vision from to the current body position
+            timeout_sec: A timeout for waiting on a response/result from the action server. The timeout arg is used
+                on each command, so max duration is 2x timeout. Setting to None creates no timeout.
+
+        Return:
+            vision_t_body_desired: body_t_target: SE3 transform to the target you want to gaze at
+
+        """
+        x_axis = np.array([1, 0, 0])
+        new_vec_norm = normalize([body_t_target.t])[0]
+
+        # actual interesting math to compute angle and axis
+        normal_axis = np.cross(x_axis, new_vec_norm)
+        angle = np.arccos(np.dot(x_axis, new_vec_norm))
+        body_current_t_body_pointed_at_target = SE3.AngleAxis(angle, normal_axis)
+
+        import pdb
+
+        pdb.set_trace()
+        if vision_t_body is None:
+            vision_t_body = self.lookup_a_tform_b(
+                self.FrameHint.VISION.value, self.FrameHint.BODY.value, wait_for_frames=True
+            )
+
+        vision_t_body_desired = vision_t_body * body_current_t_body_pointed_at_target
+        return vision_t_body_desired
+
+    def body_gaze_at(
+        self, body_t_target: SE3, vision_t_body: Optional[SE3] = None, timeout_sec: Optional[float] = None
+    ) -> Optional[RobotCommandFeedback]:
+        """Aligns the x-axis of the body frame along the vector from the current body position
+        to the target. If you don't provide vision_t_body, you must set the tf listener for spot.
+
+        Args:
+            body_t_target: SE3 transform from the current body position to the target you want to gaze at
+            vision_t_body: SE3 transform from the vision from to the current body position
+            timeout_sec: A timeout for waiting on a response/result from the action server. The timeout arg is used
+                on each command, so max duration is 2x timeout. Setting to None creates no timeout.
+
+        """
+        vision_t_body_desired = self._body_gaze_at_vision_t_body_desired(body_t_target, vision_t_body)
+        return self.walk_and_orient(vision_t_body_desired, timeout_sec=timeout_sec)
+
+    def body_gaze_at_async(
+        self,
+        body_t_target: SE3,
+        vision_t_body: Optional[SE3] = None,
+        *,
+        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Optional[RobotCommandFeedback]:
+        """Aligns the x-axis of the body frame along the vector from the current body position
+        to the target. If you don't provide vision_t_body, you must set the tf listener for spot.
+
+        Args:
+            body_t_target: SE3 transform from the current body position to the target you want to gaze at
+            vision_t_body: SE3 transform from the vision from to the current body position
+            result_callback: A callback to process/handle the resulting feedback from executing each of the commands
+            feedback_callback: A callback to process/handle the feedback received during the execution of any of the
+                commands
+            on_failure_callback: A callback to process/handle when any of actions fail for various reasons
+
+        """
+        vision_t_body_desired = self._body_gaze_at_vision_t_body_desired(body_t_target, vision_t_body)
+        return self.walk_and_orient_async(
+            vision_t_body_desired,
+            result_callback=result_callback,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
+
     def walk_and_orient(
         self, vision_t_goal: SE3, timeout_sec: Optional[float] = None
     ) -> Optional[RobotCommandFeedback]:
@@ -1508,7 +1588,10 @@ class SpotBasic(object):
         ):
             return None
 
-        return self.stand_with_orientation(SO3(vision_t_goal), height=vision_t_goal.z, timeout_sec=timeout_sec)
+        rpy = vision_t_goal.rpy()
+        new_pose_t_goal = SO3.RPY(rpy[0], rpy[1], 0)
+
+        return self.stand_with_orientation(new_pose_t_goal, height=vision_t_goal.z, timeout_sec=timeout_sec)
 
     def walk_and_orient_async(
         self,
