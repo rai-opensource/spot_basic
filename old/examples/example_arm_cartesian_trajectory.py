@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+from __future__ import annotations
+
 import argparse
 import sys
 import time
@@ -7,18 +9,19 @@ from typing import Optional, Sequence
 
 import numpy as np
 import rclpy
-from bdai_ros.utilities.manual_conversions import to_ros_pose
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 from bosdyn.api import arm_command_pb2, geometry_pb2, trajectory_pb2
-from bosdyn.client.frame_helpers import BODY_FRAME_NAME, HAND_FRAME_NAME, ODOM_FRAME_NAME
+from bosdyn.client.frame_helpers import BODY_FRAME_NAME, ODOM_FRAME_NAME
 from rclpy.node import Node
 from spatialmath import SE3, Twist3
 from spatialmath.base import trinterp
+from spot_utilities.robot_command_helpers import AxisModeDict
 from spot_utilities.spot_basic import SpotBasic
 
 
-# Where we want the robot to walk to relative to itself
 class SpotRunner(Node):
+    """Class to run the Spot robot."""
+
     def __init__(
         self,
         options: argparse.Namespace,
@@ -42,23 +45,27 @@ class SpotRunner(Node):
         start_pose[2, 3] = z_start
         start_pose[3, 3] = 1
         self._cobra_pose = SE3(np.copy(start_pose))  # Baseline pose for this set of actions
-        self._frequency = 50  # Hz
+        self._frequency = 65  # Hz
         self.max_acceleration = 10.0  # meters/sec^2
         self.max_linear_velocity = 2.0  # meters/sec
         self.max_angular_velocity = np.pi / 2  # radians/sec
         self.max_pos_tracking_error = 0.5  # meters
         self.max_rot_tracking_error = np.pi / 3  # Radians
-
-        self._body_frame_name = options.robot + "/" + BODY_FRAME_NAME
-        self._hand_frame_name = options.robot + "/" + HAND_FRAME_NAME
-        self._odom_frame_name = options.robot + "/" + ODOM_FRAME_NAME
         self.I = SE3()
-
-        self._tf_listener = TFListenerWrapper(
-            "arm_trajectory_tf", wait_for_transform=[self._body_frame_name, self._hand_frame_name]
+        self._position_mode = arm_command_pb2.ArmCartesianCommand.Request.AXIS_MODE_POSITION
+        self.axis_mode_dict = AxisModeDict(
+            x=self._position_mode,
+            y=self._position_mode,
+            z=self._position_mode,
+            rx=self._position_mode,
+            ry=self._position_mode,
+            rz=self._position_mode,
         )
 
         self._robot = SpotBasic(robot_name=options.robot, parent_node_name=self.get_name())
+        self._tf_listener = TFListenerWrapper(
+            "arm_trajectory_tf", wait_for_transform=[self._robot.body_frame_name, self._robot.hand_frame_name]
+        )
 
     def initialize_robot(self) -> bool:
         self.get_logger().info("Claiming robot")
@@ -67,7 +74,7 @@ class SpotRunner(Node):
             return False
         self.get_logger().info("Claimed robot")
 
-        # Stand the robot up.print
+        # Stand the robot up
         self.get_logger().info("Powering robot on")
         success = self._robot.power_on()
         if not success:
@@ -87,12 +94,12 @@ class SpotRunner(Node):
         return True
 
     def get_odom_to_hand_tf(self) -> SE3:
-        return self._tf_listener.lookup_a_tform_b(self._odom_frame_name, self._hand_frame_name)
+        return self._tf_listener.lookup_a_tform_b(self._robot.odom_frame_name, self._robot.hand_frame_name)
 
     def get_body_to_hand_tf(self) -> SE3:
-        return self._tf_listener.lookup_a_tform_b(self._body_frame_name, self._hand_frame_name)
+        return self._tf_listener.lookup_a_tform_b(self._robot.body_frame_name, self._robot.hand_frame_name)
 
-    def _move_relative_to_body(
+    def _move_arm_relative_to_body(
         self,
         timestamps_between_points: np.typing.ArrayLike,
         pose_vecs: Sequence[SE3],
@@ -105,65 +112,68 @@ class SpotRunner(Node):
         preferred_joint_configuration: Optional[arm_command_pb2.ArmJointPosition] = None,
         timeout_sec: Optional[float] = 5.0,
         reference_time: Optional[float] = None,
+        move_async: bool = False,
     ) -> None:
         self.get_logger().info("Moving arm along trajectory")
-        """Calls the arm trajectory movements"""
-        self._robot.move_end_effector_cartesian_trajectory(
-            root_frame_name=BODY_FRAME_NAME,
-            timestamps_between_points=timestamps_between_points,
-            pose_vecs=pose_vecs,
-            vel_vecs=vel_vecs,
-            pose_interpolation=pose_interpolation,
-            ang_interpolation=ang_interpolation,
-            wrist_t_tool=wrist_t_tool,
-            root_t_task=root_t_task,
-            max_acceleration=self.max_acceleration,
-            max_linear_velocity=self.max_linear_velocity,
-            max_angular_velocity=self.max_angular_velocity,
-            max_pos_tracking_error=self.max_pos_tracking_error,
-            max_rot_tracking_error=self.max_rot_tracking_error,
-            stay_near_current_joint_angles=stay_near_current_joint_angles,
-            preferred_joint_configuration=preferred_joint_configuration,
-            timeout_sec=timeout_sec,
-            body_follow_arm=False,
-            reference_time=reference_time,
-        )
-        self.get_logger().info("Completed!")
+        """Invokes the arm to move relative to body following some trajectory.
 
-    def _move_relative_to_body_async(
-        self,
-        timestamps_between_points: np.typing.ArrayLike,
-        pose_vecs: Sequence[SE3],
-        wrist_t_tool: Optional[SE3] = None,
-        root_t_task: Optional[SE3] = None,
-        vel_vecs: Optional[Sequence[Twist3]] = None,
-        pose_interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
-        ang_interpolation: trajectory_pb2.AngularInterpolation = trajectory_pb2.ANG_INTERP_LINEAR,
-        stay_near_current_joint_angles: Optional[bool] = None,
-        preferred_joint_configuration: Optional[arm_command_pb2.ArmJointPosition] = None,
-        reference_time: Optional[float] = None,
-    ) -> None:
-        self.get_logger().info("Moving arm along trajectory")
-        """Calls the arm trajectory movements"""
-        self._robot.move_end_effector_cartesian_trajectory_async(
-            root_frame_name=BODY_FRAME_NAME,
-            timestamps_between_points=timestamps_between_points,
-            pose_vecs=pose_vecs,
-            vel_vecs=vel_vecs,
-            pose_interpolation=pose_interpolation,
-            ang_interpolation=ang_interpolation,
-            wrist_t_tool=wrist_t_tool,
-            root_t_task=root_t_task,
-            max_acceleration=self.max_acceleration,
-            max_linear_velocity=self.max_linear_velocity,
-            max_angular_velocity=self.max_angular_velocity,
-            max_pos_tracking_error=self.max_pos_tracking_error,
-            max_rot_tracking_error=self.max_rot_tracking_error,
-            stay_near_current_joint_angles=stay_near_current_joint_angles,
-            preferred_joint_configuration=preferred_joint_configuration,
-            body_follow_arm=False,
-            reference_time=reference_time,
-        )
+        Args:
+            timestamps_between_points: vector of timestamps for each point along the trajectory
+            pose_vecs: vector of SE3 poses forming the trajectory
+            wrist_t_tool: optional transform from the wrist of the spot to a mounted tool
+            root_t_task: optional transform from the root frame to the task frame of spot. Defaults to identity
+            vel_vecs: optional velocity trajectory to track
+            pose_interpolation: interpolation method for the positions along the trajectory
+            ang_interpolation: interpolation method for the angles along the trajectory
+            stay_near_current_joint_angles: ask the system to find solutions near the current arm config
+            preferred_joint_configuration: preferred final joint configuration
+            timeout_sec: time before the command times out, in seconds
+            reference_time: reference time to begin the trajectory, referecing the robot clock
+            move_async: whether or not to move asynchronously. This is a risky move so be careful
+        """
+        if not move_async:
+            self._robot.move_end_effector_cartesian_trajectory(
+                root_frame_name=BODY_FRAME_NAME,
+                axis_mode_dict=self.axis_mode_dict,
+                timestamps_between_poses=timestamps_between_points,
+                pose_vecs=pose_vecs,
+                vel_vecs=vel_vecs,
+                pose_interpolation=pose_interpolation,
+                ang_interpolation=ang_interpolation,
+                wrist_t_tool=wrist_t_tool,
+                root_t_task=root_t_task,
+                max_acceleration=self.max_acceleration,
+                max_linear_velocity=self.max_linear_velocity,
+                max_angular_velocity=self.max_angular_velocity,
+                max_pos_tracking_error=self.max_pos_tracking_error,
+                max_rot_tracking_error=self.max_rot_tracking_error,
+                stay_near_current_joint_angles=stay_near_current_joint_angles,
+                preferred_joint_configuration=preferred_joint_configuration,
+                timeout_sec=timeout_sec,
+                body_follow_arm=False,
+                reference_time=reference_time,
+            )
+        else:
+            self._robot.move_end_effector_cartesian_trajectory_async(
+                root_frame_name=BODY_FRAME_NAME,
+                axis_mode_dict=self.axis_mode_dict,
+                timestamps_between_poses=timestamps_between_points,
+                pose_vecs=pose_vecs,
+                vel_vecs=vel_vecs,
+                pose_interpolation=pose_interpolation,
+                ang_interpolation=ang_interpolation,
+                wrist_t_tool=wrist_t_tool,
+                root_t_task=root_t_task,
+                max_acceleration=self.max_acceleration,
+                max_linear_velocity=self.max_linear_velocity,
+                max_angular_velocity=self.max_angular_velocity,
+                max_pos_tracking_error=self.max_pos_tracking_error,
+                max_rot_tracking_error=self.max_rot_tracking_error,
+                stay_near_current_joint_angles=stay_near_current_joint_angles,
+                preferred_joint_configuration=preferred_joint_configuration,
+                body_follow_arm=False,
+                reference_time=reference_time,
+            )
         self.get_logger().info("Completed!")
 
     def _move_hand_body_follow_wrt_odom(
@@ -181,10 +191,29 @@ class SpotRunner(Node):
         reference_time: Optional[float] = None,
     ) -> None:
         self.get_logger().info("Moving arm, body following along trajectory")
-        """Calls the arm trajectory movements relative to the fixed body frame"""
+        """Calls arm trajectory movements with the body following the arm.
+
+        Trajectories must be described in the odometry frame for this method. 
+        Specifying in the body frame will not work as these motions are intended
+        to go outside the body frame.
+
+        Args:
+            timestamps_between_points: vector of timestamps for each point along the trajectory
+            pose_vecs: vector of SE3 poses forming the trajectory
+            wrist_t_tool: optional transform from the wrist of the spot to a mounted tool
+            root_t_task: optional transform from the root frame to the task frame of spot. Defaults to identity
+            vel_vecs: optional velocity trajectory to track
+            pose_interpolation: interpolation method for the positions along the trajectory
+            ang_interpolation: interpolation method for the angles along the trajectory
+            stay_near_current_joint_angles: ask the system to find solutions near the current arm config
+            preferred_joint_configuration: preferred final joint configuration
+            timeout_sec: time before the command times out, in seconds
+            reference_time: reference time to begin the trajectory, referecing the robot clock
+        """
         self._robot.move_end_effector_cartesian_trajectory(
             root_frame_name=ODOM_FRAME_NAME,
-            timestamps_between_points=timestamps_between_points,
+            axis_mode_dict=self.axis_mode_dict,
+            timestamps_between_poses=timestamps_between_points,
             pose_vecs=pose_vecs,
             vel_vecs=vel_vecs,
             pose_interpolation=pose_interpolation,
@@ -212,9 +241,18 @@ class SpotRunner(Node):
         vel_traj: Optional[Sequence[Twist3]] = None,
         reference_time: Optional[float] = None,
     ) -> None:
-        """Generates an arm trajectory with the body following along"""
+        """Generates an arm trajectory with the body following along.
+
+        Args:
+            end_pose_body_frame: the final pose of the robot, in the body frame
+            num_points: number of points you wish to sample along the trajectory
+            end_time: time you want to reach the goal
+            vel_traj: optional velocity trajectory to follow along with the pose trajectory.
+            reference_time: reference time with respect to the robot clock. Only set it if you know
+                            what you're doing.
+        """
         start_body_hand_pose = self.get_body_to_hand_tf()
-        odom_to_body = self._tf_listener.lookup_a_tform_b(self._odom_frame_name, self._body_frame_name)
+        odom_to_body = self._tf_listener.lookup_a_tform_b(self._robot.odom_frame_name, self._robot.body_frame_name)
 
         timestamps, trajectory = generate_trajectory(
             start_pose=start_body_hand_pose, end_pose=end_pose_body_frame, num_points=num_points, end_time=end_time
@@ -239,11 +277,19 @@ class SpotRunner(Node):
         end_pose_body_frame: SE3,
         num_points: int,
         end_time: float,
-        start_time: float = 0.0,
         vel_traj: Optional[Sequence[Twist3]] = None,
         reference_time: Optional[float] = None,
     ) -> None:
-        """Commands the arm to follow a trajectory without the body moving"""
+        """Commands the arm to follow a trajectory without the body moving.
+
+        Args:
+            end_pose_body_frame: the final pose of the robot, in the body frame
+            num_points: number of points you wish to sample along the trajectory
+            end_time: time you want to reach the goal
+            vel_traj: optional velocity trajectory to follow along with the pose trajectory.
+            reference_time: reference time with respect to the robot clock.
+                            Only set it if you know what you're doing.
+        """
         start_body_hand_pose = self.get_body_to_hand_tf()
         timestamps, trajectory = generate_trajectory(
             start_pose=start_body_hand_pose,
@@ -252,20 +298,20 @@ class SpotRunner(Node):
             end_time=end_time,
         )
 
-        self._move_relative_to_body(
+        self._move_arm_relative_to_body(
             timestamps_between_points=timestamps,
             pose_vecs=trajectory,
             root_t_task=self.I,
             vel_vecs=vel_traj,
-            reference_time=start_time,
+            reference_time=reference_time,
         )
 
     def _get_points(self, duration: float) -> int:
+        """Returns a number of points depending on the frequency you set."""
         return int(self._frequency * duration)
 
     def test_run(self) -> None:
         # Test a variety of behaviours
-        # Initial pose
         time.sleep(0.5)
         self.cobra()
         time.sleep(0.5)
@@ -273,12 +319,10 @@ class SpotRunner(Node):
         # Move the hand relative to the body in a basic trajectory
         end_pose_body_hand = self.get_body_to_hand_tf() * SE3.Trans([0.2, 0.2, -0.1])
         no_vel_body_end_time = 1.5  # seconds
-        no_vel_body_start_time = 1.0  # seconds
         self.move_arm_without_body(
             end_pose_body_frame=end_pose_body_hand,
             num_points=self._get_points(no_vel_body_end_time),
             end_time=no_vel_body_end_time,
-            start_time=no_vel_body_start_time,
         )
         time.sleep(0.5)
 
@@ -298,7 +342,7 @@ class SpotRunner(Node):
 
         # Translate the body and arm
         end_pose_translate_hand = self.get_body_to_hand_tf() * SE3.Trans([0.25, -0.3, 0.2])
-        translate_body_move_time = 1.5  # seconds
+        translate_body_move_time = 1.25  # seconds
         self.move_arm_with_body_follow(
             end_pose_body_frame=end_pose_translate_hand,
             num_points=self._get_points(translate_body_move_time),
@@ -321,7 +365,7 @@ class SpotRunner(Node):
         time.sleep(0.5)
 
         # # # Move arm with a velocity profile
-        translate_arm_vel_time = 2.0  # seconds
+        translate_arm_vel_time = 1.0  # seconds
         translate_arm_vel_points = 100
         translate_arm_base_vel = np.array([0.3, 0.0, 0.0])
         end_pose_translate_arm = self.get_body_to_hand_tf() * SE3.Trans(translate_arm_base_vel)
@@ -349,30 +393,46 @@ class SpotRunner(Node):
         start_pose_cosine_arm = self.get_body_to_hand_tf()
         end_pose_cosine_arm = start_pose_cosine_arm * SE3.Trans([0.3, 0.0, 0.0])
         cosine_arm_traj = []
-        cosine_arm_duration = 2.0  # seconds
+        cosine_arm_duration = 1.5  # seconds
         b = start_pose_cosine_arm.z
-        A = 0.2
+        A = 0.1
         for i in range(translate_arm_vel_points):
             # formula is Asin(x/(2*pi)) + b
             lin_coeff = i / translate_arm_vel_points
             x = end_pose_cosine_arm.x * lin_coeff + start_pose_cosine_arm.x * (1.0 - lin_coeff)
             z = A * np.sin(2 * np.pi * lin_coeff) + b
             cosine_arm_traj.append(SE3.Trans(np.array([x, start_pose_cosine_arm.y, z])))
-        # self.get_logger().info(cosine_arm_traj)
-        self.get_logger().info(str(to_ros_pose(self.get_body_to_hand_tf())))
-        self._move_relative_to_body(
+        self._move_arm_relative_to_body(
             timestamps_between_points=np.linspace(0.0, cosine_arm_duration, translate_arm_vel_points),
             pose_vecs=cosine_arm_traj,
         )
-        self.get_logger().info(str(to_ros_pose(self.get_body_to_hand_tf())))
+        time.sleep(0.5)
+
+        self.cobra()
+
+        # Test the axis mode dictionary to see if it's catching the errors
+        try:
+            self.axis_mode_dict = AxisModeDict(
+                x=self._position_mode, y=self._position_mode, ry=self._position_mode, rz=self._position_mode
+            )
+            self.cobra()
+        except Exception as e:
+            print(e)
+
+        self.axis_mode_dict = AxisModeDict(
+            x=self._position_mode,
+            y=self._position_mode,
+            z=self._position_mode,
+            rx=self._position_mode,
+            ry=self._position_mode,
+            rz=self._position_mode,
+        )
+        self.cobra()
         time.sleep(0.5)
         self._robot.stow_arm()
 
     def cobra(self) -> None:
-        self._move_relative_to_body_async(
-            timestamps_between_points=[0.5],
-            pose_vecs=[self._cobra_pose],
-        )
+        self._move_arm_relative_to_body(timestamps_between_points=[0.5], pose_vecs=[self._cobra_pose], move_async=False)
 
     def shutdown(self) -> None:
         self._tf_listener.shutdown()

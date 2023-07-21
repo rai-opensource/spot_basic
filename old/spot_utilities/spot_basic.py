@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+from __future__ import annotations
+
 import argparse
 from enum import Enum, IntEnum
 from functools import partial
@@ -22,9 +24,7 @@ from bosdyn.api import (
     geometry_pb2,
     image_pb2,
     manipulation_api_pb2,
-    mobility_command_pb2,
     robot_command_pb2,
-    synchronized_command_pb2,
     trajectory_pb2,
 )
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
@@ -86,8 +86,10 @@ from typing_extensions import override
 from visualization_msgs.msg import Marker
 
 from spot_utilities.robot_command_helpers import (
+    AxisModeDict,
     timestamped_se2_vecs_to_robot_command_proto,
     timestamped_se3_poses_to_se3_trajectory,
+    timestamped_spatialforces_to_wrench_protos,
 )
 
 Proto = TypeVar("Proto")
@@ -2024,11 +2026,12 @@ class SpotBasic(object):
     def _get_arm_trajectory_action_goal(
         self,
         root_frame_name: str,
-        timestamps_between_points: np.typing.ArrayLike,
-        pose_vecs: Sequence[SE3],
+        axis_mode_dict: AxisModeDict,
+        timestamps_between_poses: Optional[np.typing.ArrayLike] = None,
+        timestamps_between_wrenches: Optional[np.typing.ArrayLike] = None,
+        pose_vecs: Optional[Sequence[SE3]] = None,
         vel_vecs: Optional[Sequence[Twist3]] = None,
-        pose_interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
-        ang_interpolation: trajectory_pb2.AngularInterpolation = trajectory_pb2.ANG_INTERP_CUBIC_EULER,
+        wrench_vecs: Optional[SpatialForce] = None,
         wrist_t_tool: Optional[SE3] = None,
         root_t_task: Optional[SE3] = None,
         max_acceleration: Optional[float] = None,
@@ -2038,27 +2041,38 @@ class SpotBasic(object):
         max_rot_tracking_error: Optional[float] = None,
         stay_near_current_joint_angles: Optional[bool] = None,
         preferred_joint_configuration: Optional[arm_command_pb2.ArmJointPosition] = None,
-        body_follow_arm: bool = False,
         reference_time: Optional[float] = None,
+        pose_interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
+        ang_interpolation: trajectory_pb2.AngularInterpolation = trajectory_pb2.ANG_INTERP_CUBIC_EULER,
+        body_follow_arm: bool = False,
     ) -> RobotCommand.Goal:
         """Return a goal corresponding to the arm following a Cartesian trajectory.
 
+        This Cartesian trajectory can exist in the kinematic SE3 space or be in the force-torque
+        wrench space. It can also be hybrid of the two, but any axis can only exist in either the
+        pose or wrench mode. Modes that plan on being fixed in space should be set to
+        AXIS_MODE_POSITION to avoid undefined behaviour.
+
         Args:
             root_frame_name: optional task frame that all trajectories are defined with respect to.
+            axis_mode_dict: dataclass in robot_command_helpers.py which maps axis to control modes (position or force).
+            timestamps_between_poses: array of timestamps of when each pose point is traversed (seconds)
+            timestamps_between_wrenches: array of timestamps of when each wrench point is traversed (seconds)
+            pose_vecs: vector of SE3 poses for the end effector to pass through described by the spatialmath library
+            vel_vecs: vector of velocities to pass through at each point
+            wrench_vecs: vector of SpatialForces for the end effector to output in the spatialmath library
             wrist_t_tool: tool pose relative to the parent link (wrist)
             root_t_task: transform between root and task frame
-            pose_vecs: vector of SE3 poses described by the spatialmath library
-            timestamps_between points: array of timestamps of when each point is traversed (seconds)
-            vel_vecs: vector of velocities met at each point
-            pose_interpolation: positional interpolation method. Defaults to cubic.
-            ang_interpolation: angular interpolation method. Defaults to linear.
             max_acceleration: max acceleration of end effector (m/s^2)
             max_linear_velocity: max linear velocity of end effector (m/s)
             max_angular_velocity: max radial velocity of end effector (rad/s)
             max_pos_tracking_error: max deviation between inputted and tracked end effector position
-            max_rot_tracking error: max deviation between inputted and tracked end effector orientations
+            max_rot_tracking_error: max deviation between inputted and tracked end effector orientations
             stay_near_current_joint_angles: forces the system to look for solutions near the current joint angles
             preferred_joint_configuration: the preferred joint configuration for the arm to end up in.
+            reference_time: time with respect to the robot clock of when to reference when trajectories start and end
+            pose_interpolation: positional interpolation method. Defaults to cubic.
+            ang_interpolation: angular interpolation method. Defaults to cubic.
             body_follow_arm: have the body follow the arm when it moves
 
         Returns:
@@ -2067,106 +2081,72 @@ class SpotBasic(object):
         https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html#armcartesiancommand-request
         https://github.com/bdaiinstitute/spatialmath-python/blob/master/spatialmath/pose3d.py
         """
-        arm_trajectory = timestamped_se3_poses_to_se3_trajectory(
-            timestamps_between_points=timestamps_between_points,
-            pose_vecs=pose_vecs,
-            vel_vecs=vel_vecs,
-            pose_interpolation=pose_interpolation,
-            ang_interpolation=ang_interpolation,
-            reference_time=reference_time,
-        )
-        AXIS_MODE_POSITION = arm_command_pb2.ArmCartesianCommand.Request.AXIS_MODE_POSITION
+        robot_cmd = robot_command_pb2.RobotCommand()
+        arm_cartesian_command = robot_cmd.synchronized_command.arm_command.arm_cartesian_command
+        arm_cartesian_command.root_frame_name = root_frame_name
 
-        # Cannot set the values of the wrist_t_tool or root_tform_tool after
-        # we have created the request, so we have to create 4 commands based on
-        # what was inputted.
-        if wrist_t_tool is not None and root_t_task is not None:
-            arm_request = arm_command_pb2.ArmCartesianCommand.Request(
-                root_frame_name=root_frame_name,
-                wrist_tform_tool=se3_to_se3pose_proto(wrist_t_tool),
-                root_tform_task=se3_to_se3pose_proto(root_t_task),
-                pose_trajectory_in_task=arm_trajectory,
-                x_axis=AXIS_MODE_POSITION,
-                y_axis=AXIS_MODE_POSITION,
-                z_axis=AXIS_MODE_POSITION,
-                rx_axis=AXIS_MODE_POSITION,
-                ry_axis=AXIS_MODE_POSITION,
-                rz_axis=AXIS_MODE_POSITION,
+        if wrist_t_tool is not None:
+            arm_cartesian_command.wrist_tform_tool.CopyFrom(se3_to_se3pose_proto(wrist_t_tool))
+
+        if root_t_task is not None:
+            arm_cartesian_command.root_tform_task.CopyFrom(se3_to_se3pose_proto(root_t_task))
+
+        if pose_vecs is not None:
+            arm_trajectory = timestamped_se3_poses_to_se3_trajectory(
+                timestamps_between_points=timestamps_between_poses,
+                pose_vecs=pose_vecs,
+                vel_vecs=vel_vecs,
+                pose_interpolation=pose_interpolation,
+                ang_interpolation=ang_interpolation,
+                reference_time=reference_time,
             )
-        elif wrist_t_tool is None and root_t_task is not None:
-            arm_request = arm_command_pb2.ArmCartesianCommand.Request(
-                root_frame_name=root_frame_name,
-                root_tform_task=se3_to_se3pose_proto(root_t_task),
-                pose_trajectory_in_task=arm_trajectory,
-                x_axis=AXIS_MODE_POSITION,
-                y_axis=AXIS_MODE_POSITION,
-                z_axis=AXIS_MODE_POSITION,
-                rx_axis=AXIS_MODE_POSITION,
-                ry_axis=AXIS_MODE_POSITION,
-                rz_axis=AXIS_MODE_POSITION,
+            arm_cartesian_command.pose_trajectory_in_task.CopyFrom(arm_trajectory)
+
+        if wrench_vecs is not None:
+            wrench_trajectory = timestamped_spatialforces_to_wrench_protos(
+                timestamps_between_wrenches=timestamps_between_wrenches,
+                wrench_vecs=wrench_vecs,
+                reference_time=reference_time,
             )
-        elif wrist_t_tool is not None and root_t_task is None:
-            arm_request = arm_command_pb2.ArmCartesianCommand.Request(
-                root_frame_name=root_frame_name,
-                wrist_tform_tool=se3_to_se3pose_proto(wrist_t_tool),
-                pose_trajectory_in_task=arm_trajectory,
-                x_axis=AXIS_MODE_POSITION,
-                y_axis=AXIS_MODE_POSITION,
-                z_axis=AXIS_MODE_POSITION,
-                rx_axis=AXIS_MODE_POSITION,
-                ry_axis=AXIS_MODE_POSITION,
-                rz_axis=AXIS_MODE_POSITION,
-            )
-        else:
-            arm_request = arm_command_pb2.ArmCartesianCommand.Request(
-                root_frame_name=root_frame_name,
-                pose_trajectory_in_task=arm_trajectory,
-                x_axis=AXIS_MODE_POSITION,
-                y_axis=AXIS_MODE_POSITION,
-                z_axis=AXIS_MODE_POSITION,
-                rx_axis=AXIS_MODE_POSITION,
-                ry_axis=AXIS_MODE_POSITION,
-                rz_axis=AXIS_MODE_POSITION,
-            )
-        # Fill in the optional fields
+            arm_cartesian_command.wrench_trajectory_in_task.CopyFrom(wrench_trajectory)
+
+        if body_follow_arm:
+            mobility_command = robot_cmd.synchronized_command.mobility_command
+            mobility_command.follow_arm_request.CopyFrom(basic_command_pb2.FollowArmCommand.Request())
+
+        arm_cartesian_command.x_axis = axis_mode_dict.x
+        arm_cartesian_command.y_axis = axis_mode_dict.y
+        arm_cartesian_command.z_axis = axis_mode_dict.z
+        arm_cartesian_command.rz_axis = axis_mode_dict.rx
+        arm_cartesian_command.ry_axis = axis_mode_dict.ry
+        arm_cartesian_command.rz_axis = axis_mode_dict.rz
+
         if max_acceleration is not None:
-            arm_request.maximum_acceleration.value = max_acceleration
+            arm_cartesian_command.maximum_acceleration.value = max_acceleration
 
         if max_linear_velocity is not None:
-            arm_request.max_linear_velocity.value = max_linear_velocity
+            arm_cartesian_command.max_linear_velocity.value = max_linear_velocity
 
         if max_angular_velocity is not None:
-            arm_request.max_angular_velocity.value = max_angular_velocity
+            arm_cartesian_command.max_angular_velocity.value = max_angular_velocity
 
         if stay_near_current_joint_angles is not None:
-            arm_request.force_remain_near_current_joint_configuration = stay_near_current_joint_angles
+            arm_cartesian_command.force_remain_near_current_joint_configuration = stay_near_current_joint_angles
 
         if preferred_joint_configuration is not None:
-            arm_request.preferred_joint_configuration = preferred_joint_configuration
+            arm_cartesian_command.preferred_joint_configuration = preferred_joint_configuration
 
-        arm_command = arm_command_pb2.ArmCommand.Request(arm_cartesian_command=arm_request)
-        # Have the body follow th earm
-        if body_follow_arm:
-            mobility_command = mobility_command_pb2.MobilityCommand.Request(
-                follow_arm_request=basic_command_pb2.FollowArmCommand.Request()
-            )
-            synchronized_command = synchronized_command_pb2.SynchronizedCommand.Request(
-                arm_command=arm_command, mobility_command=mobility_command
-            )
-        else:
-            synchronized_command = synchronized_command_pb2.SynchronizedCommand.Request(arm_command=arm_command)
-
-        robot_command_proto = robot_command_pb2.RobotCommand(synchronized_command=synchronized_command)
-        return self._convert_proto_to_robot_cmd_action_goal(robot_command_proto)
+        return self._convert_proto_to_robot_cmd_action_goal(robot_cmd)
 
     def move_end_effector_cartesian_trajectory(
         self,
         root_frame_name: str,
-        timestamps_between_points: np.typing.ArrayLike,
-        pose_vecs: Sequence[SE3],
+        axis_mode_dict: AxisModeDict,
+        timestamps_between_poses: Optional[np.typing.ArrayLike] = None,
+        timestamps_between_wrenches: Optional[np.typing.ArrayLike] = None,
+        pose_vecs: Optional[Sequence[SE3]] = None,
         vel_vecs: Optional[Sequence[Twist3]] = None,
-        pose_interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
-        ang_interpolation: trajectory_pb2.AngularInterpolation = trajectory_pb2.ANG_INTERP_CUBIC_EULER,
+        wrench_vecs: Optional[Sequence[SpatialForce]] = None,
         wrist_t_tool: Optional[SE3] = None,
         root_t_task: Optional[SE3] = None,
         max_acceleration: Optional[float] = None,
@@ -2176,28 +2156,41 @@ class SpotBasic(object):
         max_rot_tracking_error: Optional[float] = None,
         stay_near_current_joint_angles: Optional[bool] = None,
         preferred_joint_configuration: Optional[arm_command_pb2.ArmJointPosition] = None,
-        timeout_sec: Optional[float] = 5.0,
-        body_follow_arm: bool = False,
         reference_time: Optional[float] = None,
+        pose_interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
+        ang_interpolation: trajectory_pb2.AngularInterpolation = trajectory_pb2.ANG_INTERP_CUBIC_EULER,
+        body_follow_arm: bool = False,
+        timeout_sec: Optional[float] = 5.0,
     ) -> Optional[RobotCommandFeedback]:
         """Return a goal corresponding to the arm following a Cartesian trajectory.
 
+        This Cartesian trajectory can exist in the kinematic SE3 space or be in the force-torque
+        wrench space. It can also be hybrid of the two, but any axis can only exist in either the
+        pose or wrench mode. Modes that plan on being fixed in space should be set to
+        AXIS_MODE_POSITION to avoid unexpected behaviour.
+
         Args:
             root_frame_name: optional task frame that all trajectories are defined with respect to.
+            axis_mode_dict: dataclass in robot_command_helpers.py which maps axis to control modes (position or force).
+            timestamps_between_poses: array of timestamps of when each pose point is traversed (seconds)
+            timestamps_between_wrenches: array of timestamps of when each wrench point is traversed (seconds)
+            pose_vecs: vector of SE3 poses for the end effector to pass through described by the spatialmath library
+            vel_vecs: vector of velocities to pass through at each point
+            wrench_vecs: vector of SpatialForces for the end effector to output in the spatialmath library
             wrist_t_tool: tool pose relative to the parent link (wrist)
             root_t_task: transform between root and task frame
-            pose_vecs: vector of SE3 poses described by the spatialmath library
-            timestamps_between points: array of timestamps of when each point is traversed (seconds)
-            vel_vecs: vector of velocities met at each point
-            pose_interpolation: positional interpolation method. Defaults to cubic.
-            ang_interpolation: angular interpolation method. Defaults to linear.
             max_acceleration: max acceleration of end effector (m/s^2)
             max_linear_velocity: max linear velocity of end effector (m/s)
             max_angular_velocity: max radial velocity of end effector (rad/s)
             max_pos_tracking_error: max deviation between inputted and tracked end effector position
-            max_rot_tracking error: max deviation between inputted and tracked end effector orientations
+            max_rot_tracking_error: max deviation between inputted and tracked end effector orientations
             stay_near_current_joint_angles: forces the system to look for solutions near the current joint angles
             preferred_joint_configuration: the preferred joint configuration for the arm to end up in.
+            reference_time: time with respect to the robot clock of when to reference when trajectories start and end
+            pose_interpolation: positional interpolation method. Defaults to cubic.
+            ang_interpolation: angular interpolation method. Defaults to cubic.
+            body_follow_arm: have the body follow the arm when it moves
+            timeout_sec: seconds it will attempt to run the command before timing out and returning
 
         Returns:
             The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
@@ -2207,13 +2200,14 @@ class SpotBasic(object):
         """
         action_goal = self._get_arm_trajectory_action_goal(
             root_frame_name=root_frame_name,
-            wrist_t_tool=wrist_t_tool,
-            root_t_task=root_t_task,
-            timestamps_between_points=timestamps_between_points,
+            axis_mode_dict=axis_mode_dict,
+            timestamps_between_poses=timestamps_between_poses,
+            timestamps_between_wrenches=timestamps_between_wrenches,
             pose_vecs=pose_vecs,
             vel_vecs=vel_vecs,
-            pose_interpolation=pose_interpolation,
-            ang_interpolation=ang_interpolation,
+            wrench_vecs=wrench_vecs,
+            wrist_t_tool=wrist_t_tool,
+            root_t_task=root_t_task,
             max_acceleration=max_acceleration,
             max_linear_velocity=max_linear_velocity,
             max_angular_velocity=max_angular_velocity,
@@ -2221,19 +2215,22 @@ class SpotBasic(object):
             max_rot_tracking_error=max_rot_tracking_error,
             stay_near_current_joint_angles=stay_near_current_joint_angles,
             preferred_joint_configuration=preferred_joint_configuration,
-            body_follow_arm=body_follow_arm,
             reference_time=reference_time,
+            pose_interpolation=pose_interpolation,
+            ang_interpolation=ang_interpolation,
+            body_follow_arm=body_follow_arm,
         )
         return self.command("move_arm_along_trajectory", action_goal, timeout_sec)
 
     def move_end_effector_cartesian_trajectory_async(
         self,
         root_frame_name: str,
-        timestamps_between_points: np.typing.ArrayLike,
-        pose_vecs: Sequence[SE3],
+        axis_mode_dict: AxisModeDict,
+        timestamps_between_poses: Optional[np.typing.ArrayLike] = None,
+        timestamps_between_wrenches: Optional[np.typing.ArrayLike] = None,
+        pose_vecs: Optional[Sequence[SE3]] = None,
         vel_vecs: Optional[Sequence[Twist3]] = None,
-        pose_interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
-        ang_interpolation: trajectory_pb2.AngularInterpolation = trajectory_pb2.ANG_INTERP_CUBIC_EULER,
+        wrench_vecs: Optional[Sequence[SpatialForce]] = None,
         wrist_t_tool: Optional[SE3] = None,
         root_t_task: Optional[SE3] = None,
         max_acceleration: Optional[float] = None,
@@ -2243,30 +2240,43 @@ class SpotBasic(object):
         max_rot_tracking_error: Optional[float] = None,
         stay_near_current_joint_angles: Optional[bool] = None,
         preferred_joint_configuration: Optional[arm_command_pb2.ArmJointPosition] = None,
+        reference_time: Optional[float] = None,
+        pose_interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
+        ang_interpolation: trajectory_pb2.AngularInterpolation = trajectory_pb2.ANG_INTERP_CUBIC_EULER,
+        body_follow_arm: bool = False,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[None], None]] = None,
-        body_follow_arm: bool = False,
-        reference_time: Optional[float] = None,
     ) -> Optional[SpotActionHandle]:
         """Return a goal corresponding to the arm following a Cartesian trajectory.
 
+        This Cartesian trajectory can exist in the kinematic SE3 space or be in the force-torque
+        wrench space. It can also be hybrid of the two, but any axis can only exist in either the
+        pose or wrench mode. Modes that plan on being fixed in space should be set to
+        AXIS_MODE_POSITION to avoid unexpected behaviour.
+
         Args:
             root_frame_name: optional task frame that all trajectories are defined with respect to.
+            root_frame_name: optional task frame that all trajectories are defined with respect to.
+            axis_mode_dict: dataclass in robot_command_helpers.py which maps axis to control modes (position or force).
+            timestamps_between_poses: array of timestamps of when each pose point is traversed (seconds)
+            timestamps_between_wrenches: array of timestamps of when each wrench point is traversed (seconds)
+            pose_vecs: vector of SE3 poses for the end effector to pass through described by the spatialmath library
+            vel_vecs: vector of velocities to pass through at each point
+            wrench_vecs: vector of SpatialForces for the end effector to output in the spatialmath library
             wrist_t_tool: tool pose relative to the parent link (wrist)
             root_t_task: transform between root and task frame
-            pose_vecs: vector of SE3 poses described by the spatialmath library
-            timestamps_between points: array of timestamps of when each point is traversed (seconds)
-            vel_vecs: vector of velocities met at each point
-            pose_interpolation: positional interpolation method. Defaults to cubic.
-            ang_interpolation: angular interpolation method. Defaults to linear.
             max_acceleration: max acceleration of end effector (m/s^2)
             max_linear_velocity: max linear velocity of end effector (m/s)
             max_angular_velocity: max radial velocity of end effector (rad/s)
             max_pos_tracking_error: max deviation between inputted and tracked end effector position
-            max_rot_tracking error: max deviation between inputted and tracked end effector orientations
+            max_rot_tracking_error: max deviation between inputted and tracked end effector orientations
             stay_near_current_joint_angles: forces the system to look for solutions near the current joint angles
             preferred_joint_configuration: the preferred joint configuration for the arm to end up in.
+            reference_time: time with respect to the robot clock of when to reference when trajectories start and end
+            pose_interpolation: positional interpolation method. Defaults to cubic.
+            ang_interpolation: angular interpolation method. Defaults to cubic.
+            body_follow_arm: have the body follow the arm when it moves
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
             on_failure_callback: A callback to process/handle when the action fails for various reasons
@@ -2276,15 +2286,17 @@ class SpotBasic(object):
         https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html#armcartesiancommand-request
         https://github.com/bdaiinstitute/spatialmath-python/blob/master/spatialmath/pose3d.py
         """
+
         action_goal = self._get_arm_trajectory_action_goal(
             root_frame_name=root_frame_name,
-            wrist_t_tool=wrist_t_tool,
-            root_t_task=root_t_task,
-            timestamps_between_points=timestamps_between_points,
+            axis_mode_dict=axis_mode_dict,
+            timestamps_between_poses=timestamps_between_poses,
+            timestamps_between_wrenches=timestamps_between_wrenches,
             pose_vecs=pose_vecs,
             vel_vecs=vel_vecs,
-            pose_interpolation=pose_interpolation,
-            ang_interpolation=ang_interpolation,
+            wrench_vecs=wrench_vecs,
+            wrist_t_tool=wrist_t_tool,
+            root_t_task=root_t_task,
             max_acceleration=max_acceleration,
             max_linear_velocity=max_linear_velocity,
             max_angular_velocity=max_angular_velocity,
@@ -2292,8 +2304,10 @@ class SpotBasic(object):
             max_rot_tracking_error=max_rot_tracking_error,
             stay_near_current_joint_angles=stay_near_current_joint_angles,
             preferred_joint_configuration=preferred_joint_configuration,
-            body_follow_arm=body_follow_arm,
             reference_time=reference_time,
+            pose_interpolation=pose_interpolation,
+            ang_interpolation=ang_interpolation,
+            body_follow_arm=body_follow_arm,
         )
         return self.command_async(
             "move_arm_along_cartesian_trajectory",
