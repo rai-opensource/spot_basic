@@ -1535,6 +1535,8 @@ class SpotBasic(object):
             timeout_sec: A timeout for waiting on a response/result from the action server. The timeout arg is used
                 on each command, so max duration is 2x timeout. Setting to None creates no timeout.
 
+        Returns:
+            The feedback from the SpotDriver about the result of the commands if it was accepted, None otherwise
         """
         vision_t_body_desired = self._body_gaze_at_vision_t_body_desired(body_t_target, vision_t_body)
         return self.walk_and_orient(vision_t_body_desired, timeout_sec=timeout_sec)
@@ -1547,7 +1549,7 @@ class SpotBasic(object):
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Optional[RobotCommandFeedback]:
+    ) -> Optional[RobotComposeCommandHandle]:
         """Aligns the x-axis of the body frame along the vector from the current body position
         to the target. If you don't provide vision_t_body, you must set the tf listener for spot.
 
@@ -1605,6 +1607,56 @@ class SpotBasic(object):
             body_height = body_t_goal.z
 
         return self.stand_with_orientation(new_pose_t_goal, height=body_height, timeout_sec=timeout_sec)
+
+    def _get_arm_gaze_at_action_goal(self, point: R3, frame: FrameHint) -> RobotCommand.Goal:
+        """Create the ROS msg to gaze at a point."""
+        proto = RobotCommandBuilder.arm_gaze_command(x=point[0], y=point[1], z=point[2], frame_name=frame.value)
+        return self._convert_proto_to_robot_cmd_action_goal(proto)
+
+    def arm_gaze_at(
+        self, point: R3, frame: FrameHint, timeout_sec: Optional[float] = None
+    ) -> Optional[RobotCommandFeedback]:
+        """Gaze the arm/hand camera at a point relative to a frame.
+
+        Args:
+            point: A 3d vector representing a point, relative to a frame.
+            frame: A frame hint representing one of spot's default frames, like vision or body.
+                The point is relative to this frame.
+            timeout_sec: A timeout for waiting on a response/result from the action server.
+
+        Returns:
+            The feedback from the SpotDriver about the result of the commands if it was accepted, None otherwise
+        """
+        return self.command("arm_gaze", self._get_arm_gaze_at_action_goal(point, frame), timeout_sec)
+
+    def arm_gaze_at_async(
+        self,
+        point: R3,
+        frame: FrameHint,
+        *,
+        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Optional[SpotActionHandle]:
+        """Gaze the arm/hand camera at a point relative to a frame.
+
+        Args:
+            point: A 3d vector representing a point, relative to a frame.
+            frame: A frame hint representing one of spot's default frames, like vision or body.
+                The point is relative to this frame.
+            result_callback: A callback to process/handle the resulting feedback from executing each of the commands
+            feedback_callback: A callback to process/handle the feedback received during the execution of any of the
+                commands
+            on_failure_callback: A callback to process/handle when any of actions fail for various reasons
+        """
+        action_goal = self._get_arm_gaze_at_action_goal(point, frame)
+        return self.command_async(
+            "arm_gaze",
+            action_goal,
+            result_callback=result_callback,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
 
     def walk_and_orient_async(
         self,
