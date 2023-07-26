@@ -1,0 +1,71 @@
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+import argparse
+
+import rclpy
+from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
+from spot_utilities.spot_basic import SpotBasic
+from spot_utilities.spot_vision import CameraLocation, SpotImages
+
+""" This is a test script to demo how spot_ros2 publishes image and camera data on spot. 
+It visualizes a point cloud, rgb, and depth images from a camera.
+
+Use:
+    1) start spot driver with a config file that makes spot_ros2 publish the depth registered in the rgb camera. 
+        for example, 'bdai spot driver Autumn --config-file projects/_experimental/spot_ros.yaml --no-build'
+        where the yaml has the line 'publish_depth_registered: True'
+    
+    2) execute this script, pass in the robot name and camera location (see --help for valid locations)
+"""
+
+
+def main() -> None:
+    rclpy.init()
+    """Command-line interface."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("robot", help="Name of the robot if the ROS driver is inside that namespace.")
+    parser.add_argument(
+        "-c",
+        "--camera-location",
+        help=f"Choose a camera to get the image:\n{[e.value for e in CameraLocation]}.",
+        default="frontleft",
+    )
+    options = parser.parse_args()
+
+    ###############################################
+    # Boiler plate code
+    node = rclpy.create_node("image_example")
+    spot = SpotBasic(options.robot, parent_node_name=node.get_name())
+    tf = TFListenerWrapper(
+        spot.robot_name + "_tf",
+        cache_time_s=30,
+        wait_for_transform=[spot.body_frame_name, spot.vision_frame_name],
+    )
+    spot.set_tf_listener(tf)
+    cam_loc = CameraLocation(options.camera_location)
+    ###############################################
+
+    spot_images = SpotImages(node_name="spot_images", use_registered_depth=True)
+    [rgb, depth] = spot_images.rbg_and_depth_camera_from_location(cam_loc)
+
+    spot_images.display_pointcloud(cam_loc, spot, 5.0)
+
+    rotation_angle = 0
+    if cam_loc == CameraLocation.FRONT_LEFT:
+        rotation_angle = -90
+    if cam_loc == CameraLocation.FRONT_RIGHT:
+        rotation_angle = 90
+
+    spot_images.display_image(rgb, spot, rotation_angle=rotation_angle, timeout_sec=5.0)
+    spot_images.display_image(depth, spot, rotation_angle=rotation_angle, timeout_sec=5.0)
+
+    ###############################################
+    # Boiler plate code
+    spot.shutdown()
+    node.destroy_node()
+    rclpy.shutdown()
+    ###############################################
+
+
+if __name__ == "__main__":
+    main()

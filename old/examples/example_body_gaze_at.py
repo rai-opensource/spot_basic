@@ -1,3 +1,4 @@
+# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 import time
 
 import rclpy
@@ -9,8 +10,8 @@ from spot_utilities.spot_basic import SpotBasic
 Use:
     1) tele op the robot so that the origin of the vision frame is outside the support
         polygon of the feet
-    1) start spot driver
-    2) execute this script, pass in the robot name
+    2) start spot driver
+    3) execute this script, pass in the robot name
 """
 
 
