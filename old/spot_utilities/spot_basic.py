@@ -889,7 +889,21 @@ class SpotBasic(object):
     def list_world_objects(self, p_request: ListWorldObjectRequest) -> Optional[ListWorldObjectResponse]:
         """Requests a list of world objects
 
-        TODO: not use ROS msgs
+        When constructing the calling ListWorldObjectRequest, you must follow the correct typing for
+        requested objects, which is somewhat non-intuitive.
+
+        # imports required for below
+        from bosdyn_msgs.msg import ListWorldObjectRequest, WorldObjectType
+        from bosdyn.api import world_object_pb2
+
+        # must be constructed explicitly, WorldObjectType.WORLD_OBJECT_DOCK is also not the same
+        world_object_dock_type = WorldObjectType(value=world_object_pb2.WORLD_OBJECT_DOCK)
+
+        # add any requested objects to the list of object types (or leave it blank for all)
+        request_fiducials = ListWorldObjectRequest()
+        request_fiducials.object_type.append(world_object_dock_type)
+
+        TODO: make this more robust and user intuitive
         """
         self._node.get_logger().info(f"List world objects for {self.robot_name}")
         request = ListWorldObjects.Request()
