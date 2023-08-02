@@ -15,8 +15,8 @@ from bosdyn.client.frame_helpers import BODY_FRAME_NAME, ODOM_FRAME_NAME
 from rclpy.node import Node
 from spatialmath import SE3, Twist3
 from spatialmath.base import trinterp
-from spot_utilities.robot_command_helpers import AxisModeDict
 from spot_utilities.spot_basic import SpotBasic
+from spot_utilities.spot_dataclasses import AxisModeMap
 
 
 class SpotRunner(Node):
@@ -53,7 +53,7 @@ class SpotRunner(Node):
         self.max_rot_tracking_error = np.pi / 3  # Radians
         self.I = SE3()
         self._position_mode = arm_command_pb2.ArmCartesianCommand.Request.AXIS_MODE_POSITION
-        self.axis_mode_dict = AxisModeDict(
+        self.axis_mode_map = AxisModeMap(
             x=self._position_mode,
             y=self._position_mode,
             z=self._position_mode,
@@ -67,31 +67,16 @@ class SpotRunner(Node):
             "arm_trajectory_tf", wait_for_transform=[self._robot.body_frame_name, self._robot.hand_frame_name]
         )
 
-    def initialize_robot(self) -> bool:
-        self.get_logger().info("Claiming robot")
-        success = self._robot.claim()
-        if not success:
-            return False
-        self.get_logger().info("Claimed robot")
-
-        # Stand the robot up
-        self.get_logger().info("Powering robot on")
-        success = self._robot.power_on()
-        if not success:
-            return False
+    def initialize_robot(self) -> None:
+        self._robot.initialize_robot()
         self.get_logger().info("Standing robot up")
-        success = self._robot.stand()
-        if not success:
-            return False
+        self._robot.stand()
         self.get_logger().info("Successfully stood up.")
 
         # Move the arm to a specific location
-        self._robot.stow_arm()
         self.get_logger().info("Moving arm to start config")
-        if not success:
-            return False
+        self._robot.stow_arm()
         self.get_logger().info("Successfully moved arm to starting config")
-        return True
 
     def get_odom_to_hand_tf(self) -> SE3:
         return self._tf_listener.lookup_a_tform_b(self._robot.odom_frame_name, self._robot.hand_frame_name)
@@ -134,7 +119,7 @@ class SpotRunner(Node):
         if not move_async:
             self._robot.move_end_effector_cartesian_trajectory(
                 root_frame_name=BODY_FRAME_NAME,
-                axis_mode_dict=self.axis_mode_dict,
+                axis_mode_map=self.axis_mode_map,
                 timestamps_between_poses=timestamps_between_points,
                 pose_vecs=pose_vecs,
                 vel_vecs=vel_vecs,
@@ -156,7 +141,7 @@ class SpotRunner(Node):
         else:
             self._robot.move_end_effector_cartesian_trajectory_async(
                 root_frame_name=BODY_FRAME_NAME,
-                axis_mode_dict=self.axis_mode_dict,
+                axis_mode_map=self.axis_mode_map,
                 timestamps_between_poses=timestamps_between_points,
                 pose_vecs=pose_vecs,
                 vel_vecs=vel_vecs,
@@ -212,7 +197,7 @@ class SpotRunner(Node):
         """
         self._robot.move_end_effector_cartesian_trajectory(
             root_frame_name=ODOM_FRAME_NAME,
-            axis_mode_dict=self.axis_mode_dict,
+            axis_mode_map=self.axis_mode_map,
             timestamps_between_poses=timestamps_between_points,
             pose_vecs=pose_vecs,
             vel_vecs=vel_vecs,
@@ -412,14 +397,14 @@ class SpotRunner(Node):
 
         # Test the axis mode dictionary to see if it's catching the errors
         try:
-            self.axis_mode_dict = AxisModeDict(
+            self.axis_mode_map = AxisModeMap(
                 x=self._position_mode, y=self._position_mode, ry=self._position_mode, rz=self._position_mode
             )
             self.cobra()
         except Exception as e:
             print(e)
 
-        self.axis_mode_dict = AxisModeDict(
+        self.axis_mode_map = AxisModeMap(
             x=self._position_mode,
             y=self._position_mode,
             z=self._position_mode,

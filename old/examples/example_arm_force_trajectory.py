@@ -14,8 +14,8 @@ from bosdyn.api import arm_command_pb2, geometry_pb2
 from bosdyn.client.frame_helpers import BODY_FRAME_NAME
 from rclpy.node import Node
 from spatialmath import SE3, SpatialForce, Twist3
-from spot_utilities.robot_command_helpers import AxisModeDict
 from spot_utilities.spot_basic import SpotBasic
+from spot_utilities.spot_dataclasses import AxisModeMap
 
 
 # Where we want the robot to walk to relative to itself
@@ -58,31 +58,16 @@ class SpotRunner(Node):
             "arm_force_trajectory_tf", wait_for_transform=[self._robot.body_frame_name, self._robot.hand_frame_name]
         )
 
-    def initialize_robot(self) -> bool:
-        self.get_logger().info("Claiming robot")
-        success = self._robot.claim()
-        if not success:
-            return False
-        self.get_logger().info("Claimed robot")
-
-        # Stand the robot up.print
-        self.get_logger().info("Powering robot on")
-        success = self._robot.power_on()
-        if not success:
-            return False
+    def initialize_robot(self) -> None:
+        self._robot.initialize_robot()
         self.get_logger().info("Standing robot up")
-        success = self._robot.stand()
-        if not success:
-            return False
+        self._robot.stand()
         self.get_logger().info("Successfully stood up.")
 
         # Move the arm to a specific location
-        self._robot.stow_arm()
         self.get_logger().info("Moving arm to start config")
-        if not success:
-            return False
+        self._robot.stow_arm()
         self.get_logger().info("Successfully moved arm to starting config")
-        return True
 
     def get_odom_to_hand_tf(self) -> SE3:
         return self._tf_listener.lookup_a_tform_b(self._robot.odom_frame_name, self._robot.hand_frame_name)
@@ -112,7 +97,7 @@ class SpotRunner(Node):
         """Calls the arm trajectory movements relative to the fixed body frame.
 
         Args:
-            axis_mode_dict: dictionary mapping the name of the axis to the correct mode (position vs wrench)
+            axis_mode_map: dataclass in robot_command_helpers.py which maps axis to control modes (position or force).
             timestamps_between_poses: array of timestamps of when each pose point is traversed (seconds)
             timestamps_between_wrenches: array of timestamps of when each wrench point is traversed (seconds)
             pose_vecs: vector of SE3 poses for the end effector to pass through described by the spatialmath library
@@ -134,7 +119,7 @@ class SpotRunner(Node):
         if not move_async:
             self._robot.move_end_effector_cartesian_trajectory(
                 root_frame_name=BODY_FRAME_NAME,
-                axis_mode_dict=self.axis_mode_dict,
+                axis_mode_map=self.axis_mode_map,
                 timestamps_between_poses=timestamps_between_poses,
                 timestamps_between_wrenches=timestamps_between_wrenches,
                 pose_vecs=pose_vecs,
@@ -155,7 +140,7 @@ class SpotRunner(Node):
         else:
             self._robot.move_end_effector_cartesian_trajectory_async(
                 root_frame_name=BODY_FRAME_NAME,
-                axis_mode_dict=self.axis_mode_dict,
+                axis_mode_map=self.axis_mode_map,
                 timestamps_between_poses=timestamps_between_poses,
                 timestamps_between_wrenches=timestamps_between_wrenches,
                 pose_vecs=pose_vecs,
@@ -183,7 +168,7 @@ class SpotRunner(Node):
 
         # Test a set force
         timestamps_between_wrenches = np.array([1.5])
-        self.axis_mode_dict = AxisModeDict(
+        self.axis_mode_map = AxisModeMap(
             x=self._position_mode,
             y=self._position_mode,
             z=self._wrench_mode,
@@ -191,10 +176,9 @@ class SpotRunner(Node):
             ry=self._position_mode,
             rz=self._position_mode,
         )
-        wrench_vecs = [SpatialForce([0.0, 0.0, 5.0, 0.0, 0.0, 0.0])]
+        wrench_vecs = [SpatialForce([0.0, 0.0, 1.0, 0.0, 0.0, 0.0])]
         self.move_arm_relative_to_body(
-            timestamps_between_wrenches=timestamps_between_wrenches,
-            wrench_vecs=wrench_vecs,
+            timestamps_between_wrenches=timestamps_between_wrenches, wrench_vecs=wrench_vecs, timeout_sec=1.0
         )
         time.sleep(0.1)
         self.cobra()
@@ -202,7 +186,7 @@ class SpotRunner(Node):
 
         # Linearly move from 1 to 3 Newtons and back over 4 seconds
         timestamps_between_wrenches = np.array([0.0, 0.5, 1.0, 1.5, 2.0])
-        self.axis_mode_dict = AxisModeDict(
+        self.axis_mode_map = AxisModeMap(
             x=self._wrench_mode,
             y=self._position_mode,
             z=self._position_mode,
@@ -217,10 +201,11 @@ class SpotRunner(Node):
         fx = 0
         for i in range(num_wrenches):
             if i <= num_wrenches / 2:
-                fx += 5
+                fx += 1
             else:
-                fx -= 5
+                fx -= 1
             wrench_vecs.append(SpatialForce([fx, 0, 0, 0, 0, 0]))
+        self.get_logger().info("Force trajectory command")
         self.move_arm_relative_to_body(
             timestamps_between_wrenches=timestamps_between_wrenches,
             wrench_vecs=wrench_vecs,
@@ -235,11 +220,12 @@ class SpotRunner(Node):
         # Move the arm in the x-y plane relative to the body and apply a force in z
         # For this particular command, you want to set the other axis in position mode
         # or else the position of the end effector will drift
+        self.get_logger().info("Hybrid force command")
         timestamps_between_poses = np.array([0.5, 1.0])
         timestamps_between_wrenches = np.array([2.0])
         pose_vecs = [SE3(x=0.45, y=0.0, z=0.55), SE3(x=0.65, y=0.0, z=0.55)]
         wrench_vecs = [SpatialForce([0.0, 0.0, 2.0, 0.0, 0.0, 0.0])]
-        self.axis_mode_dict = AxisModeDict(
+        self.axis_mode_map = AxisModeMap(
             x=self._position_mode,
             y=self._position_mode,
             z=self._wrench_mode,
@@ -253,16 +239,17 @@ class SpotRunner(Node):
             # timestamps_between_wrenches=timestamps_between_wrenches,
             pose_vecs=pose_vecs,
             # wrench_vecs=wrench_vecs,
-            timeout_sec=5.0,
+            timeout_sec=1.0,
         )
         time.sleep(0.1)
         self.cobra()
         time.sleep(0.5)
 
         # Test a torque
+        self.get_logger().info("Torque command")
         timestamps_between_wrenches = np.array([1.5])
-        wrench_vecs = [SpatialForce([0.0, 0.0, 0.0, 0.0, 0.0, 5.0])]
-        self.axis_mode_dict = AxisModeDict(
+        wrench_vecs = [SpatialForce([0.0, 0.0, 0.0, 0.0, 0.0, 1.0])]
+        self.axis_mode_map = AxisModeMap(
             x=self._position_mode,
             y=self._position_mode,
             z=self._position_mode,
@@ -273,16 +260,17 @@ class SpotRunner(Node):
         self.move_arm_relative_to_body(
             timestamps_between_wrenches=timestamps_between_wrenches,
             wrench_vecs=wrench_vecs,
-            timeout_sec=5.0,
+            timeout_sec=1.0,
         )
         time.sleep(0.1)
         self.cobra()
         time.sleep(0.5)
 
         # Force-torque command
+        self.get_logger().info("Force torque command")
         timestamps_between_wrenches = np.array([1.5])
-        wrench_vecs = [SpatialForce([1.0, 0.0, 0.0, 0.0, 3.0, 0.0])]
-        self.axis_mode_dict = AxisModeDict(
+        wrench_vecs = [SpatialForce([1.0, 0.0, 0.0, 0.0, 0.5, 0.0])]
+        self.axis_mode_map = AxisModeMap(
             x=self._wrench_mode,
             y=self._position_mode,
             z=self._position_mode,
@@ -293,7 +281,7 @@ class SpotRunner(Node):
         self.move_arm_relative_to_body(
             timestamps_between_wrenches=timestamps_between_wrenches,
             wrench_vecs=wrench_vecs,
-            timeout_sec=5.0,
+            timeout_sec=1.0,
         )
         time.sleep(0.1)
         self.cobra()
@@ -303,11 +291,12 @@ class SpotRunner(Node):
         # Move the arm in the x-y plane relative to the body and apply a force in z
         # For this particular command, you want to set the other axis in position mode
         # or else the position of the end effector will drift
+        self.get_logger().info("Hybrid command")
         timestamps_between_poses = np.array([0.375, 0.75])
         timestamps_between_wrenches = np.array([2.0])
         pose_vecs = [SE3(x=0.45, y=0.0, z=0.55), SE3(x=0.45, y=0.2, z=0.55)]
-        wrench_vecs = [SpatialForce([0.0, 0.0, 0.0, 0.0, 0.0, -2.0])]
-        self.axis_mode_dict = AxisModeDict(
+        wrench_vecs = [SpatialForce([0.0, 0.0, 0.0, 0.0, 0.0, -1.0])]
+        self.axis_mode_map = AxisModeMap(
             x=self._position_mode,
             y=self._position_mode,
             z=self._position_mode,
@@ -321,7 +310,7 @@ class SpotRunner(Node):
             timestamps_between_wrenches=timestamps_between_wrenches,
             pose_vecs=pose_vecs,
             wrench_vecs=wrench_vecs,
-            timeout_sec=5.0,
+            timeout_sec=1.0,
         )
         time.sleep(0.1)
         self.cobra()
@@ -331,7 +320,7 @@ class SpotRunner(Node):
 
     def cobra(self) -> None:
         """Move to a cobra-like position."""
-        self.axis_mode_dict = AxisModeDict(
+        self.axis_mode_map = AxisModeMap(
             x=self._position_mode,
             y=self._position_mode,
             z=self._position_mode,

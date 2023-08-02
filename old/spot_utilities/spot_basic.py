@@ -16,7 +16,11 @@ from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai_ros.utilities.action_handle import ActionHandle
 from bdai_ros.utilities.custom_types import Action
 from bdai_ros.utilities.futures import wait_for_future
-from bdai_ros.utilities.manual_conversions import se3_to_se3pose_proto, to_ros_pose
+from bdai_ros.utilities.manual_conversions import (
+    arm_joint_map_to_list,
+    se3_to_se3pose_proto,
+    to_ros_pose,
+)
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 from bosdyn.api import (
     arm_command_pb2,
@@ -86,10 +90,13 @@ from typing_extensions import override
 from visualization_msgs.msg import Marker
 
 from spot_utilities.robot_command_helpers import (
-    AxisModeDict,
     timestamped_se2_vecs_to_robot_command_proto,
     timestamped_se3_poses_to_se3_trajectory,
     timestamped_spatialforces_to_wrench_protos,
+)
+from spot_utilities.spot_dataclasses import (
+    ArmJointMap,
+    AxisModeMap,
 )
 
 Proto = TypeVar("Proto")
@@ -2037,10 +2044,286 @@ class SpotBasic(object):
             on_failure_callback=on_failure_callback,
         )
 
-    def _get_arm_trajectory_action_goal(
+    def _get_arm_joint_trajectory_goal(
+        self,
+        joint_angles: Sequence[ArmJointMap],
+        times: Sequence[float],
+        joint_velocities: Optional[Sequence[ArmJointMap]] = None,
+        ref_time: Optional[float] = None,
+        max_acc: Optional[float] = None,
+        max_vel: Optional[float] = None,
+    ) -> RobotCommand.Goal:
+        """Returns the action goal to move the arm along a specified trajectory
+
+        Args:
+            joint_angles: List of joint angles to command the arm to move to. Each set of joint
+                          angles must be size 6, as there are 6 joints. Max 10 points per BD
+            times: List of times we want to reach each joint position relative to the reference time
+            joint_velocities: List of joint velocities for the arm to achieve along the trajectory.
+            ref_time: reference time to begin trajectory, relative to the robot clock.
+            max_acc: maximum acceleration allowed for any joint along the trajectory (rad/s^2)
+            max_vel: maximum velocity allowed for any joint along the trajectory (rad/s)
+
+        Returns:
+            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+
+        Raises:
+            Exception if too many points in trajectory (10 is the hard limit by BD).
+            Joint velocities, angles, and time do not have the same lengths
+
+        https://github.com/boston-dynamics/spot-sdk/blob/b3e41278a7d6b22ad82a2ec4d7df6d36df029470/protos/bosdyn/api/arm_command.proto#L314
+        https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference#armjointtrajectory
+        """
+        if len(joint_angles) > 10:
+            raise ValueError("An ArmJointTrajectory accepts only up to 10 knot points")
+
+        if len(times) != len(joint_angles):
+            raise ValueError("Must have the same number of joint angles and timestamps")
+
+        if joint_velocities is not None:
+            if len(joint_velocities) != len(joint_angles):
+                raise ValueError("Must have the same number of joint angles and velocities")
+
+        # Convert the joint angles to a list
+        joint_angles_list = []
+        for joint_angle in joint_angles:
+            joint_angles_list.append(arm_joint_map_to_list(joint_angle))
+        # Convert the joint velocities to a list
+        if joint_velocities is not None:
+            joint_velocities_list = []
+            for joint_vel in joint_velocities:
+                joint_velocities_list.append(arm_joint_map_to_list(joint_vel))
+            robot_cmd = RobotCommandBuilder.arm_joint_move_helper(
+                joint_positions=joint_angles_list,
+                times=times,
+                joint_velocities=joint_velocities_list,
+                ref_time=ref_time,
+                max_acc=max_acc,
+                max_vel=max_vel,
+            )
+        else:
+            robot_cmd = RobotCommandBuilder.arm_joint_move_helper(
+                joint_positions=joint_angles_list, times=times, ref_time=ref_time, max_acc=max_acc, max_vel=max_vel
+            )
+        return self._convert_proto_to_robot_cmd_action_goal(robot_cmd)
+
+    def move_arm_joint_trajectory(
+        self,
+        joint_angles: Sequence[ArmJointMap],
+        times: Sequence[float],
+        *,
+        joint_velocities: Optional[Sequence[ArmJointMap]] = None,
+        ref_time: Optional[float] = None,
+        max_acc: Optional[float] = None,
+        max_vel: Optional[float] = None,
+        timeout_sec: float = 5.0,
+    ) -> Optional[RobotCommandFeedback]:
+        """Move the joint angles of the arm along a specified trajectory.
+
+        Args:
+            joint_angles: List of joint angles to command the arm to move to. Each set of joint
+                          angles must be size 6, as there are 6 joints. Max 10 points per BD
+            times: List of times we want to reach each joint position relative to the reference time
+            joint_velocities: List of joint velocities for the arm to achieve along the trajectory.
+            ref_time: reference time to begin trajectory, relative to the robot clock.
+            max_acc: maximum acceleration allowed for any joint along the trajectory (rad/s^2)
+            max_vel: maximum velocity allowed for any joint along the trajectory (rad/s)
+            timeout_sec: seconds between receive and execution until the command times out
+
+        Returns:
+            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+
+        Raises:
+            Exception if too many points in trajectory
+
+        https://github.com/boston-dynamics/spot-sdk/blob/b3e41278a7d6b22ad82a2ec4d7df6d36df029470/protos/bosdyn/api/arm_command.proto#L314
+        https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference#armjointtrajectory
+        """
+        action_goal = self._get_arm_joint_trajectory_goal(
+            joint_angles=joint_angles,
+            times=times,
+            joint_velocities=joint_velocities,
+            ref_time=ref_time,
+            max_acc=max_acc,
+            max_vel=max_vel,
+        )
+        return self.command("move_arm_joint_trajectory", action_goal, timeout_sec)
+
+    def move_arm_joint_trajectory_async(
+        self,
+        joint_angles: Sequence[ArmJointMap],
+        times: Sequence[float],
+        *,
+        joint_velocities: Optional[Sequence[ArmJointMap]] = None,
+        ref_time: Optional[float] = None,
+        max_acc: Optional[float] = None,
+        max_vel: Optional[float] = None,
+        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Optional[SpotActionHandle]:
+        """Move the joint angles of the arm along a specified trajectory.
+
+        Args:
+            joint_angles: List of joint angles to command the arm to move to. Each set of joint
+                          angles must be size 6, as there are 6 joints. Max 10 points per BD
+            times: List of times we want to reach each joint position relative to the reference time
+            joint_velocities: List of joint velocities for the arm to achieve along the trajectory.
+            ref_time: reference time to begin trajectory, relative to the robot clock.
+            max_acc: maximum acceleration allowed for any joint along the trajectory (rad/s^2)
+            max_vel: maximum velocity allowed for any joint along the trajectory (rad/s)
+            result_callback: A callback to process/handle the resulting feedback from executing the command
+            feedback_callback: A callback to process/handle the feedback received during the execution of the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
+
+        Returns:
+            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+        Raises:
+            Exception if too many points
+
+        https://github.com/boston-dynamics/spot-sdk/blob/b3e41278a7d6b22ad82a2ec4d7df6d36df029470/protos/bosdyn/api/arm_command.proto#L314
+        https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference#armjointtrajectory
+        """
+        action_goal = self._get_arm_joint_trajectory_goal(
+            joint_angles=joint_angles,
+            times=times,
+            joint_velocities=joint_velocities,
+            ref_time=ref_time,
+            max_acc=max_acc,
+            max_vel=max_vel,
+        )
+        return self.command_async(
+            "move_arm_joint_trajectory_async",
+            action_goal,
+            result_callback=result_callback,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
+
+    def _get_joint_move_action_goal(
+        self, joint_angles: Optional[ArmJointMap], time_since_reference_secs: Optional[float] = None
+    ) -> RobotCommand.Goal:
+        """Converts an arm joint trajectory into an action goal.
+
+        Args:
+            joint_angles: the joint angles of the robot, in order from shoulder to wrist.
+                          If the joint angles is None, then the arm is locked in place.
+            time_since_reference_secs: duration the command needs to execute with respect to the reference
+
+        Returns:
+            Action goal representing the arm joint movements
+        """
+        if joint_angles is None:
+            arm_joint_traj = arm_command_pb2.ArmJointTrajectory(points=[arm_command_pb2.ArmJointTrajectoryPoint()])
+        else:
+            traj_point = RobotCommandBuilder.create_arm_joint_trajectory_point(
+                sh0=joint_angles.sh0,
+                sh1=joint_angles.sh1,
+                el0=joint_angles.el0,
+                el1=joint_angles.el1,
+                wr0=joint_angles.wr0,
+                wr1=joint_angles.wr1,
+                time_since_reference_secs=time_since_reference_secs,
+            )
+            arm_joint_traj = arm_command_pb2.ArmJointTrajectory(points=[traj_point])
+        robot_cmd = robot_command_pb2.RobotCommand()
+        joint_move_cmd = robot_cmd.synchronized_command.arm_command.arm_joint_move_command
+        joint_move_cmd.trajectory.CopyFrom(arm_joint_traj)
+        return self._convert_proto_to_robot_cmd_action_goal(robot_cmd)
+
+    def move_arm_to_joint_angles(
+        self,
+        joint_angles: Optional[ArmJointMap],
+        *,
+        time_since_reference_secs: Optional[float] = None,
+        timeout_sec: float = 5.0,
+    ) -> Optional[RobotCommandFeedback]:
+        """Moves the arm to a specific set of joint angles
+
+        Args:
+            joint_angles: the joint angles of the robot, in order from shoulder to wrist.
+                          If the joint angles is None, then the arm is locked in place.
+            time_since_reference_secs: duration the command needs to execute with respect to the reference
+            timeout_sec: seconds between receive and execution until the command times out
+
+        Returns:
+            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+        """
+        # Builds the action goal
+        action_goal = self._get_joint_move_action_goal(
+            joint_angles=joint_angles, time_since_reference_secs=time_since_reference_secs
+        )
+        return self.command("move_arm_to_joint_angles", action_goal, timeout_sec)
+
+    def move_arm_to_joint_angles_async(
+        self,
+        joint_angles: Optional[ArmJointMap],
+        *,
+        time_since_reference_secs: Optional[float] = None,
+        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Optional[SpotActionHandle]:
+        """Moves the arm to a specific set of joint angles
+
+        Args:
+            joint_angles: the joint angles of the robot, in order from shoulder to wrist.
+                          If the joint angles is None, then the arm is locked in place.
+            time_since_reference_secs: duration the command needs to execute with respect to the reference
+            result_callback: A callback to process/handle the resulting feedback from executing the command
+            feedback_callback: A callback to process/handle the feedback received during the execution of the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
+
+        Returns:
+            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+        """
+        action_goal = self._get_joint_move_action_goal(
+            joint_angles=joint_angles, time_since_reference_secs=time_since_reference_secs
+        )
+        return self.command_async(
+            "move_arm_to_joint_angles_async",
+            action_goal,
+            result_callback=result_callback,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
+
+    def lock_arm(self) -> Optional[RobotCommandFeedback]:
+        """Locks the arm joint in place.
+
+        Returns:
+            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+        """
+        return self.move_arm_to_joint_angles(joint_angles=None)
+
+    def lock_arm_async(
+        self,
+        *,
+        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Optional[SpotActionHandle]:
+        """Locks the arm joint in place.
+
+        Args:
+            result_callback: A callback to process/handle the resulting feedback from executing the command
+            feedback_callback: A callback to process/handle the feedback received during the execution of the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
+
+        Returns:
+            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise.
+        """
+        return self.move_arm_to_joint_angles_async(
+            joint_angles=None,
+            result_callback=result_callback,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
+
+    def _get_arm_cartesian_trajectory_action_goal(
         self,
         root_frame_name: str,
-        axis_mode_dict: AxisModeDict,
+        axis_mode_map: AxisModeMap,
         timestamps_between_poses: Optional[np.typing.ArrayLike] = None,
         timestamps_between_wrenches: Optional[np.typing.ArrayLike] = None,
         pose_vecs: Optional[Sequence[SE3]] = None,
@@ -2069,7 +2352,7 @@ class SpotBasic(object):
 
         Args:
             root_frame_name: optional task frame that all trajectories are defined with respect to.
-            axis_mode_dict: dataclass in robot_command_helpers.py which maps axis to control modes (position or force).
+            axis_mode_map: dataclass in robot_command_helpers.py which maps axis to control modes (position or force).
             timestamps_between_poses: array of timestamps of when each pose point is traversed (seconds)
             timestamps_between_wrenches: array of timestamps of when each wrench point is traversed (seconds)
             pose_vecs: vector of SE3 poses for the end effector to pass through described by the spatialmath library
@@ -2128,12 +2411,12 @@ class SpotBasic(object):
             mobility_command = robot_cmd.synchronized_command.mobility_command
             mobility_command.follow_arm_request.CopyFrom(basic_command_pb2.FollowArmCommand.Request())
 
-        arm_cartesian_command.x_axis = axis_mode_dict.x
-        arm_cartesian_command.y_axis = axis_mode_dict.y
-        arm_cartesian_command.z_axis = axis_mode_dict.z
-        arm_cartesian_command.rz_axis = axis_mode_dict.rx
-        arm_cartesian_command.ry_axis = axis_mode_dict.ry
-        arm_cartesian_command.rz_axis = axis_mode_dict.rz
+        arm_cartesian_command.x_axis = axis_mode_map.x
+        arm_cartesian_command.y_axis = axis_mode_map.y
+        arm_cartesian_command.z_axis = axis_mode_map.z
+        arm_cartesian_command.rz_axis = axis_mode_map.rx
+        arm_cartesian_command.ry_axis = axis_mode_map.ry
+        arm_cartesian_command.rz_axis = axis_mode_map.rz
 
         if max_acceleration is not None:
             arm_cartesian_command.maximum_acceleration.value = max_acceleration
@@ -2155,7 +2438,8 @@ class SpotBasic(object):
     def move_end_effector_cartesian_trajectory(
         self,
         root_frame_name: str,
-        axis_mode_dict: AxisModeDict,
+        axis_mode_map: AxisModeMap,
+        *,
         timestamps_between_poses: Optional[np.typing.ArrayLike] = None,
         timestamps_between_wrenches: Optional[np.typing.ArrayLike] = None,
         pose_vecs: Optional[Sequence[SE3]] = None,
@@ -2185,7 +2469,7 @@ class SpotBasic(object):
 
         Args:
             root_frame_name: optional task frame that all trajectories are defined with respect to.
-            axis_mode_dict: dataclass in robot_command_helpers.py which maps axis to control modes (position or force).
+            axis_mode_map: dataclass in robot_command_helpers.py which maps axis to control modes (position or force).
             timestamps_between_poses: array of timestamps of when each pose point is traversed (seconds)
             timestamps_between_wrenches: array of timestamps of when each wrench point is traversed (seconds)
             pose_vecs: vector of SE3 poses for the end effector to pass through described by the spatialmath library
@@ -2212,9 +2496,9 @@ class SpotBasic(object):
         https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html#armcartesiancommand-request
         https://github.com/bdaiinstitute/spatialmath-python/blob/master/spatialmath/pose3d.py
         """
-        action_goal = self._get_arm_trajectory_action_goal(
+        action_goal = self._get_arm_cartesian_trajectory_action_goal(
             root_frame_name=root_frame_name,
-            axis_mode_dict=axis_mode_dict,
+            axis_mode_map=axis_mode_map,
             timestamps_between_poses=timestamps_between_poses,
             timestamps_between_wrenches=timestamps_between_wrenches,
             pose_vecs=pose_vecs,
@@ -2239,7 +2523,8 @@ class SpotBasic(object):
     def move_end_effector_cartesian_trajectory_async(
         self,
         root_frame_name: str,
-        axis_mode_dict: AxisModeDict,
+        axis_mode_map: AxisModeMap,
+        *,
         timestamps_between_poses: Optional[np.typing.ArrayLike] = None,
         timestamps_between_wrenches: Optional[np.typing.ArrayLike] = None,
         pose_vecs: Optional[Sequence[SE3]] = None,
@@ -2272,7 +2557,7 @@ class SpotBasic(object):
         Args:
             root_frame_name: optional task frame that all trajectories are defined with respect to.
             root_frame_name: optional task frame that all trajectories are defined with respect to.
-            axis_mode_dict: dataclass in robot_command_helpers.py which maps axis to control modes (position or force).
+            axis_mode_map: dataclass in robot_command_helpers.py which maps axis to control modes (position or force).
             timestamps_between_poses: array of timestamps of when each pose point is traversed (seconds)
             timestamps_between_wrenches: array of timestamps of when each wrench point is traversed (seconds)
             pose_vecs: vector of SE3 poses for the end effector to pass through described by the spatialmath library
@@ -2301,9 +2586,9 @@ class SpotBasic(object):
         https://github.com/bdaiinstitute/spatialmath-python/blob/master/spatialmath/pose3d.py
         """
 
-        action_goal = self._get_arm_trajectory_action_goal(
+        action_goal = self._get_arm_cartesian_trajectory_action_goal(
             root_frame_name=root_frame_name,
-            axis_mode_dict=axis_mode_dict,
+            axis_mode_map=axis_mode_map,
             timestamps_between_poses=timestamps_between_poses,
             timestamps_between_wrenches=timestamps_between_wrenches,
             pose_vecs=pose_vecs,
