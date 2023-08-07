@@ -15,6 +15,8 @@ Use:
         where the yaml has the line 'publish_depth_registered: True'
     
     2) execute this script, pass in the robot name and camera location (see --help for valid locations)
+    3) three GUI's will pop up in succession: a pointcloud, am rgb image, and a grayscale image representing depth 
+        (might be hard to make out any detail in this one)
 """
 
 

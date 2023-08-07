@@ -17,6 +17,15 @@ from bosdyn.client.frame_helpers import BODY_FRAME_NAME, VISION_FRAME_NAME
 from spatialmath import SE2
 from spot_utilities.spot_basic import SpotBasic
 
+""" This is a test script to demo having spot walk along a trajectory.
+
+Use:
+    1) start spot driver
+    2) make sure there isn't anything within a 2 meters of spot
+    3) python relative/path/to/this/script/here arguments-here
+    4) spot will walk in a pattern based on which example you picked
+"""
+
 
 def plot_trajectory(ax: plt.Axes, trajectory: SE2Trajectory) -> None:
     draw_shape(ax, trajectory, BODY_SHAPE)  # type: ignore

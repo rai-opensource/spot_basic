@@ -10,10 +10,11 @@ from spot_utilities.spot_basic import SpotBasic
 """ This is a test script to demo calling the arm impedance control.
 
 Use:
+    0) have a spot with an arm
     1) start spot driver
-    2) make sure there are no potential collision within reach of spot's current arm 
+    2) make sure there isn't anything within a meter of spot
     3) python relative/path/to/this/script/here robot-name-here
-
+    4) spot will make some circle like trajectories with its end effector
 """
 
 

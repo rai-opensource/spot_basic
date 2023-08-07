@@ -16,6 +16,15 @@ from sensor_msgs.msg import CameraInfo, Image
 from spot_utilities.spot_basic import SpotBasic
 from tf2_ros import ExtrapolationException
 
+""" This is a test script to demo using the manipulation api.
+
+Use:
+    0) have a spot with an arm, put an object you want to grasp in the field of view of a spot camera
+    1) start spot driver
+    2) python relative/path/to/this/script/here arguments-here
+    3) a GUI will pop up, click the target item, spot will pick it up
+"""
+
 # Assumes the robot with an arm is sitting or standing in an open environment, with an desired object to grasp in the
 # field of view of the given camera.
 AVAILABLE_CAMERA_NAMES = ["frontleft", "frontright", "left", "right", "back"]

@@ -12,6 +12,7 @@ Use:
         polygon of the feet
     2) start spot driver
     3) execute this script, pass in the robot name
+    4) spot will orient itself such that the front of the body is facing towards the origin of the vision frame
 """
 
 
