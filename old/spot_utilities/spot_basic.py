@@ -12,11 +12,13 @@ import numpy as np
 import rclpy
 import spot_driver.conversions as conv
 from bdai.trajectory.se2_trajectory import SE2Trajectory
+from bdai_ros.utilities.custom_types import SrvTypeRequest
 from bdai_ros.utilities.manual_conversions import (
     arm_joint_map_to_list,
     se3_to_se3pose_proto,
     to_ros_pose,
 )
+from bdai_ros.utilities.service_handle import ServiceHandle
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 from bdai_ros2_wrappers.action_client import ActionClientWrapper
 from bdai_ros2_wrappers.action_handle import ActionHandle
@@ -54,7 +56,9 @@ from geometry_msgs.msg import Twist
 from rcl_interfaces.srv import GetParameters
 from rclpy.action import ActionClient
 from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.client import Client
 from rclpy.impl.rcutils_logger import RcutilsLogger
+from rclpy.task import Future
 from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo
 from sklearn.preprocessing import normalize
@@ -142,6 +146,11 @@ class SpotActionHandle(ActionHandle):
             self._feedback_callback_internal(feedback.feedback)
 
 
+class SpotServiceHandle(ServiceHandle):
+    def __init__(self, robot_name: str, service_name: str, logger: Optional[RcutilsLogger] = None):
+        super().__init__(service_name=f"{robot_name}.{service_name}", logger=logger)
+
+
 class RobotComposeCommandHandle(object):
     """Handle for sequentially composing multiple asynchronous RobotCommand sent via an action client"""
 
@@ -172,8 +181,6 @@ class SpotBasic(object):
         "release",
         "stop",
         "self_right",
-        "sit",
-        "stand",
         "power_on",
         "power_off",
         "estop/hard",
@@ -433,32 +440,112 @@ class SpotBasic(object):
             return False
         return True
 
-    def claim(self) -> bool:
+    def trigger_service_async(
+        self,
+        service_name: str,
+        result_callback: Optional[Callable[[Future], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> SpotServiceHandle:
+        """Triggers a service asynchronously on the SpotDriver
+
+        Args:
+            service_name: name of the service we are calling
+            result_callback: callback executing on the future returned from a service call
+            on_failure_callback: callback executing if a service fails
+
+        Returns:
+            A SpotServiceHandle which contains information about the state of the service
+        """
+        return self._call_service_async(
+            service_name=f"{service_name}_async",
+            request=Trigger.Request(),
+            service_client=self._trigger_clients[service_name],
+            result_callback=result_callback,
+            on_failure_callback=on_failure_callback,
+        )
+
+    def claim(
+        self,
+        *,
+        asynchronous: bool = False,
+        result_callback: Optional[Callable[[Future], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Union[bool, SpotServiceHandle]:
         """Triggers the 'claim' service on the SpotDriver
 
+        Args:
+            asynchronous: whether or not to execute the function asynchronously
+            result_callback: callback executing on the future returned from a service call
+            on_failure_callback: callback executing if a service fails
+
         Returns:
-            True if the command succeeded, False otherwise
+            If synchronous, True if command succeeded, False otherwise
+            If asynchronous, Service handle containing the updated results
         """
+        if asynchronous:
+            return self.trigger_service_async(
+                service_name="claim", result_callback=result_callback, on_failure_callback=on_failure_callback
+            )
+
         return self.trigger_service("claim")
 
-    def release(self) -> bool:
+    def release(
+        self,
+        *,
+        asynchronous: bool = False,
+        result_callback: Optional[Callable[[Future], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Union[bool, SpotServiceHandle]:
         """Triggers the 'release' service on the SpotDriver
 
+        Args:
+            asynchronous: whether or not to execute the function asynchronously
+            result_callback: callback executing on the future returned from a service call
+            on_failure_callback: callback executing if a service fails
+
         Returns:
-            True if the command succeeded, False otherwise
+            If synchronous, True if command succeeded, False otherwise
+            If asynchronous, Service handle containing the updated results
         """
+        if asynchronous:
+            return self.trigger_service_async(
+                service_name="release", result_callback=result_callback, on_failure_callback=on_failure_callback
+            )
         return self.trigger_service("release")
 
-    def stop(self) -> bool:
+    def stop(
+        self,
+        *,
+        asynchronous: bool = False,
+        result_callback: Optional[Callable[[Future], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Union[bool, SpotServiceHandle]:
         """Triggers the 'stop' service on the SpotDriver
 
+        Args:
+            asynchronous: whether or not to execute the function asynchronously
+            result_callback: callback executing on the future returned from a service call
+            on_failure_callback: callback executing if a service fails
+
         Returns:
-            True if the command succeeded, False otherwise
+            True if command succeeded, False otherwise if synchronous
+            Service handle containing the updated results if asynchronous
+
+        Returns:
+            If synchronous, True if command succeeded, False otherwise
+            If asynchronous, Service handle containing the updated results
         """
+        if asynchronous:
+            return self.trigger_service_async(
+                service_name="stop", result_callback=result_callback, on_failure_callback=on_failure_callback
+            )
         return self.trigger_service("stop")
 
-    def dock(self, dock_id: int) -> bool:
+    def _dock(self, dock_id: int) -> bool:
         """Triggers the 'dock' service on the SpotDriver
+
+        Args:
+            dock_id: number on the fiducial associated with the dock.
 
         Returns:
             True if command succeeded, False otherwise
@@ -477,12 +564,81 @@ class SpotBasic(object):
             return False
         return True
 
-    def undock(self) -> bool:
-        """Triggers the 'undock' service on the SpotDriver
+    def _dock_async(
+        self,
+        dock_id: int,
+        *,
+        result_callback: Optional[Callable[[Future], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> SpotServiceHandle:
+        """Triggers the docking call asynchronously.
+
+        Args:
+            dock_id: number on fiducial used to identify the dock
+            result_callback: A callback to process/handle the resulting feedback from executing the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
-            True if the command succeeded, False otherwise
+            Service handle containing the updated results
         """
+        dock_request = Dock.Request()
+        dock_request.dock_id = dock_id
+        return self._call_service_async(
+            service_name="dock",
+            request=dock_request,
+            service_client=self._dock_client,
+            result_callback=result_callback,
+            on_failure_callback=on_failure_callback,
+        )
+
+    def dock(
+        self,
+        dock_id: int,
+        *,
+        asynchronous: bool = False,
+        result_callback: Optional[Callable[[Future], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Union[bool, SpotServiceHandle]:
+        """Triggers the 'dock' service on the SpotDriver
+
+        Args:
+            dock_id: number on fiducial used to identify the dock
+            asynchronous: whether or not to execute the function asynchronously
+            result_callback: callback executing on the future returned from a service call
+            on_failure_callback: callback executing if a service fails
+
+        Returns:
+            True if command succeeded, False otherwise if synchronous
+            Service handle containing the updated results if asynchronous
+        """
+        if asynchronous:
+            return self._dock_async(
+                dock_id=dock_id, result_callback=result_callback, on_failure_callback=on_failure_callback
+            )
+        return self._dock(dock_id=dock_id)
+
+    def undock(
+        self,
+        *,
+        asynchronous: bool = False,
+        result_callback: Optional[Callable[[Future], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Union[bool, SpotServiceHandle]:
+        """Triggers the 'undock' service on the SpotDriver
+
+        Args:
+            asynchronous: whether or not to execute the function asynchronously
+            result_callback: callback executing on the future returned from a service call
+            on_failure_callback: callback executing if a service fails
+
+        Returns:
+            True if command succeeded, False otherwise if synchronous
+            Service handle containing the updated results if asynchronous
+        """
+        if asynchronous:
+            return self.trigger_service_async(
+                service_name="undock", result_callback=result_callback, on_failure_callback=on_failure_callback
+            )
         return self.trigger_service("undock")
 
     def self_right(self) -> bool:
@@ -493,75 +649,233 @@ class SpotBasic(object):
         """
         return self.trigger_service("self_right")
 
-    def sit(self) -> bool:
+    def sit(self, timeout_sec: float = 5.0) -> Optional[RobotCommandFeedback]:
         """Triggers the 'sit' service on the SpotDriver
 
         Returns:
             True if the command succeeded, False otherwise
         """
-        return self.trigger_service("sit")
+        mobility_params = self._get_mobility_params()
+        command = RobotCommandBuilder.synchro_sit_command(params=mobility_params)
+        action_goal = self._convert_proto_to_robot_cmd_action_goal(command)
+        return self.command(command_name="sit", goal=action_goal, timeout_sec=timeout_sec)
 
-    def stand(self) -> bool:
+    def sit_async(
+        self,
+        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
+    ) -> Optional[SpotActionHandle]:
+        """Treats sitting as an action instead of a service and asynchronously executes it
+
+        Args:
+          result_callback: A callback to process/handle the resulting feedback from executing the command
+          feedback_callback: A callback to process/handle the feedback received during the execution of the command
+          on_failure_callback: A callback to process/handle when the action fails for various reasons
+        """
+        mobility_params = self._get_mobility_params()
+        command = RobotCommandBuilder.synchro_sit_command(params=mobility_params)
+        action_goal = self._convert_proto_to_robot_cmd_action_goal(command)
+        return self.command_async(
+            "sit_async",
+            action_goal,
+            result_callback=result_callback,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
+
+    def stand(self, timeout_sec: float = 5.0) -> Optional[RobotCommandFeedback]:
         """Triggers the 'stand' service on the SpotDriver
 
         Returns:
             True if the command succeeded, False otherwise
         """
-        return self.trigger_service("stand")
+        mobility_params = self._get_mobility_params()
+        command = RobotCommandBuilder.synchro_stand_command(params=mobility_params)
+        action_goal = self._convert_proto_to_robot_cmd_action_goal(command)
+        return self.command("stand", action_goal, timeout_sec=timeout_sec)
 
-    def rollover(self) -> bool:
-        """Triggers the 'rollover' service on the SpotDriver
+    def stand_async(
+        self,
+        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
+    ) -> Optional[SpotActionHandle]:
+        """Treats standing as an action instead of a service and asynchronously executes it
 
-        Returns:
-            True if the command succeeded, False otherwise
+        Args:
+          result_callback: A callback to process/handle the resulting feedback from executing the command
+          feedback_callback: A callback to process/handle the feedback received during the execution of the command
+          on_failure_callback: A callback to process/handle when the action fails for various reasons
         """
-        return self.trigger_service("rollover")
+        mobility_params = self._get_mobility_params()
+        command = RobotCommandBuilder.synchro_stand_command(params=mobility_params)
+        action_goal = self._convert_proto_to_robot_cmd_action_goal(command)
+        return self.command_async(
+            "stand_async",
+            action_goal,
+            result_callback=result_callback,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
 
-    def power_on(self) -> bool:
+    def rollover(self, timeout_sec: float = 5.0) -> Optional[RobotCommandFeedback]:
+        command = RobotCommandBuilder.selfright_command()
+        action_goal = self._convert_proto_to_robot_cmd_action_goal(command)
+        return self.command("rollover", action_goal, timeout_sec=timeout_sec)
+
+    def rollover_async(
+        self,
+        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
+    ) -> Optional[SpotActionHandle]:
+        """Treats self righting as an action instead of a service and asynchronously executes it
+
+        Args:
+          result_callback: A callback to process/handle the resulting feedback from executing the command
+          feedback_callback: A callback to process/handle the feedback received during the execution of the command
+          on_failure_callback: A callback to process/handle when the action fails for various reasons
+        """
+        command = RobotCommandBuilder.selfright_command()
+        action_goal = self._convert_proto_to_robot_cmd_action_goal(command)
+        return self.command_async(
+            "rollover_async",
+            action_goal,
+            result_callback=result_callback,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
+
+    def power_on(
+        self,
+        *,
+        asynchronous: bool = False,
+        result_callback: Optional[Callable[[Future], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Union[bool, SpotServiceHandle]:
         """Triggers the 'power_on' service on the SpotDriver
 
+        Args:
+            asynchronous: whether or not to execute the function asynchronously
+            result_callback: callback executing on the future returned from a service call
+            on_failure_callback: callback executing if a service fails
+
         Returns:
-            True if the command succeeded, False otherwise
+            True if command succeeded, False otherwise if synchronous
+            Service handle containing the updated results if asynchronous
         """
+        if asynchronous:
+            return self.trigger_service_async(
+                service_name="power_on", result_callback=result_callback, on_failure_callback=on_failure_callback
+            )
+
         return self.trigger_service("power_on")
 
     # Alias for the power_on function
     power_motors_on = power_on
 
-    def power_off(self) -> bool:
+    def power_off(
+        self,
+        *,
+        asynchronous: bool = False,
+        result_callback: Optional[Callable[[Future], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Union[bool, SpotServiceHandle]:
         """Triggers the 'power_off' service on the SpotDriver
 
+        Args:
+            asynchronous: whether or not to execute the function asynchronously
+            result_callback: callback executing on the future returned from a service call
+            on_failure_callback: callback executing if a service fails
+
         Returns:
-            True if the command succeeded, False otherwise
+            If synchronous, True if command succeeded, False otherwise
+            If asynchronous, Service handle containing the updated results
         """
+        if asynchronous:
+            return self.trigger_service_async(
+                service_name="power_off", result_callback=result_callback, on_failure_callback=on_failure_callback
+            )
+
         return self.trigger_service("power_off")
 
     # Alias for the power_off function
     power_motors_off = power_off
 
-    def estop_hard(self) -> bool:
+    def estop_hard(
+        self,
+        *,
+        asynchronous: bool = False,
+        result_callback: Optional[Callable[[Future], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Union[bool, SpotServiceHandle]:
         """Triggers the 'estop/hard' service on the SpotDriver. The robot will immediately cut power to the motors
 
+        Args:
+            asynchronous: whether or not to execute the function asynchronously
+            result_callback: callback executing on the future returned from a service call
+            on_failure_callback: callback executing if a service fails
+
         Returns:
-            True if the command succeeded, False otherwise
+            If synchronous, True if command succeeded, False otherwise
+            If asynchronous, Service handle containing the updated results
         """
+        if asynchronous:
+            return self.trigger_service_async(
+                service_name="estop/hard", result_callback=result_callback, on_failure_callback=on_failure_callback
+            )
+
         return self.trigger_service("estop/hard")
 
-    def estop_gentle(self) -> bool:
+    def estop_gentle(
+        self,
+        *,
+        asynchronous: bool = False,
+        result_callback: Optional[Callable[[Future], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Union[bool, SpotServiceHandle]:
         """Triggers the 'estop/gentle' service on the SpotDriver. The robot will try to settle on the ground before
                 cutting power to the motors.
 
+        Args:
+            asynchronous: whether or not to execute the function asynchronously
+            result_callback: callback executing on the future returned from a service call
+            on_failure_callback: callback executing if a service fails
+
         Returns:
-            True if the command succeeded, False otherwise
+            If synchronous, True if command succeeded, False otherwise
+            If asynchronous, Service handle containing the updated results
         """
+        if asynchronous:
+            return self.trigger_service_async(
+                service_name="estop/gentle", result_callback=result_callback, on_failure_callback=on_failure_callback
+            )
+
         return self.trigger_service("estop/gentle")
 
-    def estop_release(self) -> bool:
+    def estop_release(
+        self,
+        *,
+        asynchronous: bool = False,
+        result_callback: Optional[Callable[[Future], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> Union[bool, SpotServiceHandle]:
         """Triggers the 'estop/release' service on the SpotDriver
 
+        Args:
+            asynchronous: whether or not to execute the function asynchronously
+            result_callback: callback executing on the future returned from a service call
+            on_failure_callback: callback executing if a service fails
+
         Returns:
-            True if the command succeeded, False otherwise
+            If synchronous, True if command succeeded, False otherwise
+            If asynchronous, Service handle containing the updated results
         """
+        if asynchronous:
+            return self.trigger_service_async(
+                service_name="estop/release", result_callback=result_callback, on_failure_callback=on_failure_callback
+            )
         return self.trigger_service("estop/release")
 
     def set_stair_mode(self, value: bool) -> bool:
@@ -958,6 +1272,42 @@ class SpotBasic(object):
 
         return handle
 
+    def _send_service_request_async(
+        self,
+        service_name: str,
+        request: SrvTypeRequest,
+        service_client: Client,
+        *,
+        result_callback: Optional[Callable[[Future], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> SpotServiceHandle:
+        """Sends an asynchronous service request to the service client and handles the response.
+
+        Args:
+            service_name: name of the service we are requesting from
+            request: the request we are sending to the service
+            service_client: the client used to request the service
+            result_callback: callback executing on the future returned from a service call
+            on_failure_callback: callback executing if a service fails
+
+        Raises:
+            ValueError if a request is None
+        """
+        if request is None:
+            raise ValueError("Request must not be None!")
+
+        handle = SpotServiceHandle(robot_name=self._robot_name, service_name=service_name)
+
+        if result_callback is not None:
+            handle.set_result_callback(result_callback)
+
+        if on_failure_callback is not None:
+            handle.set_on_failure_callback(on_failure_callback=on_failure_callback)
+
+        service_future = service_client.call_async(request)
+        handle.set_send_service_future(service_future)
+        return handle
+
     def command(
         self, command_name: str, goal: RobotCommand.Goal, timeout_sec: Optional[float] = None
     ) -> Optional[RobotCommandFeedback]:
@@ -1024,6 +1374,35 @@ class SpotBasic(object):
             self._robot_command_action_client,
             result_callback=result_callback,
             feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
+
+    def _call_service_async(
+        self,
+        service_name: str,
+        request: SrvTypeRequest,
+        service_client: Client,
+        *,
+        result_callback: Optional[Callable[[Future], None]] = None,
+        on_failure_callback: Optional[Callable[[None], None]] = None,
+    ) -> SpotServiceHandle:
+        """Triggers a service asynchronous
+
+        Args:
+            service_name: A representative name of the service for logging
+            request: The request we are sending to the service server
+            service_client: the client we want to trigger the request for
+            on_failure_callback: A callback to process/handle when the request fails for various reasons
+
+        Returns:
+            A handle for the asynchronous lifecycle of the service
+        """
+        self._node.get_logger().info(f"Trigger command '{service_name}' for {self.robot_name}")
+        return self._send_service_request_async(
+            service_name=service_name,
+            request=request,
+            service_client=service_client,
+            result_callback=result_callback,
             on_failure_callback=on_failure_callback,
         )
 
