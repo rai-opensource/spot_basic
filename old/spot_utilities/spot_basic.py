@@ -5,23 +5,24 @@ from __future__ import annotations
 import argparse
 from enum import Enum, IntEnum
 from functools import partial
-from threading import Thread
-from typing import Any, Callable, List, Optional, Sequence, Tuple, TypeVar, Union
+from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 
 import geometry_msgs
 import numpy as np
 import rclpy
 import spot_driver.conversions as conv
 from bdai.trajectory.se2_trajectory import SE2Trajectory
-from bdai_ros.utilities.action_handle import ActionHandle
-from bdai_ros.utilities.custom_types import Action
-from bdai_ros.utilities.futures import wait_for_future
 from bdai_ros.utilities.manual_conversions import (
     arm_joint_map_to_list,
     se3_to_se3pose_proto,
     to_ros_pose,
 )
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
+from bdai_ros2_wrappers.action_client import ActionClientWrapper
+from bdai_ros2_wrappers.action_handle import ActionHandle
+from bdai_ros2_wrappers.futures import wait_for_future
+from bdai_ros2_wrappers.node import NodeWrapper
+from bdai_ros2_wrappers.type_hints import Action
 from bosdyn.api import (
     arm_command_pb2,
     basic_command_pb2,
@@ -53,7 +54,6 @@ from geometry_msgs.msg import Twist
 from rcl_interfaces.srv import GetParameters
 from rclpy.action import ActionClient
 from rclpy.callback_groups import ReentrantCallbackGroup
-from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.impl.rcutils_logger import RcutilsLogger
 from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo
@@ -99,10 +99,10 @@ from spot_utilities.spot_dataclasses import (
     AxisModeMap,
 )
 
-Proto = TypeVar("Proto")
-
 
 class SpotActionHandle(ActionHandle):
+    """Extends the ActionHandle for spot specific actions"""
+
     def __init__(self, robot_name: str, command_name: str, logger: Optional[RcutilsLogger] = None):
         super().__init__(action_name=f"{robot_name}.{command_name}", logger=logger)
         self._result_callback = self._result_callback_intermediate
@@ -235,7 +235,8 @@ class SpotBasic(object):
         dry: bool = False,
         rviz: bool = False,
     ):
-        """
+        """Constructor
+
         Args:
             robot_name: name of the robot
             parent_node_name: The name of the parent node containing this SpotBasic
@@ -243,7 +244,7 @@ class SpotBasic(object):
             dry: True if this is a dry run and commands should not actually be sent, False otherwise
             rviz: True if visuals should be published, False otherwise
         """
-        self._node = rclpy.create_node(node_name=f"{parent_node_name}_spot_basic", namespace=robot_name)
+        self._node = NodeWrapper(node_name=f"{parent_node_name}_spot_basic", namespace=robot_name, spin_thread=True)
 
         self._robot_name = robot_name
         self._disable_collisions = disable_collisions
@@ -259,9 +260,6 @@ class SpotBasic(object):
         self._vision_frame_name = f"{self._robot_name}/{VISION_FRAME_NAME}"
         self._odom_frame_name = f"{self._robot_name}/{ODOM_FRAME_NAME}"
 
-        self._executor = SingleThreadedExecutor()
-        self._executor.add_node(self._node)
-        self._spin_thread = Thread(target=self._spin_executor, args=(self._executor,), daemon=True)
         self._callback_group = ReentrantCallbackGroup()
 
         if self._rviz:
@@ -354,12 +352,12 @@ class SpotBasic(object):
             SetVolume, f"/{self.robot_name}/set_volume", callback_group=self._callback_group
         )
 
-        self._robot_command_action_client = ActionClient(self._node, RobotCommand, "robot_command")
+        self._robot_command_action_client = ActionClientWrapper(RobotCommand, "robot_command", self._node)
         self._node.get_logger().info(f"Waiting for the 'RobotCommand' action server for {self.robot_name} ...")
         self._robot_command_action_client.wait_for_server()
         self._node.get_logger().info(f"Found the 'RobotCommand' action server for {self.robot_name}.")
 
-        self._manipulation_action_client = ActionClient(self._node, Manipulation, "manipulation")
+        self._manipulation_action_client = ActionClientWrapper(Manipulation, "manipulation", self._node)
         self._node.get_logger().info(f"Waiting for the 'Manipulation' action server for {self.robot_name} ...")
         if self._manipulation_action_client.wait_for_server(1.0):
             self._node.get_logger().info(f"Found the 'Manipulation' action server for {self.robot_name}.")
@@ -367,8 +365,6 @@ class SpotBasic(object):
             self._node.get_logger().info(
                 f"No 'Manipulation' action server for {self.robot_name} found. Assuming it has no arm."
             )
-
-        self._spin_thread.start()
 
     @property
     def robot_name(self) -> str:
@@ -389,13 +385,6 @@ class SpotBasic(object):
     @property
     def odom_frame_name(self) -> str:
         return self._odom_frame_name
-
-    @staticmethod
-    def _spin_executor(executor: SingleThreadedExecutor) -> None:
-        try:
-            executor.spin()
-        except ExternalShutdownException:
-            pass
 
     def initialize_robot(self) -> bool:
         """Returns true/false based on success of claiming and powering up Spot."""
@@ -937,51 +926,6 @@ class SpotBasic(object):
         param = response.values[0]
         return param.bool_value
 
-    def _send_action_goal_and_wait(
-        self, command_name: str, goal: Action.Goal, action_client: ActionClient, timeout_sec: Optional[float] = None
-    ) -> Optional[Action.Result]:
-        """Sends an action goal to one of the action servers and waits for it to be done
-
-        Args:
-            command_name: A representative name of the command for logging
-            goal: The Action Goal sent to the action server
-            timeout_sec: A timeout for waiting on a response/result from the action server. Setting to None creates no
-                timeout
-
-        Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
-
-        Note: This is a blocking call
-        """
-        if goal is None:
-            self._node.get_logger.warn("Cannot send NULL ActionGoal")
-            # TODO: Is there something better that we can return with information about the failure?
-            # maybe a ActionType.Result that represents failure?
-            return None
-
-        if self._dry:
-            # TODO: What to return on a dry run? Just success?
-            return None
-
-        self._node.get_logger().info(f"Sending Action [{self._robot_name}.{command_name}]")
-
-        future = action_client.send_goal_async(goal)
-        if not wait_for_future(future, timeout_sec=timeout_sec):
-            return None
-
-        goal_handle = future.result()
-        if not goal_handle.accepted:
-            self._node.get_logger().error(f"Action [{self._robot_name}.{command_name}] was not accepted")
-            return None
-
-        self._node.get_logger().info(f"Action [{self._robot_name}.{command_name}] accepted")
-        future = goal_handle.get_result_async()
-        if not wait_for_future(future, timeout_sec=timeout_sec):
-            return None
-
-        self._node.get_logger().info(f"Received response for Action [{self._robot_name}.{command_name}]")
-        return future.result().result
-
     def _send_action_goal_async(
         self,
         command_name: str,
@@ -990,7 +934,7 @@ class SpotBasic(object):
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         if goal is None:
             # Is there something better that we can return with information about the failure?
@@ -1002,6 +946,8 @@ class SpotBasic(object):
         handle = SpotActionHandle(robot_name=self._robot_name, command_name=command_name)
         if result_callback is not None:
             handle.set_result_callback(result_callback)
+        if on_failure_callback is not None:
+            handle.set_on_failure_callback(on_failure_callback)
 
         if feedback_callback is None:
             send_goal_future = action_client.send_goal_async(goal)
@@ -1009,9 +955,6 @@ class SpotBasic(object):
             handle.set_feedback_callback(feedback_callback)
             send_goal_future = action_client.send_goal_async(goal, feedback_callback=handle.get_feedback_callback)
         handle.set_send_goal_future(send_goal_future)
-
-        if on_failure_callback is not None:
-            handle.set_on_failure_callback(on_failure_callback)
 
         return handle
 
@@ -1027,17 +970,30 @@ class SpotBasic(object):
                 timeout
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
 
         See https://github.com/bdaiinstitute/spot_ros2/blob/main/spot_msgs/action/RobotCommand.action
         """
-        if (
-            action_result := self._send_action_goal_and_wait(
-                command_name, goal, self._robot_command_action_client, timeout_sec
-            )
-        ) is not None:
-            return action_result.result
-        return None
+        failed = False
+
+        def _on_failure() -> None:
+            nonlocal failed
+            failed = True
+
+        handle = self._send_action_goal_async(
+            command_name=command_name,
+            goal=goal,
+            action_client=self._robot_command_action_client,
+            on_failure_callback=_on_failure,
+        )
+        if handle is None:
+            return None
+        if not handle.wait_for_result(timeout_sec=timeout_sec):
+            return None
+        if failed:
+            return None
+        return handle.result
 
     def command_async(
         self,
@@ -1046,7 +1002,7 @@ class SpotBasic(object):
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Runs the `RobotCommand` action asynchronously
 
@@ -1058,7 +1014,7 @@ class SpotBasic(object):
             on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
-            A handle for the asynchronous lifecycle of the action
+            Optional[SpotActionHandle]: A handle for the asynchronous lifecycle of the action
 
         See https://github.com/bdaiinstitute/spot_ros2/blob/main/spot_msgs/action/RobotCommand.action
         """
@@ -1077,23 +1033,39 @@ class SpotBasic(object):
         """Synchronously run a manipulation request
 
         Args:
-            command_name
-            goal
-            timeout_sec
+            command_name (str): A representative name of the command for logging
+            goal (Manipulation.Goal): The Action Goal sent to the action server
+            timeout_sec (Optional[float]): A timeout for waiting on a response/result from the action server. Setting to
+                None creates no timeout
 
         Returns:
+            Optional[ManipulationApiFeedbackResponse]: The feedback from the SpotDriver about the result of the command
+                if it was accepted and a result was successfully received, None otherwise
 
+        See https://github.com/bdaiinstitute/spot_ros2/blob/main/spot_msgs/action/RobotCommand.action
         """
         if not self.has_arm():
             self._node.get_logger().error("Cannot send Manipulation api request, robot has no arm.")
             return None
-        if (
-            action_result := self._send_action_goal_and_wait(
-                command_name, goal, self._manipulation_action_client, timeout_sec
-            )
-        ) is not None:
-            return action_result.result
-        return None
+        failed = False
+
+        def _on_failure() -> None:
+            nonlocal failed
+            failed = True
+
+        handle = self._send_action_goal_async(
+            command_name=command_name,
+            goal=goal,
+            action_client=self._manipulation_action_client,
+            on_failure_callback=_on_failure,
+        )
+        if handle is None:
+            return None
+        if not handle.wait_until_result(timeout_sec=timeout_sec):
+            return None
+        if failed:
+            return None
+        return handle.result
 
     def manipulation_async(
         self,
@@ -1102,7 +1074,7 @@ class SpotBasic(object):
         *,
         result_callback: Optional[Callable[[ManipulationApiFeedbackResponse], None]] = None,
         feedback_callback: Optional[Callable[[ManipulationApiFeedbackResponse], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         if not self.has_arm():
             self._node.get_logger().error("Cannot send Manipulation api request, robot has no arm.")
@@ -1133,13 +1105,15 @@ class SpotBasic(object):
         self._vis_pub.publish(marker)
 
     @staticmethod
-    def _convert_proto_to_robot_cmd_action_goal(proto: Proto) -> RobotCommand.Goal:
+    def _convert_proto_to_robot_cmd_action_goal(proto: robot_command_pb2.RobotCommand) -> RobotCommand.Goal:
         action_goal = RobotCommand.Goal()
         conv.convert_proto_to_bosdyn_msgs_robot_command(proto, action_goal.command)
         return action_goal
 
     @staticmethod
-    def _convert_proto_to_manip_cmd_action_goal(proto: Proto) -> RobotCommand.Goal:
+    def _convert_proto_to_manip_cmd_action_goal(
+        proto: manipulation_api_pb2.ManipulationApiRequest,
+    ) -> RobotCommand.Goal:
         action_goal = Manipulation.Goal()
         conv.convert_proto_to_bosdyn_msgs_manipulation_api_request(proto, action_goal.command)
         return action_goal
@@ -1202,7 +1176,6 @@ class SpotBasic(object):
         Returns:
             A tree-based collection of transformation to common frames.
         """
-
         child_to_parent_edge_map = {}
 
         # Add root frame.
@@ -1325,8 +1298,8 @@ class SpotBasic(object):
                 timeout
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
-
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         action_goal = self._get_battery_change_pose(dir_hint)
         return self.command("go_to_battery_change_pose", action_goal, timeout_sec)
@@ -1337,7 +1310,7 @@ class SpotBasic(object):
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Send command to go to the battery change pose asynchronously
 
@@ -1409,7 +1382,8 @@ class SpotBasic(object):
                 timeout
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         action_goal = self._get_walk_to_action_goal(vision_t_goal, height)
         return self.command("walk_to", action_goal, timeout_sec)
@@ -1421,7 +1395,7 @@ class SpotBasic(object):
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Send the command to walk to a specific SE2 pose
 
@@ -1480,7 +1454,8 @@ class SpotBasic(object):
                 timeout
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         action_goal_stand = self._get_stand_to_action_goal(vision_r_goal, height=height)
         return self.command("orient", action_goal_stand, timeout_sec)
@@ -1492,7 +1467,7 @@ class SpotBasic(object):
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Send the command to stand in a specific SO3 rotation
 
@@ -1523,12 +1498,9 @@ class SpotBasic(object):
         Args:
             body_t_target: SE3 transform from the current body position to the target you want to gaze at
             vision_t_body: SE3 transform from the vision from to the current body position
-            timeout_sec: A timeout for waiting on a response/result from the action server. The timeout arg is used
-                on each command, so max duration is 2x timeout. Setting to None creates no timeout.
 
         Return:
             vision_t_body_desired: body_t_target: SE3 transform to the target you want to gaze at
-
         """
         x_axis = np.array([1, 0, 0])
         new_vec_norm = normalize([body_t_target.t])[0]
@@ -1571,7 +1543,7 @@ class SpotBasic(object):
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[RobotComposeCommandHandle]:
         """Aligns the x-axis of the body frame along the vector from the current body position
         to the target. If you don't provide vision_t_body, you must set the tf listener for spot.
@@ -1659,7 +1631,7 @@ class SpotBasic(object):
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Gaze the arm/hand camera at a point relative to a frame.
 
@@ -1687,7 +1659,7 @@ class SpotBasic(object):
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[RobotComposeCommandHandle]:
         """Send the command to walk and rotate to a specific SE3 pose
 
@@ -1796,11 +1768,11 @@ class SpotBasic(object):
         self,
         vision_t_trajectory: SE2Trajectory,
         timestep_sec: float = 0.1,
-        interpolation: int = 2,
+        interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Send the command to walk along a trajectory asynchronously
 
@@ -1837,7 +1809,8 @@ class SpotBasic(object):
                 timeout
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         action_goal = self._get_arm_stow_action_goal()
         return self.command("stow_arm", action_goal, timeout_sec)
@@ -1847,7 +1820,7 @@ class SpotBasic(object):
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Send a command to stow the arm asynchronously
 
@@ -1881,7 +1854,8 @@ class SpotBasic(object):
                 timeout
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         action_goal = self._get_arm_ready_action_goal()
         return self.command("ready_arm", action_goal, timeout_sec)
@@ -1894,7 +1868,7 @@ class SpotBasic(object):
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Send a command to move the arm to the ready position asynchronously
 
@@ -1931,7 +1905,8 @@ class SpotBasic(object):
                 timeout
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         action_goal = self._get_arm_carry_action_goal()
         return self.command("carry_arm", action_goal, timeout_sec)
@@ -1941,7 +1916,7 @@ class SpotBasic(object):
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Move the arm to the carry position asynchronously
 
@@ -2002,7 +1977,8 @@ class SpotBasic(object):
             body_follow: If True, the robot's body would automatically follow the arm to achieve the goal
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
 
         See:
         https://github.com/boston-dynamics/spot-sdk/blob/master/python/bosdyn-client/src/bosdyn/client/robot_command.py#L1224
@@ -2018,7 +1994,7 @@ class SpotBasic(object):
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Send command to move the end effector to a specific pose asynchronously
 
@@ -2065,7 +2041,8 @@ class SpotBasic(object):
             max_vel: maximum velocity allowed for any joint along the trajectory (rad/s)
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
 
         Raises:
             Exception if too many points in trajectory (10 is the hard limit by BD).
@@ -2131,7 +2108,8 @@ class SpotBasic(object):
             timeout_sec: seconds between receive and execution until the command times out
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
 
         Raises:
             Exception if too many points in trajectory
@@ -2160,7 +2138,7 @@ class SpotBasic(object):
         max_vel: Optional[float] = None,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Move the joint angles of the arm along a specified trajectory.
 
@@ -2177,7 +2155,8 @@ class SpotBasic(object):
             on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         Raises:
             Exception if too many points
 
@@ -2247,7 +2226,8 @@ class SpotBasic(object):
             timeout_sec: seconds between receive and execution until the command times out
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         # Builds the action goal
         action_goal = self._get_joint_move_action_goal(
@@ -2262,7 +2242,7 @@ class SpotBasic(object):
         time_since_reference_secs: Optional[float] = None,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Moves the arm to a specific set of joint angles
 
@@ -2275,7 +2255,8 @@ class SpotBasic(object):
             on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         action_goal = self._get_joint_move_action_goal(
             joint_angles=joint_angles, time_since_reference_secs=time_since_reference_secs
@@ -2292,7 +2273,8 @@ class SpotBasic(object):
         """Locks the arm joint in place.
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         return self.move_arm_to_joint_angles(joint_angles=None)
 
@@ -2301,7 +2283,7 @@ class SpotBasic(object):
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Locks the arm joint in place.
 
@@ -2311,7 +2293,8 @@ class SpotBasic(object):
             on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise.
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise.
         """
         return self.move_arm_to_joint_angles_async(
             joint_angles=None,
@@ -2491,7 +2474,8 @@ class SpotBasic(object):
             timeout_sec: seconds it will attempt to run the command before timing out and returning
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
 
         https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html#armcartesiancommand-request
         https://github.com/bdaiinstitute/spatialmath-python/blob/master/spatialmath/pose3d.py
@@ -2545,7 +2529,7 @@ class SpotBasic(object):
         body_follow_arm: bool = False,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Return a goal corresponding to the arm following a Cartesian trajectory.
 
@@ -2580,7 +2564,8 @@ class SpotBasic(object):
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
             on_failure_callback: A callback to process/handle when the action fails for various reasons
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
 
         https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html#armcartesiancommand-request
         https://github.com/bdaiinstitute/spatialmath-python/blob/master/spatialmath/pose3d.py
@@ -2624,7 +2609,8 @@ class SpotBasic(object):
                 timeout
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         raise NotImplementedError()
 
@@ -2633,7 +2619,7 @@ class SpotBasic(object):
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """TODO
 
@@ -2643,7 +2629,8 @@ class SpotBasic(object):
             on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
-            TODO
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         raise NotImplementedError()
 
@@ -2726,7 +2713,8 @@ class SpotBasic(object):
             timeout_sec: the timeout
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         action_goal = self._get_arm_impedance_action_goal(
             root_frame_name, root_t_task, wrist_t_tool, trajectory, stiffness, damping, wrench_nm
@@ -2745,7 +2733,7 @@ class SpotBasic(object):
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Impedance control as variable stiffness/damping position control combined with a
             feed-forward force control as a wrench.
@@ -2786,7 +2774,8 @@ class SpotBasic(object):
                 timeout
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         action_goal = self._convert_proto_to_robot_cmd_action_goal(RobotCommandBuilder.claw_gripper_open_command())
         return self.command("claw_gripper_open", action_goal, timeout_sec)
@@ -2796,7 +2785,7 @@ class SpotBasic(object):
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Send a command to open the gripper asynchronously
 
@@ -2825,7 +2814,8 @@ class SpotBasic(object):
                 timeout
 
         Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted, None otherwise
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         action_goal = self._convert_proto_to_robot_cmd_action_goal(RobotCommandBuilder.claw_gripper_close_command())
         return self.command("claw_gripper_close", action_goal, timeout_sec)
@@ -2835,7 +2825,7 @@ class SpotBasic(object):
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Send a command to close the gripper asynchronously
 
@@ -2949,7 +2939,7 @@ class SpotBasic(object):
         apply_grasp_params_func: Optional[Callable] = None,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Grasp an item in an image taken with a camera on spot asynchronously.
 
@@ -3063,15 +3053,11 @@ class SpotBasic(object):
 
     def shutdown(self) -> None:
         """Shutdown all the internal components"""
-        self._executor.shutdown()
-        self._node.destroy_node()
-        try:
-            # seconds
-            self._spin_thread.join(1)
-        except KeyboardInterrupt:
-            pass
+        self._node.shutdown()
 
-        # TODO: Is there anything else that we should shutdown?
+    def __del__(self) -> None:
+        """Destructor"""
+        self.shutdown()
 
 
 def main() -> None:
