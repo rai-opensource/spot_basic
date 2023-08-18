@@ -363,15 +363,16 @@ class SpotBasic(object):
         self._node.get_logger().info(f"Waiting for the 'RobotCommand' action server for {self.robot_name} ...")
         self._robot_command_action_client.wait_for_server()
         self._node.get_logger().info(f"Found the 'RobotCommand' action server for {self.robot_name}.")
-
-        self._manipulation_action_client = ActionClientWrapper(Manipulation, "manipulation", self._node)
-        self._node.get_logger().info(f"Waiting for the 'Manipulation' action server for {self.robot_name} ...")
-        if self._manipulation_action_client.wait_for_server(1.0):
-            self._node.get_logger().info(f"Found the 'Manipulation' action server for {self.robot_name}.")
-        else:
-            self._node.get_logger().info(
-                f"No 'Manipulation' action server for {self.robot_name} found. Assuming it has no arm."
-            )
+        # Check for arm and manipulation client
+        if self.has_arm():
+            self._manipulation_action_client = ActionClientWrapper(Manipulation, "manipulation", self._node)
+            self._node.get_logger().info(f"Waiting for the 'Manipulation' action server for {self.robot_name} ...")
+            if self._manipulation_action_client.wait_for_server(1.0):
+                self._node.get_logger().info(f"Found the 'Manipulation' action server for {self.robot_name}.")
+            else:
+                self._node.get_logger().info(
+                    f"No 'Manipulation' action server for {self.robot_name} found. Assuming it has no arm."
+                )
 
     @property
     def robot_name(self) -> str:
@@ -1426,6 +1427,7 @@ class SpotBasic(object):
         if not self.has_arm():
             self._node.get_logger().error("Cannot send Manipulation api request, robot has no arm.")
             return None
+
         failed = False
 
         def _on_failure() -> None:
