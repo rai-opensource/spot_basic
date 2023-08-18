@@ -12,19 +12,18 @@ import numpy as np
 import rclpy
 import spot_driver.conversions as conv
 from bdai.trajectory.se2_trajectory import SE2Trajectory
-from bdai_ros.utilities.custom_types import SrvTypeRequest
 from bdai_ros.utilities.manual_conversions import (
     arm_joint_map_to_list,
     se3_to_se3pose_proto,
     to_ros_pose,
 )
-from bdai_ros.utilities.service_handle import ServiceHandle
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 from bdai_ros2_wrappers.action_client import ActionClientWrapper
 from bdai_ros2_wrappers.action_handle import ActionHandle
 from bdai_ros2_wrappers.futures import wait_for_future
 from bdai_ros2_wrappers.node import NodeWrapper
-from bdai_ros2_wrappers.type_hints import Action
+from bdai_ros2_wrappers.service_handle import ServiceHandle
+from bdai_ros2_wrappers.type_hints import Action, SrvTypeRequest
 from bosdyn.api import (
     arm_command_pb2,
     basic_command_pb2,
