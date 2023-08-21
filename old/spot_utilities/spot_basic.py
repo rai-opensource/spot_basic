@@ -87,11 +87,6 @@ from spot_msgs.srv import (
     SetVolume,
     UploadAnimation,
 )
-from std_msgs.msg import ColorRGBA as Color
-from std_srvs.srv import SetBool, Trigger
-from typing_extensions import override
-from visualization_msgs.msg import Marker
-
 from spot_utilities.robot_command_helpers import (
     timestamped_se2_vecs_to_robot_command_proto,
     timestamped_se3_poses_to_se3_trajectory,
@@ -101,6 +96,10 @@ from spot_utilities.spot_dataclasses import (
     ArmJointMap,
     AxisModeMap,
 )
+from std_msgs.msg import ColorRGBA as Color
+from std_srvs.srv import SetBool, Trigger
+from typing_extensions import override
+from visualization_msgs.msg import Marker
 
 
 class SpotActionHandle(ActionHandle):
