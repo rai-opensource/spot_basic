@@ -1440,7 +1440,7 @@ class SpotBasic(object):
         )
         if handle is None:
             return None
-        if not handle.wait_until_result(timeout_sec=timeout_sec):
+        if not handle.wait_for_result(timeout_sec=timeout_sec):
             return None
         if failed:
             return None
