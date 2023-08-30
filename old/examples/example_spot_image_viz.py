@@ -50,13 +50,13 @@ def main() -> None:
     spot_images = SpotImages(node_name="spot_images", use_registered_depth=True)
     [rgb, depth] = spot_images.rbg_and_depth_camera_from_location(cam_loc)
 
-    spot_images.display_pointcloud(cam_loc, spot, 5.0)
+    spot_images.display_pointcloud(cam_loc, spot, 10.0)
 
     rotation_angle = 0
     if cam_loc == CameraLocation.FRONT_LEFT:
-        rotation_angle = -90
-    if cam_loc == CameraLocation.FRONT_RIGHT:
         rotation_angle = 90
+    if cam_loc == CameraLocation.FRONT_RIGHT:
+        rotation_angle = -90
 
     spot_images.display_image(rgb, spot, rotation_angle=rotation_angle, timeout_sec=5.0)
     spot_images.display_image(depth, spot, rotation_angle=rotation_angle, timeout_sec=5.0)
