@@ -16,65 +16,65 @@ class Test6DPoseCommand(Node):
 
     def __init__(self, args: argparse.Namespace) -> None:
         super().__init__("Test6DPoseCommandNode")
-        self.__robot_name = args.robot
-        self.__relative = args.relative
-        self.__goal = args.goal
+        self._robot_name = args.robot
+        self._relative = args.relative
+        self._goal = args.goal
 
-        self.__spot = SpotBasic(robot_name=self.__robot_name, parent_node_name=self.get_name())
-        self.__spot.initialize_robot()
+        self._spot = SpotBasic(robot_name=self._robot_name, parent_node_name=self.get_name())
+        self._spot.initialize_robot()
 
-        self.__tf = TFListenerWrapper(
+        self._tf = TFListenerWrapper(
             self.get_name() + "_tf",
             cache_time_s=30,
-            wait_for_transform=[self.__spot.body_frame_name, self.__spot.vision_frame_name],
+            wait_for_transform=[self._spot.body_frame_name, self._spot.vision_frame_name],
         )
-        self.__spot.set_tf_listener(self.__tf)
+        self._spot.set_tf_listener(self._tf)
 
         self.test_walk_6d()
 
     def test_walk_6d(self) -> None:
-        if len(self.__goal) == 3:
-            x, y, z = self.__goal
+        if len(self._goal) == 3:
+            x, y, z = self._goal
             quaternion = UnitQuaternion(s=1.0, v=[0.0, 0.0, 0.0])
-        elif len(self.__goal) == 6:
-            x, y, z, thx, thy, thz = self.__goal
+        elif len(self._goal) == 6:
+            x, y, z, thx, thy, thz = self._goal
             quaternion = UnitQuaternion.RPY([thx, thy, thz], unit="deg")
-        elif len(self.__goal) == 7:
-            x, y, z, qx, qy, qz, qw = self.__goal
+        elif len(self._goal) == 7:
+            x, y, z, qx, qy, qz, qw = self._goal
             quaternion = UnitQuaternion(s=qw, v=[qx, qy, qz])
         else:
-            raise ValueError(f"invalid goal: {self.__goal}")
+            raise ValueError(f"invalid goal: {self._goal}")
 
         thx, thy, thz = quaternion.SO3().rpy()
         self.get_logger().info(
             f"\n Goal:\n- x: {x}\n- y: {y}\n- z: {z}\n- thx (roll): {thx}\n- thy (pitch): {thy}\n- thz (yaw): {thz}"
         )
 
-        if self.__relative:
+        if self._relative:
             body_t_goal = SE3.Rt(R=quaternion.SO3(), t=[x, y, z])
             self.get_logger().info(f"body_t_goal z: {str(body_t_goal.z)}")
-            vision_t_body = self.__tf.lookup_a_tform_b(self.__spot.vision_frame_name, self.__spot.body_frame_name)
+            vision_t_body = self._tf.lookup_a_tform_b(self._spot.vision_frame_name, self._spot.body_frame_name)
             vision_t_goal = vision_t_body * body_t_goal
         else:
             vision_t_goal = SE3.Rt(R=quaternion.SO3(), t=[x, y, z])
 
         try:
             # uncomment lines below to test synchronous walk_and_orient()
-            self.__spot.walk_and_orient(vision_t_goal=vision_t_goal)
+            self._spot.walk_and_orient(frame_t_goal=vision_t_goal)
             self.get_logger().info("Move to 6D pose test done.")
-            # self.__spot.walk_and_orient_async(
-            #     vision_t_goal=vision_t_goal, result_callback=Test6DPoseCommand.test_result_callback
+            # self._spot.walk_and_orient_async(
+            #     frame_t_goal=vision_t_goal, result_callback=Test6DPoseCommand.test_result_callback
             # )
         except KeyboardInterrupt:
-            self.__spot.stop()
+            self._spot.stop()
 
     @staticmethod
     def test_result_callback(feedback: RobotCommandFeedback) -> None:
         print("Test result_callback: Move to 6D pose test done.")
 
     def shutdown(self) -> None:
-        self.__spot.shutdown()
-        self.__tf.shutdown()
+        self._spot.shutdown()
+        self._tf.shutdown()
         self.destroy_node()
 
 

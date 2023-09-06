@@ -392,6 +392,12 @@ class SpotBasic(object):
     def odom_frame_name(self) -> str:
         return self._odom_frame_name
 
+    def get_set_base_frame(self, base_frame: Optional[FrameHint]) -> FrameHint:
+        """Function which returns the provided frame, or the VISION frame if base_frame is not provided"""
+        if base_frame is not None:
+            return base_frame
+        return self.FrameHint.VISION
+
     def initialize_robot(self) -> bool:
         """Returns true/false based on success of claiming and powering up Spot."""
         # Claim robot.
@@ -1700,7 +1706,8 @@ class SpotBasic(object):
             on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
-            TODO
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         action_goal = self._get_battery_change_pose(dir_hint)
         return self.command_async(
@@ -1724,12 +1731,13 @@ class SpotBasic(object):
         )
         return spot_command_pb2.MobilityParams(obstacle_params=obstacles)
 
-    def _get_walk_to_action_goal(self, vision_t_goal: SE2, height: float) -> RobotCommand.Goal:
+    def _get_walk_to_action_goal(self, frame_t_goal: SE2, height: float, base_frame: FrameHint) -> RobotCommand.Goal:
         """TODO
 
         Args:
-            vision_t_goal: A SE2 transform from the vision frame to where the user wants the spot to walk to
+            frame_t_goal: A SE2 transform from the base frame to where the user wants the spot to walk to
             height: The height of the body
+            base_frame: The frame in which the goal is specified
 
         Returns:
             An Action.Goal representing the command for a spot to walk to a specific goal location
@@ -1737,41 +1745,51 @@ class SpotBasic(object):
         self._node.get_logger().info("Walking to goal...")
 
         if self._rviz:
-            self._draw_arrow(self.vision_frame_name, self.body_frame_name, vision_t_goal, color=Color(g=1.0, a=1.0))
+            self._draw_arrow(
+                f"{self._robot_name}/{base_frame.value}", self.body_frame_name, frame_t_goal, color=Color(g=1.0, a=1.0)
+            )
 
         proto_goal = RobotCommandBuilder.synchro_se2_trajectory_point_command(
-            goal_x=vision_t_goal.x,
-            goal_y=vision_t_goal.y,
-            goal_heading=vision_t_goal.theta(),
-            frame_name=VISION_FRAME_NAME,
+            goal_x=frame_t_goal.x,
+            goal_y=frame_t_goal.y,
+            goal_heading=frame_t_goal.theta(),
+            frame_name=base_frame.value,
             body_height=height,
             params=self._get_mobility_params(),
         )
         return self._convert_proto_to_robot_cmd_action_goal(proto_goal)
 
     def walk_to(
-        self, vision_t_goal: SE2, height: float = 0, timeout_sec: Optional[float] = None
+        self,
+        frame_t_goal: SE2,
+        height: float = 0,
+        timeout_sec: Optional[float] = None,
+        *,
+        base_frame: Optional[FrameHint] = None,
     ) -> Optional[RobotCommandFeedback]:
         """Send the command to walk to a specific SE2 goal
 
         Args:
-            vision_t_goal: A SE2 transform from the vision frame to where the user wants the spot to walk to
+            frame_t_goal: A SE2 transform from the base frame to where the user wants the spot to walk to
             height: The height of the body
             timeout_sec: A timeout for waiting on a response/result from the action server. Setting to None creates no
                 timeout
+            base_frame: The frame in which the goal is specified. Defaults to VISION frame in the get_set_base_frame
 
         Returns:
             The feedback from the SpotDriver about the result of the command if it was accepted and a result was
                 successfully received, None otherwise
         """
-        action_goal = self._get_walk_to_action_goal(vision_t_goal, height)
+        base_frame = self.get_set_base_frame(base_frame)
+        action_goal = self._get_walk_to_action_goal(frame_t_goal, height, base_frame)
         return self.command("walk_to", action_goal, timeout_sec)
 
     def walk_to_async(
         self,
-        vision_t_goal: SE2,
+        frame_t_goal: SE2,
         height: float = 0,
         *,
+        base_frame: Optional[FrameHint] = None,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[], None]] = None,
@@ -1779,16 +1797,19 @@ class SpotBasic(object):
         """Send the command to walk to a specific SE2 pose
 
         Args:
-            vision_t_goal: A SE2 transform from the vision frame to where the user wants the spot to walk to
+            frame_t_goal: A SE2 transform from the base frame to where the user wants the spot to walk to
             height: The height of the body
+            base_frame: The frame in which the goal is specified. Defaults to VISION frame in the get_set_base_frame
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
             on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
-            TODO
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
-        action_goal = self._get_walk_to_action_goal(vision_t_goal, height)
+        base_frame = self.get_set_base_frame(base_frame)
+        action_goal = self._get_walk_to_action_goal(frame_t_goal, height, base_frame)
         return self.command_async(
             "walk_to",
             action_goal,
@@ -1859,7 +1880,8 @@ class SpotBasic(object):
             on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
-            TODO
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         action_goal_stand = self._get_stand_to_action_goal(vision_r_goal, height=height)
         return self.command_async(
@@ -1870,16 +1892,20 @@ class SpotBasic(object):
             on_failure_callback=on_failure_callback,
         )
 
-    def _body_gaze_at_vision_t_body_desired(
-        self, body_t_target: SE3, vision_t_body: Optional[SE3] = None
+    def _body_gaze_at_frame_t_body_desired(
+        self,
+        base_frame: FrameHint,
+        body_t_target: SE3,
+        frame_t_body: Optional[SE3] = None,
     ) -> Optional[RobotCommandFeedback]:
         """
         Args:
+            base_frame: Frame the goal is specified in
             body_t_target: SE3 transform from the current body position to the target you want to gaze at
-            vision_t_body: SE3 transform from the vision from to the current body position
+            frame_t_body: SE3 transform from the frame from to the current body position
 
         Return:
-            vision_t_body_desired: body_t_target: SE3 transform to the target you want to gaze at
+            frame_t_body_desired: body_t_target: SE3 transform to the target you want to gaze at
         """
         x_axis = np.array([1, 0, 0])
         new_vec_norm = normalize([body_t_target.t])[0]
@@ -1889,37 +1915,43 @@ class SpotBasic(object):
         angle = np.arccos(np.dot(x_axis, new_vec_norm))
         body_current_t_body_pointed_at_target = SE3.AngleAxis(angle, normal_axis)
 
-        if vision_t_body is None:
-            vision_t_body = self.lookup_a_tform_b(
-                self.FrameHint.VISION.value, self.FrameHint.BODY.value, wait_for_frames=True
-            )
+        if frame_t_body is None:
+            frame_t_body = self.lookup_a_tform_b(base_frame.value, self.FrameHint.BODY.value, wait_for_frames=True)
 
-        vision_t_body_desired = vision_t_body * body_current_t_body_pointed_at_target
-        return vision_t_body_desired
+        frame_t_body_desired = frame_t_body * body_current_t_body_pointed_at_target
+        return frame_t_body_desired
 
     def body_gaze_at(
-        self, body_t_target: SE3, vision_t_body: Optional[SE3] = None, timeout_sec: Optional[float] = None
+        self,
+        body_t_target: SE3,
+        frame_t_body: Optional[SE3] = None,
+        timeout_sec: Optional[float] = None,
+        *,
+        base_frame: Optional[FrameHint] = None,
     ) -> Optional[RobotCommandFeedback]:
         """Aligns the x-axis of the body frame along the vector from the current body position
         to the target. If you don't provide vision_t_body, you must set the tf listener for spot.
 
         Args:
             body_t_target: SE3 transform from the current body position to the target you want to gaze at
-            vision_t_body: SE3 transform from the vision from to the current body position
+            frame_t_body: SE3 transform from the base frame from to the current body position
             timeout_sec: A timeout for waiting on a response/result from the action server. The timeout arg is used
                 on each command, so max duration is 2x timeout. Setting to None creates no timeout.
+            base_frame: The frame in which the goal is specified. Defaults to VISION frame in the get_set_base_frame
 
         Returns:
             The feedback from the SpotDriver about the result of the commands if it was accepted, None otherwise
         """
-        vision_t_body_desired = self._body_gaze_at_vision_t_body_desired(body_t_target, vision_t_body)
-        return self.walk_and_orient(vision_t_body_desired, timeout_sec=timeout_sec)
+        base_frame = self.get_set_base_frame(base_frame)
+        frame_t_body_desired = self._body_gaze_at_frame_t_body_desired(base_frame, body_t_target, frame_t_body)
+        return self.walk_and_orient(frame_t_body_desired, base_frame=base_frame, timeout_sec=timeout_sec)
 
     def body_gaze_at_async(
         self,
         body_t_target: SE3,
-        vision_t_body: Optional[SE3] = None,
+        frame_t_body: Optional[SE3] = None,
         *,
+        base_frame: Optional[FrameHint] = None,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[], None]] = None,
@@ -1929,58 +1961,104 @@ class SpotBasic(object):
 
         Args:
             body_t_target: SE3 transform from the current body position to the target you want to gaze at
-            vision_t_body: SE3 transform from the vision from to the current body position
+            frame_t_body: SE3 transform from the base_frame from to the current body position
+            base_frame: Frame the goal is specified in. Defaults to VISION frame in get_set_base_frame
             result_callback: A callback to process/handle the resulting feedback from executing each of the commands
             feedback_callback: A callback to process/handle the feedback received during the execution of any of the
                 commands
             on_failure_callback: A callback to process/handle when any of actions fail for various reasons
 
         """
-        vision_t_body_desired = self._body_gaze_at_vision_t_body_desired(body_t_target, vision_t_body)
+        base_frame = self.get_set_base_frame(base_frame)
+        frame_t_body_desired = self._body_gaze_at_frame_t_body_desired(base_frame, body_t_target, frame_t_body)
         return self.walk_and_orient_async(
-            vision_t_body_desired,
+            frame_t_body_desired,
+            base_frame=base_frame,
             result_callback=result_callback,
             feedback_callback=feedback_callback,
             on_failure_callback=on_failure_callback,
         )
 
     def walk_and_orient(
-        self, vision_t_goal: SE3, body_height: Optional[float] = None, timeout_sec: Optional[float] = None
+        self,
+        frame_t_goal: SE3,
+        body_height: Optional[float] = None,
+        timeout_sec: Optional[float] = None,
+        *,
+        base_frame: Optional[FrameHint] = None,
     ) -> Optional[RobotCommandFeedback]:
         """Send the command to walk and rotate to a specific SE3 pose
 
         Args:
-            vision_t_goal: A SE3 transform from the vision frame to where the user wants the spot to walk to
+            frame_t_goal: A SE3 transform from the base frame to where the user wants the spot to walk to
             body_height: desired height of the body relative to spot's normal height. Passed directly into
                 synchro_stand_command. If None, then height will be inferred based on vision_t_goal
             timeout_sec: A timeout for waiting on a response/result from the action server. The timeout arg is used
                 on each command, so max duration is 2x timeout. Setting to None creates no timeout.
+            base_frame: Frame the goal is specified in. Defaults to VISION frame in get_set_base_frame
 
         Returns:
             The feedback from the SpotDriver about the result of the commands if it was accepted, None otherwise
         """
-        if not self.walk_to(
-            vision_t_goal.yaw_SE2(),
-            timeout_sec=timeout_sec,
-        ):
+        base_frame = self.get_set_base_frame(base_frame)
+        if not self.walk_to(frame_t_goal.yaw_SE2(), timeout_sec=timeout_sec, base_frame=base_frame):
             return None
 
-        rpy = vision_t_goal.rpy()
+        rpy = frame_t_goal.rpy()
         new_pose_t_goal = SO3.RPY(rpy[0], rpy[1], 0)
         if body_height is None:
             if self._tf_listener is None:
                 raise ValueError(
-                    "unable to infer body height from vision_t_goal. "
+                    "unable to infer body height from frame_t_goal. "
                     "Either pass in 'body_height' explicitly, or call set_tf_listener(tflistener) "
                     "where tflistener should be a TFListenerWrapper"
                 )
-            body_t_vision = self.lookup_a_tform_b(
-                self.FrameHint.BODY.value, self.FrameHint.VISION.value, wait_for_frames=True
-            )
-            body_t_goal = body_t_vision * vision_t_goal
+            body_t_frame = self.lookup_a_tform_b(self.FrameHint.BODY.value, base_frame.value, wait_for_frames=True)
+            body_t_goal = body_t_frame * frame_t_goal
             body_height = body_t_goal.z
 
         return self.stand_with_orientation(new_pose_t_goal, height=body_height, timeout_sec=timeout_sec)
+
+    def walk_and_orient_async(
+        self,
+        frame_t_goal: SE3,
+        *,
+        base_frame: Optional[FrameHint] = None,
+        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
+    ) -> Optional[RobotComposeCommandHandle]:
+        """Send the command to walk and rotate to a specific SE3 pose
+
+        Args:
+            frame_t_goal: A SE3 transform from the base frame to where the user wants the spot to walk to
+            base_frame: Frame the goal is specified in. Defaults to VISION frame in get_set_base_frame
+            result_callback: A callback to process/handle the resulting feedback from executing each of the commands
+            feedback_callback: A callback to process/handle the feedback received during the execution of any of the
+                commands
+            on_failure_callback: A callback to process/handle when any of actions fail for various reasons
+
+        Returns:
+            RobotComposeCommandHandle: A class to handle a list with multiple async RobotCommand (actions). The actions
+                are sent sequentially to SpotDriver via an action client
+        """
+        base_frame = self.get_set_base_frame(base_frame)
+        walk_partial = partial(
+            self.walk_to_async,
+            frame_t_goal.yaw_SE2(),
+            base_frame=base_frame,
+            height=frame_t_goal.z,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
+        stand_partial = partial(
+            self.stand_with_orientation_async,
+            SO3(frame_t_goal),
+            height=frame_t_goal.z,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
+        return RobotComposeCommandHandle([walk_partial, stand_partial], result_callback)
 
     def _get_arm_gaze_at_action_goal(self, point: R3, frame: FrameHint) -> RobotCommand.Goal:
         """Create the ROS msg to gaze at a point."""
@@ -2032,43 +2110,6 @@ class SpotBasic(object):
             on_failure_callback=on_failure_callback,
         )
 
-    def walk_and_orient_async(
-        self,
-        vision_t_goal: SE3,
-        *,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[RobotComposeCommandHandle]:
-        """Send the command to walk and rotate to a specific SE3 pose
-
-        Args:
-            vision_t_goal: A SE3 transform from the vision frame to where the user wants the spot to walk to
-            result_callback: A callback to process/handle the resulting feedback from executing each of the commands
-            feedback_callback: A callback to process/handle the feedback received during the execution of any of the
-                commands
-            on_failure_callback: A callback to process/handle when any of actions fail for various reasons
-
-        Returns:
-            RobotComposeCommandHandle: A class to handle a list with multiple async RobotCommand (actions). The actions
-                are sent sequentially to SpotDriver via an action client
-        """
-        walk_partial = partial(
-            self.walk_to_async,
-            vision_t_goal.yaw_SE2(),
-            height=vision_t_goal.z,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
-        stand_partial = partial(
-            self.stand_with_orientation_async,
-            SO3(vision_t_goal),
-            height=vision_t_goal.z,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
-        return RobotComposeCommandHandle([walk_partial, stand_partial], result_callback)
-
     def walk_velocity(
         self, body_velocity: Twist2, duration: Optional[float] = None, rate: Optional[float] = 50.0
     ) -> None:
@@ -2103,52 +2144,59 @@ class SpotBasic(object):
 
     def _get_walk_trajectory_action_goal(
         self,
-        vision_t_trajectory: SE2Trajectory,
+        frame_t_trajectory: SE2Trajectory,
+        base_frame: FrameHint,
         timestep_sec: float = 0.1,
         interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
     ) -> RobotCommand.Goal:
         """Create an action goal for visiting a sequence of poses with a given time schedule and interpolation settings
 
         Args:
-            vision_t_trajectory: SE2Trajectory, i.e., time-parameterization of sequence of poses in vision frame
+            frame_t_trajectory: SE2Trajectory, i.e., time-parameterization of sequence of poses in the base frame
             timestep_sec: time step used to sample poses from the trajectory
             interpolation: method used to interpolate between sampled poses (0 = none, 1 = linear, 2 = cubic)
+            base_frame: frame that the trajectory poses are specified in
         """
         self._node.get_logger().info("Walking along commanded trajectory...")
 
         proto_goal = timestamped_se2_vecs_to_robot_command_proto(
-            *vision_t_trajectory(timestep_sec=timestep_sec, with_timestamps=True),
+            *frame_t_trajectory(timestep_sec=timestep_sec, with_timestamps=True),
             interpolation=interpolation,
             mobility_params=self._get_mobility_params(),
-            base_frame=VISION_FRAME_NAME,
+            base_frame=base_frame.value,
         )
         return self._convert_proto_to_robot_cmd_action_goal(proto_goal)
 
     def walk_trajectory(
         self,
-        vision_t_trajectory: SE2Trajectory,
+        frame_t_trajectory: SE2Trajectory,
         timestep_sec: float = 0.1,
         interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
         timeout_sec: Optional[float] = None,
+        *,
+        base_frame: Optional[FrameHint] = None,
     ) -> Optional[RobotCommand.Result]:
         """Send a command to walk along a trajectory synchronously
 
         Args:
-            vision_t_trajectory: SE2Trajectory, i.e., time-parameterization of sequence of poses in vision frame
+            frame_t_trajectory: SE2Trajectory, i.e., time-parameterization of sequence of poses in the base frame
             timestep_sec: time step used to sample poses from the trajectory
             interpolation: method used to interpolate between sampled poses (0 = none, 1 = linear, 2 = cubic)
             timeout_sec: A timeout for waiting on a response/result from the action server. Setting to None creates no
                 timeout
+            base_frame: Frame the goal is specified in. Defaults to VISION frame in get_set_base_frame
         """
-        action_goal = self._get_walk_trajectory_action_goal(vision_t_trajectory, timestep_sec, interpolation)
+        base_frame = self.get_set_base_frame(base_frame)
+        action_goal = self._get_walk_trajectory_action_goal(frame_t_trajectory, base_frame, timestep_sec, interpolation)
         return self.command("walk_trajectory", action_goal, timeout_sec)
 
     def walk_trajectory_async(
         self,
-        vision_t_trajectory: SE2Trajectory,
+        frame_t_trajectory: SE2Trajectory,
         timestep_sec: float = 0.1,
         interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
         *,
+        base_frame: Optional[FrameHint] = None,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[], None]] = None,
@@ -2156,17 +2204,21 @@ class SpotBasic(object):
         """Send the command to walk along a trajectory asynchronously
 
         Args:
-            vision_t_trajectory: SE2Trajectory, i.e., time-parameterization of sequence of poses in vision frame
+            frame_t_trajectory: SE2Trajectory, i.e., time-parameterization of sequence of poses in the base frame
             timestep_sec: time step used to sample poses from the trajectory
             interpolation: method used to interpolate between sampled poses (0 = none, 1 = linear, 2 = cubic)
+            base_frame: Frame the goal is specified in. Defaults to VISION frame in get_set_base_frame
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
             on_failure_callback: A callback to process/handle when the action fails for various reasons
 
+
         Returns:
-            TODO
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
-        action_goal = self._get_walk_trajectory_action_goal(vision_t_trajectory, timestep_sec, interpolation)
+        base_frame = self.get_set_base_frame(base_frame)
+        action_goal = self._get_walk_trajectory_action_goal(frame_t_trajectory, base_frame, timestep_sec, interpolation)
         return self.command_async(
             "walk_trajectory",
             action_goal,
@@ -2209,7 +2261,8 @@ class SpotBasic(object):
             on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
-            TODO
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         action_goal = self._get_arm_stow_action_goal()
         return self.command_async(
@@ -2257,7 +2310,8 @@ class SpotBasic(object):
             on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
-            TODO
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         action_goal = self._get_arm_ready_action_goal()
         return self.command_async(
@@ -2305,7 +2359,8 @@ class SpotBasic(object):
             on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
-            TODO
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         action_goal = self._get_arm_carry_action_goal()
         return self.command_async(
@@ -2317,19 +2372,30 @@ class SpotBasic(object):
         )
 
     def _get_arm_pose_action_goal(
-        self, vision_t_goal: SE3, move_duration_sec: float, body_follow: bool = False
+        self, frame_t_goal: SE3, move_duration_sec: float, base_frame: FrameHint, body_follow: bool = False
     ) -> RobotCommand.Goal:
-        """Create the ROS Msg for moving the end effector to specific pose"""
-        quat = UnitQuaternion(vision_t_goal)
+        """Create the ROS Msg for moving the end effector to specific pose.
+
+        Args:
+            frame_t_goal: A pose for the end effector to move to relative to the base frame
+            move_duration_sec: The duration of the move
+            base_frame: frame that the trajectory poses are specified in
+            body_follow: If True, the robot's body would automatically follow the arm to achieve the goal
+
+        Returns:
+            ROS2 Action goal containing information about the end effector pose
+
+        """
+        quat = UnitQuaternion(frame_t_goal)
         arm_pose_command = RobotCommandBuilder.arm_pose_command(
-            x=vision_t_goal.x,
-            y=vision_t_goal.y,
-            z=vision_t_goal.z,
+            x=frame_t_goal.x,
+            y=frame_t_goal.y,
+            z=frame_t_goal.z,
             qw=quat.A[0],
             qx=quat.A[1],
             qy=quat.A[2],
             qz=quat.A[3],
-            frame_name=VISION_FRAME_NAME,
+            frame_name=base_frame.value,
             seconds=move_duration_sec,
         )
         if body_follow:
@@ -2341,19 +2407,22 @@ class SpotBasic(object):
 
     def move_end_effector_cartesian(
         self,
-        vision_t_goal: SE3,
+        frame_t_goal: SE3,
         move_duration_sec: float = 5.0,
         body_follow: bool = False,
         timeout_sec: Optional[float] = None,
+        *,
+        base_frame: Optional[FrameHint] = None,
     ) -> Optional[RobotCommandFeedback]:
         """Send command to move the end effector to a specific pose synchronously
 
         Args:
-            vision_t_goal: A pose for the end effector to move to relative to the base frame
+            frame_t_goal: A pose for the end effector to move to relative to the base frame
             move_duration_sec: The duration of the move
+            body_follow: If True, the robot's body would automatically follow the arm to achieve the goal
             timeout_sec: A timeout for waiting on a response/result from the action server. Setting to None creates no
                 timeout
-            body_follow: If True, the robot's body would automatically follow the arm to achieve the goal
+            base_frame: Frame the goal is specified in. Defaults to VISION frame in get_set_base_frame
 
         Returns:
             The feedback from the SpotDriver about the result of the command if it was accepted and a result was
@@ -2362,15 +2431,19 @@ class SpotBasic(object):
         See:
         https://github.com/boston-dynamics/spot-sdk/blob/master/python/bosdyn-client/src/bosdyn/client/robot_command.py#L1224
         """
-        action_goal = self._get_arm_pose_action_goal(vision_t_goal, move_duration_sec, body_follow=body_follow)
+        base_frame = self.get_set_base_frame(base_frame)
+        action_goal = self._get_arm_pose_action_goal(
+            frame_t_goal, move_duration_sec, base_frame, body_follow=body_follow
+        )
         return self.command("move_end_effector_cartesian", action_goal, timeout_sec)
 
     def move_end_effector_cartesian_async(
         self,
-        vision_t_goal: SE3,
+        frame_t_goal: SE3,
         move_duration_sec: float = 5.0,
         body_follow: bool = False,
         *,
+        base_frame: Optional[FrameHint] = None,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[], None]] = None,
@@ -2378,19 +2451,22 @@ class SpotBasic(object):
         """Send command to move the end effector to a specific pose asynchronously
 
         Args:
-            vision_t_goal: A pose for the end effector to move to relative to the base frame
+            frame_t_goal: A pose for the end effector to move to relative to the base frame
             move_duration_sec: The duration of the move
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
             on_failure_callback: A callback to process/handle when the action fails for various reasons
+            base_frame: Frame the goal is specified in. Defaults to VISION frame in get_set_base_frame
 
         Returns:
-            TODO
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
 
-        Returns:
-            TODO
         """
-        action_goal = self._get_arm_pose_action_goal(vision_t_goal, move_duration_sec, body_follow=body_follow)
+        base_frame = self.get_set_base_frame(base_frame)
+        action_goal = self._get_arm_pose_action_goal(
+            frame_t_goal, move_duration_sec, base_frame, body_follow=body_follow
+        )
         return self.command_async(
             "move_end_effector_cartesian",
             action_goal,
@@ -3132,7 +3208,8 @@ class SpotBasic(object):
             on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
-            TODO
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         action_goal = self._get_arm_impedance_action_goal(
             root_frame_name, root_t_task, wrist_t_tool, trajectory, stiffness, damping, wrench_nm
@@ -3174,7 +3251,8 @@ class SpotBasic(object):
             on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
-            TODO
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         action_goal = self._convert_proto_to_robot_cmd_action_goal(RobotCommandBuilder.claw_gripper_open_command())
         return self.command_async(
@@ -3214,7 +3292,8 @@ class SpotBasic(object):
             on_failure_callback: A callback to process/handle when the action fails for various reasons
 
         Returns:
-            TODO
+            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
+                successfully received, None otherwise
         """
         action_goal = self._convert_proto_to_robot_cmd_action_goal(RobotCommandBuilder.claw_gripper_close_command())
         return self.command_async(

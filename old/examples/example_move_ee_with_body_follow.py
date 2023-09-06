@@ -52,6 +52,7 @@ def main() -> None:
     tf_listener = TFListenerWrapper(
         "action_exec_tf", wait_for_transform=[spot_basic.body_frame_name, spot_basic.vision_frame_name]
     )
+    spot_basic.set_tf_listener(tf_listener)
 
     if len(args.body_t_hand_goal) == 3:
         x, y, z = args.body_t_hand_goal

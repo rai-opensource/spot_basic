@@ -24,7 +24,7 @@ def main() -> None:
     # Boiler plate code
     parser = argparse.ArgumentParser()
     parser.add_argument("robot", help="Name of the robot.")
-    parser.add_argument("asynchronous", help="Flag to exercise the async code.", default=False)
+    parser.add_argument("--asynchronous", help="Flag to exercise the async code.", default=False)
     options = parser.parse_args()
 
     robot_name = options.robot
