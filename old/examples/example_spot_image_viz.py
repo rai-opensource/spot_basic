@@ -7,16 +7,16 @@ from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 from spot_utilities.spot_basic import SpotBasic
 from spot_utilities.spot_vision import CameraLocation, SpotImages
 
-""" This is a test script to demo how spot_ros2 publishes image and camera data on spot. 
+""" This is a test script to demo how spot_ros2 publishes image and camera data on spot.
 It visualizes a point cloud, rgb, and depth images from a camera.
 
 Use:
-    1) start spot driver with a config file that makes spot_ros2 publish the depth registered in the rgb camera. 
+    1) start spot driver with a config file that makes spot_ros2 publish the depth registered in the rgb camera.
         for example, 'bdai spot driver Autumn --config-file projects/_experimental/spot_ros.yaml --no-build'
         where the yaml has the line 'publish_depth_registered: True'
-    
+
     2) execute this script, pass in the robot name and camera location (see --help for valid locations)
-    3) three GUI's will pop up in succession: a pointcloud, am rgb image, and a grayscale image representing depth 
+    3) three GUI's will pop up in succession: a pointcloud, am rgb image, and a grayscale image representing depth
         (might be hard to make out any detail in this one)
 """
 
@@ -60,8 +60,8 @@ def main() -> None:
     if cam_loc == CameraLocation.RIGHT:
         rotation_angle = -180
 
-    spot_images.display_image(rgb, spot.robot_name, rotation_angle=rotation_angle, timeout_sec=5.0)
-    spot_images.display_image(depth, spot.robot_name, rotation_angle=rotation_angle, timeout_sec=5.0)
+    spot_images.display_image(rgb, spot, rotation_angle=rotation_angle, timeout_sec=5.0)
+    spot_images.display_image(depth, spot, rotation_angle=rotation_angle, timeout_sec=5.0)
 
     ###############################################
     # Boiler plate code
