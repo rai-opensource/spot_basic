@@ -1,5 +1,6 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 import argparse
+import time
 
 import rclpy
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
@@ -45,6 +46,7 @@ def main() -> None:
     )
     spot.set_tf_listener(tf)
     cam_loc = CameraLocation(options.camera_location)
+    time.sleep(4.0)
     ###############################################
 
     spot_images = SpotImages(node_name="spot_images", use_registered_depth=True)
@@ -53,13 +55,13 @@ def main() -> None:
     spot_images.display_pointcloud(cam_loc, spot, 10.0)
 
     rotation_angle = 0
-    if cam_loc == CameraLocation.FRONT_LEFT:
-        rotation_angle = 90
-    if cam_loc == CameraLocation.FRONT_RIGHT:
+    if cam_loc == CameraLocation.FRONT_LEFT or cam_loc == CameraLocation.FRONT_RIGHT:
         rotation_angle = -90
+    if cam_loc == CameraLocation.RIGHT:
+        rotation_angle = -180
 
-    spot_images.display_image(rgb, spot, rotation_angle=rotation_angle, timeout_sec=5.0)
-    spot_images.display_image(depth, spot, rotation_angle=rotation_angle, timeout_sec=5.0)
+    spot_images.display_image(rgb, spot.robot_name, rotation_angle=rotation_angle, timeout_sec=5.0)
+    spot_images.display_image(depth, spot.robot_name, rotation_angle=rotation_angle, timeout_sec=5.0)
 
     ###############################################
     # Boiler plate code
