@@ -3369,10 +3369,14 @@ class SpotBasic(object):
         pinhole_model.intrinsics.principal_point.y = camera_data.k[5]
 
         pick_vec = geometry_pb2.Vec2(x=pixel_xy[0], y=pixel_xy[1])
+
+        # Strip away robot name from frame name
+        frame_name_image_sensor = camera_data.header.frame_id.split("/")[-1]
+
         grasp = manipulation_api_pb2.PickObjectInImage(
             pixel_xy=pick_vec,
             transforms_snapshot_for_camera=self._get_basic_tform_tree_snapshot(image_timestamp),
-            frame_name_image_sensor=camera_data.header.frame_id,
+            frame_name_image_sensor=frame_name_image_sensor,
             camera_model=pinhole_model,
         )
 

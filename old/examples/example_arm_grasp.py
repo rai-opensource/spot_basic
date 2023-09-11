@@ -123,25 +123,31 @@ class ObjectGrasp(Node):
 
     def take_image_and_grasp(self) -> None:
         """Takes an image and attempts to grasp an object based on what the user selected."""
-        # Take image.
-        self.get_logger().info("wait for images.")
-        (image_success, image_msg) = wait_for_message(Image, node=self, topic=self._camera_image_topic)
-        (camera_info_success, camera_info_msg) = wait_for_message(
-            CameraInfo, node=self, topic=self._camera_image_info_topic
+        self.get_logger().info("Waiting for images...")
+
+        # Get image.
+        (image_msg_received, image_message) = wait_for_message(
+            msg_type=Image, node=self, topic=self._camera_image_topic
         )
-        self.get_logger().info("got image.")
 
-        if not (image_success and camera_info_success):
-            image_success_str = "succeeded" if image_success else "failed"
-            camera_success_str = "succeeded" if camera_info_success else "failed"
-
-            self.get_logger().error(
-                f"Failed to get the hand camera messages. On topic {self._camera_image_topic} we {image_success_str},"
-                f" and on {self._camera_image_info_topic} we {camera_success_str}"
-            )
+        if image_msg_received:
+            self.get_logger().info("Got image.")
+        else:
+            self.get_logger().error(f"Failed to get message on topic {self._camera_image_topic}")
             return
 
-        image = self.cv_bridge.imgmsg_to_cv2(image_msg, "passthrough")
+        # Get camera info.
+        (cam_info_msg_received, cam_info_msg) = wait_for_message(
+            msg_type=CameraInfo, node=self, topic=self._camera_image_info_topic
+        )
+
+        if cam_info_msg_received:
+            self.get_logger().info("Got camera info.")
+        else:
+            self.get_logger().error(f"Failed to get message on topic {self._camera_image_topic}")
+            return
+
+        image = self.cv_bridge.imgmsg_to_cv2(image_message, "passthrough")
 
         # Launch a window to let the user select an object.
         image_title = "Click to grasp"
@@ -158,12 +164,15 @@ class ObjectGrasp(Node):
                 self.get_logger().info("'q' pressed, exiting GUI.")
                 cv2.destroyAllWindows()
                 return
-
         cv2.destroyAllWindows()
         # Grasp the object in the image.
         try:
             self._robot.grasp_in_image(
-                g_image_click, image_msg.header.stamp, camera_info_msg, 0.5, _grasp_params_function
+                pixel_xy=g_image_click,
+                image_timestamp=image_message.header.stamp,
+                camera_data=cam_info_msg,
+                palm_placement_ratio=0.5,
+                apply_grasp_params_func=_grasp_params_function,
             )
         except ExtrapolationException:
             self.get_logger().info("Camera image expired. You waited to long to click on the image.")
