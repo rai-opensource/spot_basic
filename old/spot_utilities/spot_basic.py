@@ -1818,10 +1818,10 @@ class SpotBasic(object):
             on_failure_callback=on_failure_callback,
         )
 
-    def _get_stand_to_action_goal(self, vision_r_goal: SO3, height: float) -> RobotCommand.Goal:
+    def _get_stand_to_action_goal(self, gravbody_r_goal: SO3, height: float) -> RobotCommand.Goal:
         """
         Args:
-            vision_r_goal: A SO3 rotation of the body frame with respect to the footprint frame
+            gravbody_r_goal: A SO3 rotation of the body frame with respect to the footprint frame
                 (gravity aligned framed with yaw computed from the stance feet)
             height: The height of the body
 
@@ -1830,25 +1830,25 @@ class SpotBasic(object):
         """
         self._node.get_logger().info("Moving to goal orientation...")
 
-        vision_r_goal = UnitQuaternion(vision_r_goal)
+        gravbody_r_goal = UnitQuaternion(gravbody_r_goal)
         footprint_R_body = to_euler_zxy(
             Quaternion(
-                w=vision_r_goal.A[0],
-                x=vision_r_goal.A[1],
-                y=vision_r_goal.A[2],
-                z=vision_r_goal.A[3],
+                w=gravbody_r_goal.A[0],
+                x=gravbody_r_goal.A[1],
+                y=gravbody_r_goal.A[2],
+                z=gravbody_r_goal.A[3],
             )
         )
         proto_goal = RobotCommandBuilder.synchro_stand_command(body_height=height, footprint_R_body=footprint_R_body)
         return self._convert_proto_to_robot_cmd_action_goal(proto_goal)
 
     def stand_with_orientation(
-        self, vision_r_goal: SO3, height: float, timeout_sec: Optional[float] = None
+        self, gravbody_r_goal: SO3, height: float, timeout_sec: Optional[float] = None
     ) -> Optional[RobotCommandFeedback]:
         """Send the command to stand in a specific SO3 rotation
 
         Args:
-            vision_r_goal: A SO3 rotation from the vision frame to goal orientation.
+            gravbody_r_goal: A SO3 rotation from the gravity-aligned body frame to goal orientation.
             height: The height of the body
             timeout_sec: A timeout for waiting on a response/result from the action server. Setting to None creates no
                 timeout
@@ -1857,12 +1857,12 @@ class SpotBasic(object):
             The feedback from the SpotDriver about the result of the command if it was accepted and a result was
                 successfully received, None otherwise
         """
-        action_goal_stand = self._get_stand_to_action_goal(vision_r_goal, height=height)
+        action_goal_stand = self._get_stand_to_action_goal(gravbody_r_goal, height=height)
         return self.command("orient", action_goal_stand, timeout_sec)
 
     def stand_with_orientation_async(
         self,
-        vision_r_goal: SO3,
+        gravbody_r_goal: SO3,
         height: float,
         *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
@@ -1872,8 +1872,8 @@ class SpotBasic(object):
         """Send the command to stand in a specific SO3 rotation
 
         Args:
-            vision_r_goal: A SO3 rotation, expressed as EulerZXY object (yaw, pitch, roll, in radians) from the vision
-                frame to where the user wants the spot to rotate to
+            gravbody_r_goal: A SO3 rotation, expressed as EulerZXY object (yaw, pitch, roll, in radians) from
+                the gravity-aligned body frame to where the user wants the spot to rotate to
             height: The height of the body
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
@@ -1883,7 +1883,7 @@ class SpotBasic(object):
             The feedback from the SpotDriver about the result of the command if it was accepted and a result was
                 successfully received, None otherwise
         """
-        action_goal_stand = self._get_stand_to_action_goal(vision_r_goal, height=height)
+        action_goal_stand = self._get_stand_to_action_goal(gravbody_r_goal, height=height)
         return self.command_async(
             "orient",
             action_goal_stand,
@@ -2001,11 +2001,20 @@ class SpotBasic(object):
             The feedback from the SpotDriver about the result of the commands if it was accepted, None otherwise
         """
         base_frame = self.get_set_base_frame(base_frame)
+
+        # First, walk to the base_frame goal.
         if not self.walk_to(frame_t_goal.yaw_SE2(), timeout_sec=timeout_sec, base_frame=base_frame):
             return None
 
-        rpy = frame_t_goal.rpy()
-        new_pose_t_goal = SO3.RPY(rpy[0], rpy[1], 0)
+        # Then, rotate in place. Note that the yaw rotation in body frame should be 0, because yaw
+        # is handled by walk_to (doesn't mean yaw rotation in any other frame should be 0!)
+        frame_t_orien_se3 = SE3.RPY(frame_t_goal.rpy())
+        gravbody_t_frame = self.lookup_a_tform_b(
+            self.FrameHint.GRAV_ALIGNED_BODY.value, base_frame.value, wait_for_frames=True
+        )
+        gravbody_t_orien_se3 = gravbody_t_frame * frame_t_orien_se3
+        rpy = gravbody_t_orien_se3.rpy()
+        gravbody_t_orien = SE3.RPY(rpy[0], rpy[1], 0)
         if body_height is None:
             if self._tf_listener is None:
                 raise ValueError(
@@ -2017,7 +2026,7 @@ class SpotBasic(object):
             body_t_goal = body_t_frame * frame_t_goal
             body_height = body_t_goal.z
 
-        return self.stand_with_orientation(new_pose_t_goal, height=body_height, timeout_sec=timeout_sec)
+        return self.stand_with_orientation(gravbody_t_orien, height=body_height, timeout_sec=timeout_sec)
 
     def walk_and_orient_async(
         self,
