@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+import time
+
 import open3d as o3d
 import rclpy
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
@@ -49,6 +51,7 @@ def main() -> None:
         wait_for_transform=[spot.body_frame_name, spot.vision_frame_name],
     )
     spot.set_tf_listener(tf)
+    time.sleep(1.0)
 
     camera_locations = [CameraLocation(loc) for loc in options.cameras]
     pcd = create_point_cloud_in_place(spot, camera_locations, timeout_sec=15, down_voxel_size=0.02)

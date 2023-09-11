@@ -46,11 +46,10 @@ def main() -> None:
     )
     spot.set_tf_listener(tf)
     cam_loc = CameraLocation(options.camera_location)
-    time.sleep(4.0)
+    time.sleep(1.0)
     ###############################################
 
     spot_images = SpotImages(node_name="spot_images", use_registered_depth=True)
-    [rgb, depth] = spot_images.rbg_and_depth_camera_from_location(cam_loc)
 
     spot_images.display_pointcloud(cam_loc, spot, 10.0)
 
@@ -59,7 +58,7 @@ def main() -> None:
         rotation_angle = -90
     if cam_loc == CameraLocation.RIGHT:
         rotation_angle = -180
-
+    [rgb, depth] = spot_images.rbg_and_depth_camera_from_location(cam_loc)
     spot_images.display_image(rgb, spot, rotation_angle=rotation_angle, timeout_sec=5.0)
     spot_images.display_image(depth, spot, rotation_angle=rotation_angle, timeout_sec=5.0)
 
