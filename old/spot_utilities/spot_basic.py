@@ -52,6 +52,7 @@ from bosdyn_msgs.msg import (
     RobotCommandFeedback,
 )
 from geometry_msgs.msg import Twist
+from google.protobuf import wrappers_pb2
 from rcl_interfaces.srv import GetParameters
 from rclpy.action import ActionClient
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -3341,6 +3342,98 @@ class SpotBasic(object):
 
         grasp.grasp_params.position_constraint.CopyFrom(
             manipulation_api_pb2.GRASP_POSITION_CONSTRAINT_FIXED_AT_USER_POSITION
+        )
+
+    def walk_to_object_image(
+        self,
+        pixel_xy: List[float],
+        image_timestamp: Union[Time, float],
+        camera_data: CameraInfo,
+        offset: Optional[float] = None,
+        timeout_sec: Optional[float] = 10.0,
+    ) -> Optional[ManipulationApiFeedbackResponse]:
+        """Walk to an object in an image taken with a camera on spot.
+
+        Args:
+            pixel_xy: The point in the image where spot will detect the object.
+            camera_data: Camera data associated with the image spot took.
+            image_timestamp: Uses the timestamp to get the associated transformation tree snapshot.
+            offset: Target distance between spot's CoM and the object.
+            timeout_sec: Timeout for response from action server
+
+        Returns:
+            An ManipulationApiFeedbackResponse if the robot has an arm.
+        """
+
+        pinhole_model = image_pb2.ImageSource.PinholeModel()
+        pinhole_model.intrinsics.focal_length.x = camera_data.k[0]
+        pinhole_model.intrinsics.focal_length.y = camera_data.k[4]
+        pinhole_model.intrinsics.principal_point.x = camera_data.k[2]
+        pinhole_model.intrinsics.principal_point.y = camera_data.k[5]
+
+        args = {
+            "pixel_xy": geometry_pb2.Vec2(x=pixel_xy[0], y=pixel_xy[1]),
+            "transforms_snapshot_for_camera": self._get_basic_tform_tree_snapshot(image_timestamp),
+            "frame_name_image_sensor": camera_data.header.frame_id.split("/")[-1],
+            "camera_model": pinhole_model,
+        }
+        if offset is not None:
+            args["offset_distance"] = wrappers_pb2.FloatValue(value=offset)
+        move_targ = manipulation_api_pb2.WalkToObjectInImage(**args)
+
+        robot_mani_request = manipulation_api_pb2.ManipulationApiRequest(walk_to_object_in_image=move_targ)
+        action_goal = self._convert_proto_to_manip_cmd_action_goal(robot_mani_request)
+        return self.manipulation("walk_to_object_image", action_goal, timeout_sec)
+
+    def walk_to_object_image_async(
+        self,
+        pixel_xy: List[float],
+        image_timestamp: Union[Time, float],
+        camera_data: CameraInfo,
+        offset: Optional[float] = None,
+        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
+    ) -> Optional[SpotActionHandle]:
+        """Walk to an object in an image taken with a camera on spot asynchronously.
+
+        Args:
+            pixel_xy: The point in the image where spot will detect the object.
+            camera_data: Camera data associated with the image spot took.
+            image_timestamp: Uses the timestamp to get the associated transformation tree snapshot.
+            offset: Target distance between spot's CoM and the object.
+            result_callback: A callback to process/handle the resulting feedback from executing the command
+            feedback_callback: A callback to process/handle the feedback received during the execution of the command
+            on_failure_callback: A callback to process/handle when the action fails for various reasons
+
+        Returns:
+            An ManipulationApiFeedbackResponse if the robot has an arm.
+        """
+
+        pinhole_model = image_pb2.ImageSource.PinholeModel()
+        pinhole_model.intrinsics.focal_length.x = camera_data.k[0]
+        pinhole_model.intrinsics.focal_length.y = camera_data.k[4]
+        pinhole_model.intrinsics.principal_point.x = camera_data.k[2]
+        pinhole_model.intrinsics.principal_point.y = camera_data.k[5]
+
+        args = {
+            "pixel_xy": geometry_pb2.Vec2(x=pixel_xy[0], y=pixel_xy[1]),
+            "transforms_snapshot_for_camera": self._get_basic_tform_tree_snapshot(image_timestamp),
+            "frame_name_image_sensor": camera_data.header.frame_id.split("/")[-1],
+            "camera_model": pinhole_model,
+        }
+        if offset is not None:
+            args["offset_distance"] = wrappers_pb2.FloatValue(value=offset)
+        move_targ = manipulation_api_pb2.WalkToObjectInImage(**args)
+
+        robot_mani_request = manipulation_api_pb2.ManipulationApiRequest(walk_to_object_in_image=move_targ)
+        action_goal = self._convert_proto_to_manip_cmd_action_goal(robot_mani_request)
+        return self.manipulation_async(
+            "walk_to_object_image",
+            action_goal,
+            result_callback=result_callback,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
         )
 
     def grasp_in_image(
