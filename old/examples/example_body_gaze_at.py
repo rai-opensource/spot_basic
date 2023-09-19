@@ -41,6 +41,7 @@ def main() -> None:
         wait_for_transform=[spot.body_frame_name, spot.vision_frame_name],
     )
     time.sleep(1.0)  # this sleep addresses a race condition in creating the tf listener and asking it for data
+    spot.set_tf_listener(tf)
     vision_to_body = tf.lookup_a_tform_b(spot.vision_frame_name, spot.body_frame_name, wait_for_frames=True)
 
     # gaze at the origin of the vision frame, which should be where the robot started
