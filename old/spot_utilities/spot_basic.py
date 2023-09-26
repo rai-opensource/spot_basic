@@ -3615,6 +3615,28 @@ class SpotBasic(object):
         action_goal = self._convert_proto_to_manip_cmd_action_goal(grasp_request)
         return self.manipulation("grasp_long_ray", action_goal, 10.0)
 
+    def zero_g(self) -> Optional[RobotCommandFeedback]:
+        """Sets spot arm into gravity compensated mode such that the arm 'renders'
+        no apparent gravitational acceleration and low damping.
+
+        Useful for allowing a person to move the arm around freely. Does not compensate
+        for additional unmodeled mass (like putting something in the gripper.)
+
+        """
+        root_t_task = SE3.Tz(0.3)
+        stationary_traj = [(SE3(), 1.0)]
+
+        return self.move_end_effector_impedance(
+            root_frame_name=SpotBasic.FrameHint.BODY,
+            root_t_task=root_t_task,
+            wrist_t_tool=SE3(),
+            trajectory=stationary_traj,
+            stiffness=SpatialVector([0, 0, 0, 0, 0, 0]),
+            damping=SpatialVector([2.5, 2.5, 2.5, 1.0, 1.0, 1.0]),
+            wrench_nm=SpatialForce([0, 0, 0, 0, 0, 0]),
+            timeout_sec=2.0,
+        )
+
     def shutdown(self) -> None:
         """Shutdown all the internal components"""
         self._node.shutdown()

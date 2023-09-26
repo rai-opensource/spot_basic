@@ -3,8 +3,6 @@
 import argparse
 
 import rclpy
-from spatialmath import SE3, SpatialForce
-from spatialmath.spatialvector import SpatialVector
 from spot_utilities.spot_basic import SpotBasic
 
 """ This is a test script to demo starting ZeroG mode.
@@ -35,21 +33,7 @@ def main() -> None:
 
     spot.ready_arm()
 
-    # Send a single Impedance command to set the stiffness
-    root_t_task = SE3.Tz(0.3)
-    stationary_traj = [(SE3(), 1.0)]
-
-    print("Sending impedance command to set low stiffness -- should not move robot")
-    spot.move_end_effector_impedance(
-        root_frame_name=spot.FrameHint.BODY,
-        root_t_task=root_t_task,
-        wrist_t_tool=SE3(),
-        trajectory=stationary_traj,
-        stiffness=SpatialVector([0, 0, 0, 0, 0, 0]),
-        damping=SpatialVector([2.5, 2.5, 2.5, 1.0, 1.0, 1.0]),
-        wrench_nm=SpatialForce([0, 0, 0, 0, 0, 0]),
-        timeout_sec=2.0,
-    )
+    spot.zero_g()
 
     rclpy.spin(node)
 
