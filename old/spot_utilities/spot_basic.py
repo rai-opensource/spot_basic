@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from enum import Enum, IntEnum
 from functools import partial
-from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
+from typing import Callable, List, Optional, Sequence, Tuple, Union
 
 import geometry_msgs
 import numpy as np
@@ -3560,60 +3560,84 @@ class SpotBasic(object):
             on_failure_callback=on_failure_callback,
         )
 
-    def palm_grasp_in_image_top_down(
+    def _pick_object_ray_in_world(
         self,
-        pixel_xy: List[float],
-        image_data: Any,
-    ) -> RobotCommand.Goal:
-        """Grasp an item in an image taken with a camera on spot with the palm
-        pressed into the object.
-
-        Args:
-            pixel_xy: The point in the image where spot will do object detection,
-                and then grasp the object.
-            image_data: Image data taken using spot (need to figure out data type).
-        """
-        raise NotImplementedError()
-        # return self.grasp_in_image(pixel_xy, image_data, 0.0, self.set_tight_top_down_grasp)
-
-    def grasp_along_ray(
-        self,
-        task_frame_t_ray_start: R3,
-        task_frame_t_ray_end: R3,
-        task_frame_name: str,
-        palm_placement_ratio: float,
-        apply_grasp_params_func: Optional[Callable] = None,
-    ) -> Optional[ManipulationApiFeedbackResponse]:
+        frame_t_ray_start: R3,
+        frame_t_ray_end: R3,
+        frame_name: str,
+        grasp_params: Optional[manipulation_api_pb2.GraspParams] = None,
+        walk_gaze_mode: Optional[manipulation_api_pb2.WalkGazeMode] = None,
+    ) -> manipulation_api_pb2.ManipulationApiRequest:
         """Cast a ray in the world and pick the first object found along the ray.
+
         This is the lowest-level grasping message; all other grasp options internally
         use this message to trigger a grasp.
 
-        Example: You see the object you are interested in with the gripper's camera.
-        To grasp it, you cast a ray from the camera out to 4 meters (well past the object).
-        To do this you'd set:
-            ray_start_rt_frame: camera's position
-            ray_end_rt_frame: camera's position + unit vector along ray of interest * 4 meters
+        See: https://github.com/boston-dynamics/spot-sdk/blob/master/protos/bosdyn/api/manipulation_api.proto
         """
-
-        grasp = manipulation_api_pb2.PickObject(frame_name=task_frame_name)
-        grasp.object_rt_frame.CopyFrom(
-            geometry_pb2.Vec3(x=task_frame_t_ray_end[0], y=task_frame_t_ray_end[1], z=task_frame_t_ray_end[2])
+        proto = manipulation_api_pb2.PickObjectRayInWorld(
+            ray_start_rt_frame=geometry_pb2.Vec3(
+                x=frame_t_ray_start[0], y=frame_t_ray_start[1], z=frame_t_ray_start[2]
+            ),
+            ray_end_rt_frame=geometry_pb2.Vec3(x=frame_t_ray_end[0], y=frame_t_ray_end[1], z=frame_t_ray_end[2]),
+            frame_name=frame_name,
+            grasp_params=grasp_params,
+            walk_gaze_mode=walk_gaze_mode,
         )
-        # grasp.frame_name = task_frame_name
-        # Don't move the robot base, but automatically look at the grasp target with the hand camera.
-        # grasp.walk_gaze_mode = manipulation_api_pb2.PICK_AUTO_GAZE
+        return manipulation_api_pb2.ManipulationApiRequest(pick_object_ray_in_world=proto)
 
-        # We can specify where in the gripper we want to grasp.
-        grasp.grasp_params.grasp_palm_to_fingertip = palm_placement_ratio
+    def pick_object_ray_in_world(
+        self,
+        frame_t_ray_start: R3,
+        frame_t_ray_end: R3,
+        frame_name: str,
+        grasp_params: Optional[manipulation_api_pb2.GraspParams] = None,
+        walk_gaze_mode: Optional[manipulation_api_pb2.WalkGazeMode] = None,
+        timeout_sec: Optional[float] = None,
+    ) -> Optional[ManipulationApiFeedbackResponse]:
+        """Cast a ray in the world and pick the first object found along the ray.
 
-        if apply_grasp_params_func is not None:
-            apply_grasp_params_func(grasp)
+        This is the lowest-level grasping message; all other grasp options internally
+        use this message to trigger a grasp.
 
-        # Build the proto
-        grasp_request = manipulation_api_pb2.ManipulationApiRequest(pick_object=grasp)
+        See: https://github.com/boston-dynamics/spot-sdk/blob/master/protos/bosdyn/api/manipulation_api.proto
+        """
+        proto = self._pick_object_ray_in_world(
+            frame_t_ray_start, frame_t_ray_end, frame_name, grasp_params, walk_gaze_mode
+        )
+        action_goal = self._convert_proto_to_manip_cmd_action_goal(proto)
+        return self.manipulation("grasp_along_ray", action_goal, timeout_sec)
 
-        action_goal = self._convert_proto_to_manip_cmd_action_goal(grasp_request)
-        return self.manipulation("grasp_long_ray", action_goal, 10.0)
+    def pick_object_ray_in_world_async(
+        self,
+        frame_t_ray_start: R3,
+        frame_t_ray_end: R3,
+        frame_name: str,
+        grasp_params: Optional[manipulation_api_pb2.GraspParams] = None,
+        walk_gaze_mode: Optional[manipulation_api_pb2.WalkGazeMode] = None,
+        *,
+        result_callback: Optional[Callable[[ManipulationApiFeedbackResponse], None]] = None,
+        feedback_callback: Optional[Callable[[ManipulationApiFeedbackResponse], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
+    ) -> Optional[ManipulationApiFeedbackResponse]:
+        """Cast a ray in the world and pick the first object found along the ray.
+
+        This is the lowest-level grasping message; all other grasp options internally
+        use this message to trigger a grasp.
+
+        See: https://github.com/boston-dynamics/spot-sdk/blob/master/protos/bosdyn/api/manipulation_api.proto
+        """
+        proto = self._pick_object_ray_in_world(
+            frame_t_ray_start, frame_t_ray_end, frame_name, grasp_params, walk_gaze_mode
+        )
+        action_goal = self._convert_proto_to_manip_cmd_action_goal(proto)
+        return self.manipulation_async(
+            "grasp_along_ray",
+            action_goal,
+            result_callback=result_callback,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
 
     def zero_g(self) -> Optional[RobotCommandFeedback]:
         """Sets spot arm into gravity compensated mode such that the arm 'renders'
