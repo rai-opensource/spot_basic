@@ -34,6 +34,7 @@ from bosdyn.api import (
     trajectory_pb2,
 )
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
+from bosdyn.api.spot.choreography_sequence_pb2 import Animation, ChoreographySequence
 from bosdyn.client.frame_helpers import (
     BODY_FRAME_NAME,
     GRAV_ALIGNED_BODY_FRAME_NAME,
@@ -67,6 +68,8 @@ from spatialmath.base.types import R3
 from spatialmath.spatialvector import SpatialVector
 from spot_msgs.action import Manipulation, RobotCommand
 from spot_msgs.srv import (
+    ChoreographyStartRecordingState,
+    ChoreographyStopRecordingState,
     ClearBehaviorFault,
     DeleteSound,
     Dock,
@@ -292,11 +295,13 @@ class SpotBasic(object):
             f"/{self.robot_name}/execute_dance",
             callback_group=self._callback_group,
         )
+
         self._upload_animation_client = self._node.create_client(
             UploadAnimation,
             f"/{self.robot_name}/upload_animation",
             callback_group=self._callback_group,
         )
+
         self._list_all_dances_client = self._node.create_client(
             ListAllDances,
             f"/{self.robot_name}/list_all_dances",
@@ -305,6 +310,21 @@ class SpotBasic(object):
         self._list_all_moves_client = self._node.create_client(
             ListAllMoves,
             f"/{self.robot_name}/list_all_moves",
+            callback_group=self._callback_group,
+        )
+        self._list_all_moves_client = self._node.create_client(
+            ListAllMoves,
+            f"/{self.robot_name}/list_all_moves",
+            callback_group=self._callback_group,
+        )
+        self._start_recording_state_client = self._node.create_client(
+            ChoreographyStartRecordingState,
+            f"/{self.robot_name}/start_recording_state",
+            callback_group=self._callback_group,
+        )
+        self._stop_recording_state_client = self._node.create_client(
+            ChoreographyStopRecordingState,
+            f"/{self.robot_name}/stop_recording_state",
             callback_group=self._callback_group,
         )
         self._max_velocity_client = self._node.create_client(
@@ -929,6 +949,23 @@ class SpotBasic(object):
             return False, response.message
         return True, "success"
 
+    def execute_dance_proto(self, choreography_sequence: ChoreographySequence) -> tuple[bool, str]:
+        """Execute a dance sequence through Spot Driver
+        Returns:
+            (True, "success") if the command succeeded, (False, <error_message>) otherwise
+        """
+
+        request = ExecuteDance.Request()
+        request.choreo_sequence_bytes = choreography_sequence.SerializeToString()
+        future = self._execute_dance_client.call_async(request)
+        if not wait_for_future(future):
+            return False, "Call to wait_for_future timed out"
+        response = future.result()
+        if not response.success:
+            self._node.get_logger().debug(f"Executing dance on '{self.robot_name}' failed. Msg: {response.message}.")
+            return False, response.message
+        return True, "success"
+
     def upload_animation(self, move_name: str, path: str) -> tuple[bool, str]:
         """Upload an animation file through spot driver
         Returns:
@@ -951,6 +988,27 @@ class SpotBasic(object):
         if not response.success:
             self._node.get_logger().debug(
                 f"Uploading animation '{path}' to '{self.robot_name}' failed. Msg: {response.message}."
+            )
+            return False, response.message
+        return True, "success"
+
+    def upload_animation_proto(self, animation: Animation) -> tuple[bool, str]:
+        """Upload an animation file through spot driver
+        Returns:tmp
+            (True, "success") if the command succeeded, (False, <error_message>) otherwise
+        """
+        self._node.get_logger().info(f"Uploading animation named '{animation.name}' to {self.robot_name}")
+        request = UploadAnimation.Request()
+        request.animation_proto_serialized = animation.SerializeToString()
+        request.animation_name = animation.name
+
+        future = self._upload_animation_client.call_async(request)
+        if not wait_for_future(future):
+            return False, "Call to wait_for_future timed out"
+        response = future.result()
+        if not response.success:
+            self._node.get_logger().info(
+                f"Uploading proto animation '{animation.name}' to '{self.robot_name}' failed. Msg: {response.message}."
             )
             return False, response.message
         return True, "success"
@@ -984,6 +1042,30 @@ class SpotBasic(object):
             )
             return False, response.message, []
         return True, "success", response.moves
+
+    def start_recording_state(self, duration: float) -> tuple[bool, str]:
+        request = ChoreographyStartRecordingState.Request()
+        request.duration_seconds = duration
+        future = self._start_recording_state_client.call_async(request)
+        if not wait_for_future(future):
+            return False, "Call to wait_for_future timed out"
+        response = future.result()
+        if not response.success:
+            self._node.get_logger().error(f"Failed to start recording state. Msg: {response.message}.")
+            return False, response.message
+        return True, "success"
+
+    def stop_recording_state(self) -> tuple[bool, str]:
+        request = ChoreographyStopRecordingState.Request()
+
+        future = self._stop_recording_state_client.call_async(request)
+        if not wait_for_future(future):
+            return False, "Call to wait_for_future timed out"
+        response = future.result()
+        if not response.success:
+            self._node.get_logger().error(f"Failed to stop recording state. Msg: {response.message}.")
+            return False, response.message
+        return True, "success"
 
     def list_sounds(self) -> tuple[bool, str, list[str]]:
         """
