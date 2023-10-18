@@ -3642,8 +3642,67 @@ class SpotBasic(object):
             on_failure_callback=on_failure_callback,
         )
 
-    def _pick_object_ray_in_world(
+    @staticmethod
+    def _walk_to_object_ray_in_world(
+        ray_start_rt_frame: R3, ray_end_rt_frame: R3, frame_name: str, offset_distance: float
+    ) -> manipulation_api_pb2.ManipulationApiRequest:
+        """Walks the robot up to an object.  Useful to prepare to grasp or manipulate something.
+
+        See: https://github.com/boston-dynamics/spot-sdk/blob/master/protos/bosdyn/api/manipulation_api.proto#L20
+        """
+        proto = manipulation_api_pb2.WalkToObjectRayInWorld(
+            ray_start_rt_frame=geometry_pb2.Vec3(
+                x=ray_start_rt_frame[0], y=ray_start_rt_frame[1], z=ray_start_rt_frame[2]
+            ),
+            ray_end_rt_frame=geometry_pb2.Vec3(x=ray_end_rt_frame[0], y=ray_end_rt_frame[1], z=ray_end_rt_frame[2]),
+            frame_name=frame_name,
+            offset_distance=wrappers_pb2.FloatValue(value=offset_distance),
+        )
+        return manipulation_api_pb2.ManipulationApiRequest(walk_to_object_ray_in_world=proto)
+
+    def walk_to_object_ray_in_world(
         self,
+        ray_start_rt_frame: R3,
+        ray_end_rt_frame: R3,
+        frame_name: str,
+        offset_distance: float,
+        timeout_sec: Optional[float] = None,
+    ) -> Optional[RobotCommandFeedback]:
+        """Walks the robot up to an object.  Useful to prepare to grasp or manipulate something.
+
+        See: https://github.com/boston-dynamics/spot-sdk/blob/master/protos/bosdyn/api/manipulation_api.proto#L20
+        """
+        proto = self._walk_to_object_ray_in_world(ray_start_rt_frame, ray_end_rt_frame, frame_name, offset_distance)
+        action_goal = self._convert_proto_to_manip_cmd_action_goal(proto)
+        return self.manipulation("walk_to_object_ray_in_world", action_goal, timeout_sec)
+
+    def walk_to_object_ray_in_world_async(
+        self,
+        ray_start_rt_frame: R3,
+        ray_end_rt_frame: R3,
+        frame_name: str,
+        offset_distance: float,
+        *,
+        result_callback: Optional[Callable[[ManipulationApiFeedbackResponse], None]] = None,
+        feedback_callback: Optional[Callable[[ManipulationApiFeedbackResponse], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
+    ) -> Optional[ManipulationApiFeedbackResponse]:
+        """Walks the robot up to an object.  Useful to prepare to grasp or manipulate something.
+
+        See: https://github.com/boston-dynamics/spot-sdk/blob/master/protos/bosdyn/api/manipulation_api.proto#L20
+        """
+        proto = self._walk_to_object_ray_in_world(ray_start_rt_frame, ray_end_rt_frame, frame_name, offset_distance)
+        action_goal = self._convert_proto_to_manip_cmd_action_goal(proto)
+        return self.manipulation_async(
+            "walk_to_object_ray_in_world",
+            action_goal,
+            result_callback=result_callback,
+            feedback_callback=feedback_callback,
+            on_failure_callback=on_failure_callback,
+        )
+
+    @staticmethod
+    def _pick_object_ray_in_world(
         frame_t_ray_start: R3,
         frame_t_ray_end: R3,
         frame_name: str,
