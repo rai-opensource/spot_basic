@@ -3703,8 +3703,8 @@ class SpotBasic(object):
 
     @staticmethod
     def _pick_object_ray_in_world(
-        frame_t_ray_start: R3,
-        frame_t_ray_end: R3,
+        ray_start_rt_frame: R3,
+        ray_end_rt_frame: R3,
         frame_name: str,
         grasp_params: Optional[manipulation_api_pb2.GraspParams] = None,
         walk_gaze_mode: Optional[manipulation_api_pb2.WalkGazeMode] = None,
@@ -3718,9 +3718,9 @@ class SpotBasic(object):
         """
         proto = manipulation_api_pb2.PickObjectRayInWorld(
             ray_start_rt_frame=geometry_pb2.Vec3(
-                x=frame_t_ray_start[0], y=frame_t_ray_start[1], z=frame_t_ray_start[2]
+                x=ray_start_rt_frame[0], y=ray_start_rt_frame[1], z=ray_start_rt_frame[2]
             ),
-            ray_end_rt_frame=geometry_pb2.Vec3(x=frame_t_ray_end[0], y=frame_t_ray_end[1], z=frame_t_ray_end[2]),
+            ray_end_rt_frame=geometry_pb2.Vec3(x=ray_end_rt_frame[0], y=ray_end_rt_frame[1], z=ray_end_rt_frame[2]),
             frame_name=frame_name,
             grasp_params=grasp_params,
             walk_gaze_mode=walk_gaze_mode,
@@ -3729,8 +3729,8 @@ class SpotBasic(object):
 
     def pick_object_ray_in_world(
         self,
-        frame_t_ray_start: R3,
-        frame_t_ray_end: R3,
+        ray_start_rt_frame: R3,
+        ray_end_rt_frame: R3,
         frame_name: str,
         grasp_params: Optional[manipulation_api_pb2.GraspParams] = None,
         walk_gaze_mode: Optional[manipulation_api_pb2.WalkGazeMode] = None,
@@ -3744,15 +3744,15 @@ class SpotBasic(object):
         See: https://github.com/boston-dynamics/spot-sdk/blob/master/protos/bosdyn/api/manipulation_api.proto
         """
         proto = self._pick_object_ray_in_world(
-            frame_t_ray_start, frame_t_ray_end, frame_name, grasp_params, walk_gaze_mode
+            ray_start_rt_frame, ray_end_rt_frame, frame_name, grasp_params, walk_gaze_mode
         )
         action_goal = self._convert_proto_to_manip_cmd_action_goal(proto)
         return self.manipulation("grasp_along_ray", action_goal, timeout_sec)
 
     def pick_object_ray_in_world_async(
         self,
-        frame_t_ray_start: R3,
-        frame_t_ray_end: R3,
+        ray_start_rt_frame: R3,
+        ray_end_rt_frame: R3,
         frame_name: str,
         grasp_params: Optional[manipulation_api_pb2.GraspParams] = None,
         walk_gaze_mode: Optional[manipulation_api_pb2.WalkGazeMode] = None,
@@ -3769,7 +3769,7 @@ class SpotBasic(object):
         See: https://github.com/boston-dynamics/spot-sdk/blob/master/protos/bosdyn/api/manipulation_api.proto
         """
         proto = self._pick_object_ray_in_world(
-            frame_t_ray_start, frame_t_ray_end, frame_name, grasp_params, walk_gaze_mode
+            ray_start_rt_frame, ray_end_rt_frame, frame_name, grasp_params, walk_gaze_mode
         )
         action_goal = self._convert_proto_to_manip_cmd_action_goal(proto)
         return self.manipulation_async(
