@@ -214,7 +214,7 @@ class SpotBasic(object):
         RIGHT = 1
         LEFT = 2
 
-    class FrameHint(Enum):
+    class FrameHint(str, Enum):
         BODY = BODY_FRAME_NAME
         VISION = VISION_FRAME_NAME
         ODOM = ODOM_FRAME_NAME
