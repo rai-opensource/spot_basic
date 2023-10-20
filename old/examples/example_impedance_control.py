@@ -1,8 +1,8 @@
 import argparse
 import time
 
+import bdai_ros2_wrappers.process as ros_process
 import numpy as np
-import rclpy
 from spatialmath import SE3, SpatialForce
 from spatialmath.spatialvector import SpatialVector
 from spot_utilities.spot_basic import SpotBasic
@@ -18,16 +18,15 @@ Use:
 """
 
 
-def main() -> None:
+def cli() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("robot", help="Name of the robot.")
-    options = parser.parse_args()
+    return parser
 
-    robot_name = options.robot
 
-    rclpy.init()
-    node = rclpy.create_node("spot_impedance_example")
-    spot = SpotBasic(robot_name, parent_node_name=node.get_name())
+@ros_process.main(cli())
+def main(args: argparse.Namespace) -> None:
+    spot = SpotBasic(args.robot)
 
     spot.initialize_robot()
 
@@ -66,10 +65,6 @@ def main() -> None:
 
     print("Control finished! Sitting here for 5 more seconds...")
     time.sleep(5.0)
-
-    spot.shutdown()
-    node.destroy_node()
-    rclpy.shutdown()
 
 
 if __name__ == "__main__":

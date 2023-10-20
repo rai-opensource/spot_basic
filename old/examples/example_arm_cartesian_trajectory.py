@@ -3,33 +3,34 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 import time
 from typing import Optional, Sequence
 
+import bdai_ros2_wrappers.process as ros_process
 import numpy as np
-import rclpy
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
+from bdai_ros2_wrappers.utilities import fqn
 from bosdyn.api import arm_command_pb2, geometry_pb2, trajectory_pb2
 from bosdyn.client.frame_helpers import BODY_FRAME_NAME, ODOM_FRAME_NAME
-from rclpy.node import Node
 from spatialmath import SE3, Twist3
 from spatialmath.base import trinterp
 from spot_utilities.spot_basic import SpotBasic
 from spot_utilities.spot_dataclasses import AxisModeMap
 
 
-class SpotRunner(Node):
+class SpotRunner:
     """Class to run the Spot robot."""
 
     def __init__(
         self,
-        options: argparse.Namespace,
+        robot_name: str,
         root_frame_name: Optional[str] = None,
         wrist_t_tool: Optional[geometry_pb2.SE3Pose] = None,
         root_t_task: Optional[geometry_pb2.SE3Pose] = None,
     ):
-        super().__init__("spot_runner", namespace=options.robot)
+        self.logger = logging.getLogger(fqn(self.__class__))
 
         self.root_frame_name = root_frame_name
         self.wrist_t_tool = wrist_t_tool
@@ -62,21 +63,20 @@ class SpotRunner(Node):
             rz=self._position_mode,
         )
 
-        self._robot = SpotBasic(robot_name=options.robot, parent_node_name=self.get_name())
-        self._tf_listener = TFListenerWrapper(
-            "arm_trajectory_tf", wait_for_transform=[self._robot.body_frame_name, self._robot.hand_frame_name]
-        )
+        self._robot = SpotBasic(robot_name)
+        self._tf_listener = TFListenerWrapper()
+        self._tf_listener.wait_for_a_tform_b(self._robot.body_frame_name, self._robot.hand_frame_name)
 
     def initialize_robot(self) -> None:
         self._robot.initialize_robot()
-        self.get_logger().info("Standing robot up")
+        self.logger.info("Standing robot up")
         self._robot.stand()
-        self.get_logger().info("Successfully stood up.")
+        self.logger.info("Successfully stood up.")
 
         # Move the arm to a specific location
-        self.get_logger().info("Moving arm to start config")
+        self.logger.info("Moving arm to start config")
         self._robot.stow_arm()
-        self.get_logger().info("Successfully moved arm to starting config")
+        self.logger.info("Successfully moved arm to starting config")
 
     def get_odom_to_hand_tf(self) -> SE3:
         return self._tf_listener.lookup_a_tform_b(self._robot.odom_frame_name, self._robot.hand_frame_name)
@@ -99,7 +99,7 @@ class SpotRunner(Node):
         reference_time: Optional[float] = None,
         move_async: bool = False,
     ) -> None:
-        self.get_logger().info("Moving arm along trajectory")
+        self.logger.info("Moving arm along trajectory")
         """Invokes the arm to move relative to body following some trajectory.
 
         Args:
@@ -159,7 +159,7 @@ class SpotRunner(Node):
                 body_follow_arm=False,
                 reference_time=reference_time,
             )
-        self.get_logger().info("Completed!")
+        self.logger.info("Completed!")
 
     def _move_hand_body_follow_wrt_odom(
         self,
@@ -175,7 +175,7 @@ class SpotRunner(Node):
         timeout_sec: Optional[float] = 5.0,
         reference_time: Optional[float] = None,
     ) -> None:
-        self.get_logger().info("Moving arm, body following along trajectory")
+        self.logger.info("Moving arm, body following along trajectory")
         """Calls arm trajectory movements with the body following the arm.
 
         Trajectories must be described in the odometry frame for this method. 
@@ -216,7 +216,7 @@ class SpotRunner(Node):
             body_follow_arm=True,
             reference_time=reference_time,
         )
-        self.get_logger().info("Completed!")
+        self.logger.info("Completed!")
 
     def move_arm_with_body_follow(
         self,
@@ -419,9 +419,6 @@ class SpotRunner(Node):
     def cobra(self) -> None:
         self._move_arm_relative_to_body(timestamps_between_points=[0.5], pose_vecs=[self._cobra_pose], move_async=False)
 
-    def shutdown(self) -> None:
-        self._tf_listener.shutdown()
-
 
 def generate_trajectory(
     start_pose: SE3,
@@ -442,28 +439,26 @@ def generate_trajectory(
     return (timestamps, trajectory)
 
 
-def main() -> int:
-    rclpy.init()
+def cli() -> argparse.ArgumentParser:
     """Command-line interface."""
-
     parser = argparse.ArgumentParser()
-    parser.add_argument("robot", help="Name of the robot if the ROS driver is inside that namespace")
-    options = parser.parse_args()
+    parser.add_argument("robot_name", help="Name of the robot if the ROS driver is inside that namespace")
+    return parser
 
+
+@ros_process.main(cli())
+def main(args: argparse.Namespace) -> int:
     spot_runner = SpotRunner(
-        options,
+        args.robot_name,
         root_frame_name=BODY_FRAME_NAME,
     )
     spot_runner.initialize_robot()
 
-    spot_runner.get_logger().info("Check")
-
+    spot_runner.logger.info("Check")
     spot_runner.cobra()
     time.sleep(1)
 
     spot_runner.test_run()
-
-    spot_runner.shutdown()
     return 0
 
 

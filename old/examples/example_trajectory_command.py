@@ -6,9 +6,9 @@ import argparse
 import time
 from typing import Optional
 
+import bdai_ros2_wrappers.process as ros_process
 import matplotlib.pyplot as plt
 import numpy as np
-import rclpy
 from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai.trajectory.se2_trajectory_plotting import draw_shape
 from bdai.trajectory.spot_se2_properties import BODY_SHAPE, MAX_SPEED_FORWARD, MAX_SPEED_VEC
@@ -35,10 +35,8 @@ def plot_trajectory(ax: plt.Axes, trajectory: SE2Trajectory) -> None:
 def get_vision_t_body(robot_name: str) -> SE2:
     body_frame_name = f"{robot_name}/{BODY_FRAME_NAME}"
     vision_frame_name = f"{robot_name}/{VISION_FRAME_NAME}"
-    tf_listener_wrapper = TFListenerWrapper(
-        "body_movement_examples", cache_time_s=30, wait_for_transform=[body_frame_name, vision_frame_name]
-    )
-    return tf_listener_wrapper.lookup_a_tform_b_se2(vision_frame_name, body_frame_name)
+    tf_listener = TFListenerWrapper(cache_time_s=30)
+    return tf_listener.lookup_a_tform_b_se2(vision_frame_name, body_frame_name, wait_for_frames=True)
 
 
 def run_example(example_name: str, robot_name: Optional[str] = None, asynchronous: bool = False) -> None:
@@ -65,8 +63,7 @@ def run_example(example_name: str, robot_name: Optional[str] = None, asynchronou
         return
 
     # Initialize
-    rclpy.init()
-    spot_basic = SpotBasic(robot_name=robot_name, parent_node_name="dummy_node", disable_collisions=False, dry=False)
+    spot_basic = SpotBasic(robot_name, disable_collisions=False, dry=False)
     spot_basic.initialize_robot()
     spot_basic.stand()
     time.sleep(1.0)
@@ -85,20 +82,20 @@ def run_example(example_name: str, robot_name: Optional[str] = None, asynchronou
 
     # Shut down
     time.sleep(1.0)
-    spot_basic.shutdown()
-    rclpy.shutdown()
-
     return
 
 
-def main() -> None:
+def cli() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("robot_name", help="Name of robot to use.  Enter 'preview' to simply plot the trajectory")
     parser.add_argument("example_name", help="Name of example to run")
     parser.add_argument("--ac", help="Async", default=False)
-    options = parser.parse_args()
+    return parser
 
-    run_example(options.example_name, options.robot_name, options.ac)
+
+@ros_process.main(cli())
+def main(args: argparse.Namespace) -> None:
+    run_example(args.example_name, args.robot_name, args.ac)
 
 
 if __name__ == "__main__":

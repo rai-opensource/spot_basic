@@ -5,8 +5,10 @@ from __future__ import annotations
 import argparse
 from enum import Enum, IntEnum
 from functools import partial
-from typing import Callable, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 
+import bdai_ros2_wrappers.process as ros_process
+import bdai_ros2_wrappers.scope as ros_scope
 import geometry_msgs
 import numpy as np
 import rclpy
@@ -21,9 +23,9 @@ from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 from bdai_ros2_wrappers.action_client import ActionClientWrapper
 from bdai_ros2_wrappers.action_handle import ActionHandle
 from bdai_ros2_wrappers.futures import wait_for_future
-from bdai_ros2_wrappers.node import NodeWrapper
 from bdai_ros2_wrappers.service_handle import ServiceHandle
 from bdai_ros2_wrappers.type_hints import Action, SrvTypeRequest
+from bdai_ros2_wrappers.utilities import namespace_with
 from bosdyn.api import (
     arm_command_pb2,
     basic_command_pb2,
@@ -56,9 +58,8 @@ from geometry_msgs.msg import Twist
 from google.protobuf import wrappers_pb2
 from rcl_interfaces.srv import GetParameters
 from rclpy.action import ActionClient
-from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.client import Client
-from rclpy.impl.rcutils_logger import RcutilsLogger
+from rclpy.node import Node
 from rclpy.task import Future
 from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo
@@ -109,8 +110,8 @@ from visualization_msgs.msg import Marker
 class SpotActionHandle(ActionHandle):
     """Extends the ActionHandle for spot specific actions"""
 
-    def __init__(self, robot_name: str, command_name: str, logger: Optional[RcutilsLogger] = None):
-        super().__init__(action_name=f"{robot_name}.{command_name}", logger=logger)
+    def __init__(self, robot_name: str, command_name: str, **kwargs: Any):
+        super().__init__(action_name=f"{robot_name}.{command_name}", **kwargs)
         self._result_callback = self._result_callback_intermediate
         self._result_callback_internal: Optional[Callable[[RobotCommandFeedback], None]] = None
         self._result_internal: Optional[RobotCommandFeedback] = None
@@ -149,8 +150,8 @@ class SpotActionHandle(ActionHandle):
 
 
 class SpotServiceHandle(ServiceHandle):
-    def __init__(self, robot_name: str, service_name: str, logger: Optional[RcutilsLogger] = None):
-        super().__init__(service_name=f"{robot_name}.{service_name}", logger=logger)
+    def __init__(self, robot_name: str, service_name: str, **kwargs: Any):
+        super().__init__(service_name=f"{robot_name}.{service_name}", **kwargs)
 
 
 class RobotComposeCommandHandle(object):
@@ -175,7 +176,12 @@ class RobotComposeCommandHandle(object):
             self._result_callback(feedback)
 
 
-class SpotBasic(object):
+def spot_namespaced(robot_name: Optional[str], name: str) -> str:
+    """Compute spot namespaced `name`."""
+    return namespace_with("/", robot_name, name)
+
+
+class SpotBasic:
     """Base ROS2 Node that provides interfaces to calling various commands"""
 
     TRIGGER_SERVICES = [
@@ -238,8 +244,8 @@ class SpotBasic(object):
     def __init__(
         self,
         robot_name: str,
-        parent_node_name: str,
         *,
+        node: Optional[Node] = None,
         disable_collisions: bool = False,
         dry: bool = False,
         rviz: bool = False,
@@ -248,12 +254,15 @@ class SpotBasic(object):
 
         Args:
             robot_name: name of the robot
-            parent_node_name: The name of the parent node containing this SpotBasic
+            node: optional parent node, defaults to the current process node
             disable_collisions: True if collisions should be ignored, False otherwise
             dry: True if this is a dry run and commands should not actually be sent, False otherwise
             rviz: True if visuals should be published, False otherwise
         """
-        self._node = NodeWrapper(node_name=f"{parent_node_name}_spot_basic", namespace=robot_name, spin_thread=True)
+        node = node or ros_scope.node()
+        if node is None:
+            raise ValueError("no process-wide ROS 2 node available (did you use bdai_ros2_wrapper.process.main?)")
+        self.node = node
 
         self._robot_name = robot_name
         self._disable_collisions = disable_collisions
@@ -264,132 +273,100 @@ class SpotBasic(object):
         self._tf_listener: TFListenerWrapper = None
 
         # TODO: are there other frame names to grab?
-        self._body_frame_name = f"{self._robot_name}/{BODY_FRAME_NAME}"
-        self._hand_frame_name = f"{self._robot_name}/{HAND_FRAME_NAME}"
-        self._vision_frame_name = f"{self._robot_name}/{VISION_FRAME_NAME}"
-        self._odom_frame_name = f"{self._robot_name}/{ODOM_FRAME_NAME}"
-
-        self._callback_group = ReentrantCallbackGroup()
+        self._body_frame_name = namespace_with(self.robot_name, BODY_FRAME_NAME)
+        self._hand_frame_name = namespace_with(self.robot_name, HAND_FRAME_NAME)
+        self._vision_frame_name = namespace_with(self.robot_name, VISION_FRAME_NAME)
+        self._odom_frame_name = namespace_with(self.robot_name, ODOM_FRAME_NAME)
 
         if self._rviz:
-            self._vis_pub = self._node.create_publisher(Marker, "/visualization_marker", 10)
+            self._vis_pub = self.node.create_publisher(Marker, "/visualization_marker", 10)
 
-        self._velocity_cmd_publisher = self._node.create_publisher(Twist, f"/{self.robot_name}/cmd_vel", 10)
+        self._velocity_cmd_publisher = self.node.create_publisher(
+            Twist, spot_namespaced(self.robot_name, "cmd_vel"), 10
+        )
 
         self._trigger_clients = {}
         for command_name in self.TRIGGER_SERVICES:
-            self._trigger_clients[command_name] = self._node.create_client(
-                Trigger, f"/{self.robot_name}/{command_name}", callback_group=self._callback_group
+            self._trigger_clients[command_name] = self.node.create_client(
+                Trigger, spot_namespaced(self.robot_name, command_name)
             )
-        self._dock_client = self._node.create_client(
-            Dock, f"/{self.robot_name}/dock", callback_group=self._callback_group
-        )
-        self._stair_mode_client = self._node.create_client(
-            SetBool, f"/{self.robot_name}/stair_mode", callback_group=self._callback_group
-        )
-        self._locomotion_mode_client = self._node.create_client(
-            SetLocomotion, f"/{self.robot_name}/locomotion_mode", callback_group=self._callback_group
-        )
-        self._execute_dance_client = self._node.create_client(
-            ExecuteDance,
-            f"/{self.robot_name}/execute_dance",
-            callback_group=self._callback_group,
+        self._dock_client = self.node.create_client(Dock, spot_namespaced(self.robot_name, "dock"))
+        self._stair_mode_client = self.node.create_client(SetBool, spot_namespaced(self.robot_name, "stair_mode"))
+        self._locomotion_mode_client = self.node.create_client(
+            SetLocomotion, spot_namespaced(self.robot_name, "locomotion_mode")
         )
 
-        self._upload_animation_client = self._node.create_client(
-            UploadAnimation,
-            f"/{self.robot_name}/upload_animation",
-            callback_group=self._callback_group,
+        self._start_recording_state_client = self.node.create_client(
+            ChoreographyStartRecordingState, spot_namespaced(self.robot_name, "start_recording_state")
+        )
+        self._stop_recording_state_client = self.node.create_client(
+            ChoreographyStopRecordingState, spot_namespaced(self.robot_name, "stop_recording_state")
         )
 
-        self._list_all_dances_client = self._node.create_client(
-            ListAllDances,
-            f"/{self.robot_name}/list_all_dances",
-            callback_group=self._callback_group,
+        self._execute_dance_client = self.node.create_client(
+            ExecuteDance, spot_namespaced(self.robot_name, "execute_dance")
         )
-        self._list_all_moves_client = self._node.create_client(
-            ListAllMoves,
-            f"/{self.robot_name}/list_all_moves",
-            callback_group=self._callback_group,
+        self._upload_animation_client = self.node.create_client(
+            UploadAnimation, spot_namespaced(self.robot_name, "upload_animation")
         )
-        self._list_all_moves_client = self._node.create_client(
-            ListAllMoves,
-            f"/{self.robot_name}/list_all_moves",
-            callback_group=self._callback_group,
+        self._list_all_dances_client = self.node.create_client(
+            ListAllDances, spot_namespaced(self.robot_name, "list_all_dances")
         )
-        self._start_recording_state_client = self._node.create_client(
-            ChoreographyStartRecordingState,
-            f"/{self.robot_name}/start_recording_state",
-            callback_group=self._callback_group,
-        )
-        self._stop_recording_state_client = self._node.create_client(
-            ChoreographyStopRecordingState,
-            f"/{self.robot_name}/stop_recording_state",
-            callback_group=self._callback_group,
-        )
-        self._max_velocity_client = self._node.create_client(
-            SetVelocity, f"/{self.robot_name}/max_velocity", callback_group=self._callback_group
-        )
-        self._clear_behavior_fault_client = self._node.create_client(
-            ClearBehaviorFault, f"/{self.robot_name}/clear_behavior_fault", callback_group=self._callback_group
-        )
-        self._list_graph_client = self._node.create_client(
-            ListGraph, f"/{self.robot_name}/list_graph", callback_group=self._callback_group
-        )
-        self._list_world_objects_client = self._node.create_client(
-            ListWorldObjects, f"/{self.robot_name}/list_world_objects", callback_group=self._callback_group
-        )
-        self._get_parameters_client = self._node.create_client(
-            GetParameters, f"/{self.robot_name}/spot_ros2/get_parameters", callback_group=self._callback_group
-        )
-        self._graph_nav_upload_graph_client = self._node.create_client(
-            GraphNavUploadGraph, f"/{self.robot_name}/graph_nav_upload_graph", callback_group=self._callback_group
+        self._list_all_moves_client = self.node.create_client(
+            ListAllMoves, spot_namespaced(self.robot_name, "list_all_moves")
         )
 
-        self._graph_nav_clear_graph_client = self._node.create_client(
-            GraphNavClearGraph, f"/{self.robot_name}/graph_nav_clear_graph", callback_group=self._callback_group
+        self._max_velocity_client = self.node.create_client(
+            SetVelocity, spot_namespaced(self.robot_name, "max_velocity")
         )
-        self._graph_nav_set_localization_client = self._node.create_client(
-            GraphNavSetLocalization,
-            f"/{self.robot_name}/graph_nav_set_localization",
-            callback_group=self._callback_group,
+        self._clear_behavior_fault_client = self.node.create_client(
+            ClearBehaviorFault, spot_namespaced(self.robot_name, "clear_behavior_fault")
         )
-        self._graph_nav_get_localization_pose_client = self._node.create_client(
-            GraphNavGetLocalizationPose,
-            f"/{self._robot_name}/graph_nav_get_localization_pose",
-            callback_group=self._callback_group,
+        self._list_graph_client = self.node.create_client(ListGraph, spot_namespaced(self.robot_name, "list_graph"))
+        self._list_world_objects_client = self.node.create_client(
+            ListWorldObjects, spot_namespaced(self.robot_name, "list_world_objects")
         )
-        self._list_sounds_client = self._node.create_client(
-            ListSounds, f"/{self.robot_name}/list_sounds", callback_group=self._callback_group
+        self._get_parameters_client = self.node.create_client(
+            GetParameters, spot_namespaced(self.robot_name, "spot_ros2/get_parameters")
         )
-        self._load_sound_client = self._node.create_client(
-            LoadSound, f"/{self.robot_name}/load_sound", callback_group=self._callback_group
-        )
-        self._play_sound_client = self._node.create_client(
-            PlaySound, f"/{self.robot_name}/play_sound", callback_group=self._callback_group
-        )
-        self._delete_sound_client = self._node.create_client(
-            DeleteSound, f"/{self.robot_name}/delete_sound", callback_group=self._callback_group
-        )
-        self._get_volume_client = self._node.create_client(
-            GetVolume, f"/{self.robot_name}/get_volume", callback_group=self._callback_group
-        )
-        self._set_volume_client = self._node.create_client(
-            SetVolume, f"/{self.robot_name}/set_volume", callback_group=self._callback_group
+        self._graph_nav_upload_graph_client = self.node.create_client(
+            GraphNavUploadGraph, spot_namespaced(self.robot_name, "graph_nav_upload_graph")
         )
 
-        self._robot_command_action_client = ActionClientWrapper(RobotCommand, "robot_command", self._node)
-        self._node.get_logger().info(f"Waiting for the 'RobotCommand' action server for {self.robot_name} ...")
+        self._graph_nav_clear_graph_client = self.node.create_client(
+            GraphNavClearGraph, spot_namespaced(self.robot_name, "graph_nav_clear_graph")
+        )
+        self._graph_nav_set_localization_client = self.node.create_client(
+            GraphNavSetLocalization, spot_namespaced(self.robot_name, "graph_nav_set_localization")
+        )
+        self._graph_nav_get_localization_pose_client = self.node.create_client(
+            GraphNavGetLocalizationPose, spot_namespaced(self.robot_name, "graph_nav_get_localization_pose")
+        )
+        self._list_sounds_client = self.node.create_client(ListSounds, spot_namespaced(self.robot_name, "list_sounds"))
+        self._load_sound_client = self.node.create_client(LoadSound, spot_namespaced(self.robot_name, "load_sound"))
+        self._play_sound_client = self.node.create_client(PlaySound, spot_namespaced(self.robot_name, "play_sound"))
+        self._delete_sound_client = self.node.create_client(
+            DeleteSound, spot_namespaced(self.robot_name, "delete_sound")
+        )
+        self._get_volume_client = self.node.create_client(GetVolume, spot_namespaced(self.robot_name, "get_volume"))
+        self._set_volume_client = self.node.create_client(SetVolume, spot_namespaced(self.robot_name, "set_volume"))
+
+        self._robot_command_action_client = ActionClientWrapper(
+            RobotCommand, spot_namespaced(self.robot_name, "robot_command"), self.node
+        )
+        self.node.get_logger().info(f"Waiting for the 'RobotCommand' action server for {self.robot_name} ...")
         self._robot_command_action_client.wait_for_server()
-        self._node.get_logger().info(f"Found the 'RobotCommand' action server for {self.robot_name}.")
+        self.node.get_logger().info(f"Found the 'RobotCommand' action server for {self.robot_name}.")
         # Check for arm and manipulation client
         if self.has_arm():
-            self._manipulation_action_client = ActionClientWrapper(Manipulation, "manipulation", self._node)
-            self._node.get_logger().info(f"Waiting for the 'Manipulation' action server for {self.robot_name} ...")
+            self._manipulation_action_client = ActionClientWrapper(
+                Manipulation, spot_namespaced(self.robot_name, "manipulation"), self.node
+            )
+            self.node.get_logger().info(f"Waiting for the 'Manipulation' action server for {self.robot_name} ...")
             if self._manipulation_action_client.wait_for_server(1.0):
-                self._node.get_logger().info(f"Found the 'Manipulation' action server for {self.robot_name}.")
+                self.node.get_logger().info(f"Found the 'Manipulation' action server for {self.robot_name}.")
             else:
-                self._node.get_logger().info(
+                self.node.get_logger().info(
                     f"No 'Manipulation' action server for {self.robot_name} found. Assuming it has no arm."
                 )
 
@@ -447,20 +424,20 @@ class SpotBasic(object):
         Returns:
             True if the command succeeded, False otherwise
         """
-        self._node.get_logger().info(f"Trigger command '{command_name}' for {self.robot_name}")
+        self.node.get_logger().info(f"Trigger command '{command_name}' for {self.robot_name}")
         request = Trigger.Request()
         try:
             future = self._trigger_clients[command_name].call_async(request)
         except KeyError:
-            self._node.get_logger().error(f"No trigger command {command_name}")
+            self.node.get_logger().error(f"No trigger command {command_name}")
             return False
 
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False
 
         response = future.result()
         if not response.success:
-            self._node.get_logger().error(
+            self.node.get_logger().error(
                 f"Trigger command '{command_name}' for {self.robot_name} failed. Msg: {response.message}"
             )
             return False
@@ -576,17 +553,17 @@ class SpotBasic(object):
         Returns:
             True if command succeeded, False otherwise
         """
-        self._node.get_logger().info(f"Dock command for {self.robot_name}")
+        self.node.get_logger().info(f"Dock command for {self.robot_name}")
         request = Dock.Request()
         request.dock_id = dock_id
         future = self._dock_client.call_async(request)
 
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False
 
         response = future.result()
         if not response.success:
-            self._node.get_logger().error(f"Dock command for {self.robot_name} failed. Msg: {response.message}")
+            self.node.get_logger().error(f"Dock command for {self.robot_name} failed. Msg: {response.message}")
             return False
         return True
 
@@ -910,15 +887,15 @@ class SpotBasic(object):
         Returns:
             True if the command succeeded, False otherwise
         """
-        self._node.get_logger().info(f"Setting stair_mode to '{value}' for {self.robot_name}")
+        self.node.get_logger().info(f"Setting stair_mode to '{value}' for {self.robot_name}")
         request = SetBool.Request()
         request.data = value
         future = self._stair_mode_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False
         response = future.result()
         if not response.success:
-            self._node.get_logger().debug(
+            self.node.get_logger().debug(
                 f"Setting stair_mode to '{value}' for {self.robot_name} failed. Msg: {response.message}."
             )
             return False
@@ -929,7 +906,7 @@ class SpotBasic(object):
         Returns:
             (True, "success") if the command succeeded, (False, <error_message>) otherwise
         """
-        self._node.get_logger().info(f"Uploading dance at '{path}' to {self.robot_name}")
+        self.node.get_logger().info(f"Uploading dance at '{path}' to {self.robot_name}")
         request = ExecuteDance.Request()
         try:
             dance_file = open(path, "r")
@@ -939,11 +916,11 @@ class SpotBasic(object):
             return False, "Specified filepath does not exist!"
 
         future = self._execute_dance_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False, "Call to wait_for_future timed out"
         response = future.result()
         if not response.success:
-            self._node.get_logger().debug(
+            self.node.get_logger().debug(
                 f"Uploading dance '{path}' to '{self.robot_name}' failed. Msg: {response.message}."
             )
             return False, response.message
@@ -958,11 +935,11 @@ class SpotBasic(object):
         request = ExecuteDance.Request()
         request.choreo_sequence_bytes = choreography_sequence.SerializeToString()
         future = self._execute_dance_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False, "Call to wait_for_future timed out"
         response = future.result()
         if not response.success:
-            self._node.get_logger().debug(f"Executing dance on '{self.robot_name}' failed. Msg: {response.message}.")
+            self.node.get_logger().debug(f"Executing dance on '{self.robot_name}' failed. Msg: {response.message}.")
             return False, response.message
         return True, "success"
 
@@ -971,7 +948,7 @@ class SpotBasic(object):
         Returns:
             (True, "success") if the command succeeded, (False, <error_message>) otherwise
         """
-        self._node.get_logger().info(f"Uploading animation at '{path}' to {self.robot_name}")
+        self.node.get_logger().info(f"Uploading animation at '{path}' to {self.robot_name}")
         request = UploadAnimation.Request()
         try:
             dance_file = open(path, "r")
@@ -982,11 +959,11 @@ class SpotBasic(object):
             return False, "Specified filepath does not exist!"
 
         future = self._upload_animation_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False, "Call to wait_for_future timed out"
         response = future.result()
         if not response.success:
-            self._node.get_logger().debug(
+            self.node.get_logger().debug(
                 f"Uploading animation '{path}' to '{self.robot_name}' failed. Msg: {response.message}."
             )
             return False, response.message
@@ -997,17 +974,17 @@ class SpotBasic(object):
         Returns:tmp
             (True, "success") if the command succeeded, (False, <error_message>) otherwise
         """
-        self._node.get_logger().info(f"Uploading animation named '{animation.name}' to {self.robot_name}")
+        self.node.get_logger().info(f"Uploading animation named '{animation.name}' to {self.robot_name}")
         request = UploadAnimation.Request()
         request.animation_proto_serialized = animation.SerializeToString()
         request.animation_name = animation.name
 
         future = self._upload_animation_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False, "Call to wait_for_future timed out"
         response = future.result()
         if not response.success:
-            self._node.get_logger().info(
+            self.node.get_logger().info(
                 f"Uploading proto animation '{animation.name}' to '{self.robot_name}' failed. Msg: {response.message}."
             )
             return False, response.message
@@ -1015,14 +992,14 @@ class SpotBasic(object):
 
     def list_all_dances(self) -> tuple[bool, str, list[str]]:
         """Get list of all the dances uploaded on Spot"""
-        self._node.get_logger().info(f"Sending list dances request to {self.robot_name}")
+        self.node.get_logger().info(f"Sending list dances request to {self.robot_name}")
         request = ListAllDances.Request()
         future = self._list_all_dances_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False, "Call to wait_for_future timed out", []
         response = future.result()
         if not response.success:
-            self._node.get_logger().debug(
+            self.node.get_logger().debug(
                 f"Request to list dances at '{self.robot_name}' failed. Msg: {response.message}."
             )
             return False, response.message, []
@@ -1030,14 +1007,14 @@ class SpotBasic(object):
 
     def list_all_moves(self) -> tuple[bool, str, list[str]]:
         """Get list of all the moves uploaded on Spot"""
-        self._node.get_logger().info(f"Sending list moves request to {self.robot_name}")
+        self.node.get_logger().info(f"Sending list moves request to {self.robot_name}")
         request = ListAllMoves.Request()
         future = self._list_all_moves_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False, "Call to wait_for_future timed out", []
         response = future.result()
         if not response.success:
-            self._node.get_logger().debug(
+            self.node.get_logger().debug(
                 f"Request to list moves at '{self.robot_name}' failed. Msg: {response.message}."
             )
             return False, response.message, []
@@ -1047,11 +1024,11 @@ class SpotBasic(object):
         request = ChoreographyStartRecordingState.Request()
         request.duration_seconds = duration
         future = self._start_recording_state_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False, "Call to wait_for_future timed out"
         response = future.result()
         if not response.success:
-            self._node.get_logger().error(f"Failed to start recording state. Msg: {response.message}.")
+            self.node.get_logger().error(f"Failed to start recording state. Msg: {response.message}.")
             return False, response.message
         return True, "success"
 
@@ -1059,11 +1036,11 @@ class SpotBasic(object):
         request = ChoreographyStopRecordingState.Request()
 
         future = self._stop_recording_state_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False, "Call to wait_for_future timed out"
         response = future.result()
         if not response.success:
-            self._node.get_logger().error(f"Failed to stop recording state. Msg: {response.message}.")
+            self.node.get_logger().error(f"Failed to stop recording state. Msg: {response.message}.")
             return False, response.message
         return True, "success"
 
@@ -1077,7 +1054,7 @@ class SpotBasic(object):
         """
         request = ListSounds.Request()
         future = self._list_sounds_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False, "Call to wait_for_future timed out", []
         response = future.result()
         return response.success, response.message, response.names
@@ -1094,7 +1071,7 @@ class SpotBasic(object):
         request.name = name
         request.wav_path = wav_path
         future = self._load_sound_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False, "Call to wait_for_future timed out"
         response = future.result()
         return response.success, response.message
@@ -1111,7 +1088,7 @@ class SpotBasic(object):
         request.name = name
         request.volume_multiplier = volume_multiplier
         future = self._play_sound_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False, "Call to wait_for_future timed out"
         response = future.result()
         return response.success, response.message
@@ -1127,7 +1104,7 @@ class SpotBasic(object):
         request = DeleteSound.Request()
         request.name = name
         future = self._delete_sound_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False, "Call to wait_for_future timed out"
         response = future.result()
         return response.success, response.message
@@ -1142,7 +1119,7 @@ class SpotBasic(object):
         """
         request = GetVolume.Request()
         future = self._get_volume_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False, "Call to wait_for_future timed out", 0
         response = future.result()
         return response.success, response.message, response.volume
@@ -1158,7 +1135,7 @@ class SpotBasic(object):
         request = SetVolume.Request()
         request.volume = volume
         future = self._set_volume_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False, "Call to wait_for_future timed out"
         response = future.result()
         return response.success, response.message
@@ -1169,15 +1146,15 @@ class SpotBasic(object):
         Returns:
             True if the command succeeded, False otherwise
         """
-        self._node.get_logger().info(f"Setting locomotion_mode to '{l_hint}' for {self.robot_name}")
+        self.node.get_logger().info(f"Setting locomotion_mode to '{l_hint}' for {self.robot_name}")
         request = SetLocomotion.Request()
         request.locomotion_mode = int(l_hint)
         future = self._locomotion_mode_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False
         response = future.result()
         if not response.success:
-            self._node.get_logger().debug(
+            self.node.get_logger().debug(
                 f"Setting locomotion_mode to '{l_hint}' for {self.robot_name} failed. Msg: {response.message}."
             )
             return False
@@ -1189,15 +1166,15 @@ class SpotBasic(object):
         Returns:
             True if the command succeeded, False otherwise
         """
-        self._node.get_logger().info(f"Setting max_velocity to '{velocity_limit}' for {self.robot_name}")
+        self.node.get_logger().info(f"Setting max_velocity to '{velocity_limit}' for {self.robot_name}")
         request = SetVelocity.Request()
         request.velocity = velocity_limit
         future = self._max_velocity_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False
         response = future.result()
         if not response.success:
-            self._node.get_logger().debug(
+            self.node.get_logger().debug(
                 f"Setting stair_mode to '{velocity_limit}' for {self.robot_name} failed. Msg: {response.message}."
             )
             return False
@@ -1209,15 +1186,15 @@ class SpotBasic(object):
         Returns:
             True if the command succeeded, False otherwise
         """
-        self._node.get_logger().info(f"Clearing behavior fault {bid} for {self.robot_name}")
+        self.node.get_logger().info(f"Clearing behavior fault {bid} for {self.robot_name}")
         request = ClearBehaviorFault.Request()
         request.id = bid
         future = self._clear_behavior_fault_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False
         response = future.result()
         if not response.success:
-            self._node.get_logger().debug(
+            self.node.get_logger().debug(
                 f"Clearing behavior fault {bid} for {self.robot_name} failed. Msg: {response.message}"
             )
             return False
@@ -1227,7 +1204,7 @@ class SpotBasic(object):
         """Calls the SetLocalization RPC through spot_ros2.
         The 'waypoint_id' is only necessary if 'method'
         is 'waypoint'"""
-        self._node.get_logger().info("Set localization")
+        self.node.get_logger().info("Set localization")
         method_choices = {"fiducial", "waypoint"}
         if method not in method_choices:
             raise ValueError(f"Invalid localization method {method}.Must be in {method_choices}")
@@ -1236,16 +1213,16 @@ class SpotBasic(object):
         if request.method == "waypoint":
             request.waypoint_id = waypoint_id
         future = self._graph_nav_set_localization_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False
         response: GraphNavSetLocalization.Response = future.result()
         return response.success
 
     def get_localization_pose(self) -> Optional[geometry_msgs.msg.Pose]:
-        self._node.get_logger().info("Get localization pose")
+        self.node.get_logger().info("Get localization pose")
         request = GraphNavGetLocalizationPose.Request()
         future = self._graph_nav_get_localization_pose_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return None
         response = future.result()
         if not response.success:
@@ -1255,31 +1232,31 @@ class SpotBasic(object):
     get_localization = get_localization_pose
 
     def upload_graph(self, upload_filepath: str) -> bool:
-        self._node.get_logger().info("Upload graph")
+        self.node.get_logger().info("Upload graph")
         request = GraphNavUploadGraph.Request()
         request.upload_filepath = upload_filepath
         future = self._graph_nav_upload_graph_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False
         response = future.result()
         return response.success
 
     def clear_graph(self) -> bool:
-        self._node.get_logger().info("Clear graph")
+        self.node.get_logger().info("Clear graph")
         request = GraphNavClearGraph.Request()
         future = self._graph_nav_clear_graph_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return False
         response = future.result()
         return response.success
 
     def list_graph(self, upload_filepath: str) -> List[str]:
         """Request a list of waypoint ids"""
-        self._node.get_logger().info(f"List graph {upload_filepath} for {self.robot_name}")
+        self.node.get_logger().info(f"List graph {upload_filepath} for {self.robot_name}")
         request = ListGraph.Request()
         request.upload_filepath = upload_filepath
         future = self._list_graph_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return []
         response = future.result()
         return response.waypoint_ids
@@ -1303,11 +1280,11 @@ class SpotBasic(object):
 
         TODO: make this more robust and user intuitive
         """
-        self._node.get_logger().info(f"List world objects for {self.robot_name}")
+        self.node.get_logger().info(f"List world objects for {self.robot_name}")
         request = ListWorldObjects.Request()
         request.request = p_request
         future = self._list_world_objects_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return None
         response = future.result()
         return response.response
@@ -1318,11 +1295,11 @@ class SpotBasic(object):
         Returns:
             True if the spot has an arm, False if it does not, and None if the query failed
         """
-        self._node.get_logger().info(f"Checking if {self.robot_name} has an arm")
+        self.node.get_logger().info(f"Checking if {self.robot_name} has an arm")
         request = GetParameters.Request()
         request.names = ["has_arm"]
         future = self._get_parameters_client.call_async(request)
-        if not wait_for_future(future):
+        if not wait_for_future(future, context=self.node.context):
             return None
         response = future.result()
         param = response.values[0]
@@ -1345,7 +1322,7 @@ class SpotBasic(object):
             # TODO: What to return on a dry run? Just success?
             return None
 
-        handle = SpotActionHandle(robot_name=self._robot_name, command_name=command_name)
+        handle = SpotActionHandle(robot_name=self._robot_name, command_name=command_name, context=self.node.context)
         if result_callback is not None:
             handle.set_result_callback(result_callback)
         if on_failure_callback is not None:
@@ -1384,7 +1361,7 @@ class SpotBasic(object):
         if request is None:
             raise ValueError("Request must not be None!")
 
-        handle = SpotServiceHandle(robot_name=self._robot_name, service_name=service_name)
+        handle = SpotServiceHandle(robot_name=self._robot_name, service_name=service_name, context=self.node.context)
 
         if result_callback is not None:
             handle.set_result_callback(result_callback)
@@ -1485,7 +1462,7 @@ class SpotBasic(object):
         Returns:
             A handle for the asynchronous lifecycle of the service
         """
-        self._node.get_logger().info(f"Trigger command '{service_name}' for {self.robot_name}")
+        self.node.get_logger().info(f"Trigger command '{service_name}' for {self.robot_name}")
         return self._send_service_request_async(
             service_name=service_name,
             request=request,
@@ -1512,7 +1489,7 @@ class SpotBasic(object):
         See https://github.com/bdaiinstitute/spot_ros2/blob/main/spot_msgs/action/RobotCommand.action
         """
         if not self.has_arm():
-            self._node.get_logger().error("Cannot send Manipulation api request, robot has no arm.")
+            self.node.get_logger().error("Cannot send Manipulation api request, robot has no arm.")
             return None
 
         failed = False
@@ -1545,7 +1522,7 @@ class SpotBasic(object):
         on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         if not self.has_arm():
-            self._node.get_logger().error("Cannot send Manipulation api request, robot has no arm.")
+            self.node.get_logger().error("Cannot send Manipulation api request, robot has no arm.")
             return None
         return self._send_action_goal_async(
             command_name,
@@ -1559,7 +1536,7 @@ class SpotBasic(object):
     def _draw_arrow(self, frame_id: str, ns: str, frame_t_arrow: SE2 | SE3, color: Color) -> None:
         """Draw an arrow in RVIZ"""
         marker = Marker()
-        marker.header.stamp = self._node.get_clock().now().to_msg()
+        marker.header.stamp = self.node.get_clock().now().to_msg()
         marker.header.frame_id = frame_id
         marker.id = 0
         marker.ns = ns
@@ -1611,9 +1588,8 @@ class SpotBasic(object):
             timeout: The time to wait for the transform to become available if the transform_time is beyond the most
                 recent transform in the buffer.
             wait_for_frames: If true, waits timeout amount of time for a path to exist from frame_a to frame_b in the
-                buffer.  If false, this will return immediately if a path does not exist even if timeout is not
-                None.  Note that wait_for_transform can be used to wait indefinitely for a transform to become
-                available.
+                buffer. If false, this will return immediately if a path does not exist even if timeout is not
+                None.
         Returns:
             The timestamp from the latest recorded transform frame_a_t_frame_b
         Raises:
@@ -1825,7 +1801,7 @@ class SpotBasic(object):
         Returns:
             An Action.Goal representing the command for a spot to walk to a specific goal location
         """
-        self._node.get_logger().info("Walking to goal...")
+        self.node.get_logger().info("Walking to goal...")
 
         if self._rviz:
             self._draw_arrow(
@@ -1911,7 +1887,7 @@ class SpotBasic(object):
         Returns:
             An Action.Goal representing the command for a spot to walk to a specific goal location
         """
-        self._node.get_logger().info("Moving to goal orientation...")
+        self.node.get_logger().info("Moving to goal orientation...")
 
         gravbody_r_goal = UnitQuaternion(gravbody_r_goal)
         footprint_R_body = to_euler_zxy(
@@ -2219,13 +2195,13 @@ class SpotBasic(object):
         if duration is None:
             self._publish_velocity_cmd(body_velocity)
         else:
-            rate_timer = self._node.create_rate(rate)
-            start_time = self._node.get_clock().now()
-            dt = self._node.get_clock().now() - start_time
+            rate_timer = self.node.create_rate(rate)
+            start_time = self.node.get_clock().now()
+            dt = self.node.get_clock().now() - start_time
             while dt.nanoseconds * 1e-9 < duration:
                 self._publish_velocity_cmd(body_velocity)
                 rate_timer.sleep()
-                dt = self._node.get_clock().now() - start_time
+                dt = self.node.get_clock().now() - start_time
 
     def _publish_velocity_cmd(self, body_velocity: Twist2) -> None:
         velocity_cmd_msg = Twist()
@@ -2249,7 +2225,7 @@ class SpotBasic(object):
             interpolation: method used to interpolate between sampled poses (0 = none, 1 = linear, 2 = cubic)
             base_frame: frame that the trajectory poses are specified in
         """
-        self._node.get_logger().info("Walking along commanded trajectory...")
+        self.node.get_logger().info("Walking along commanded trajectory...")
 
         proto_goal = timestamped_se2_vecs_to_robot_command_proto(
             *frame_t_trajectory(timestep_sec=timestep_sec, with_timestamps=True),
@@ -3518,15 +3494,15 @@ class SpotBasic(object):
             on_failure_callback=on_failure_callback,
         )
 
-    def grasp_in_image(
+    def _grasp_in_image(
         self,
         pixel_xy: List[float],
         image_timestamp: Union[Time, float],
         camera_data: CameraInfo,
         palm_placement_ratio: float,
-        apply_grasp_params_func: Optional[Callable] = None,
-    ) -> Optional[ManipulationApiFeedbackResponse]:
-        """Grasp an item in an image taken with a camera on spot.
+        apply_grasp_params_func: Optional[Callable],
+    ) -> manipulation_api_pb2.ManipulationApiRequest:
+        """Create protobug for grasping an item in an image taken with a camera on spot.
 
         Args:
             pixel_xy: The point in the image where spot will do object detection,
@@ -3542,9 +3518,8 @@ class SpotBasic(object):
                 (see https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html?highlight=pickobjectinimage#graspparams)
 
         Returns:
-            An ManipulationApiFeedbackResponse if the robot has an arm.
-        """  # noqa: E501
-
+            The protobuf
+        """
         # Build manipulation command.
         pinhole_model = image_pb2.ImageSource.PinholeModel()
         pinhole_model.intrinsics.focal_length.x = camera_data.k[0]
@@ -3571,8 +3546,37 @@ class SpotBasic(object):
             apply_grasp_params_func(grasp)
 
         # Build the proto.
-        grasp_request = manipulation_api_pb2.ManipulationApiRequest(pick_object_in_image=grasp)
+        return manipulation_api_pb2.ManipulationApiRequest(pick_object_in_image=grasp)
 
+    def grasp_in_image(
+        self,
+        pixel_xy: List[float],
+        image_timestamp: Union[Time, float],
+        camera_data: CameraInfo,
+        palm_placement_ratio: float,
+        apply_grasp_params_func: Optional[Callable] = None,
+    ) -> Optional[ManipulationApiFeedbackResponse]:
+        """Grasp an item in an image taken with a camera on spot.
+
+        Args:
+            pixel_xy: The point in the image where spot will do object detection,
+                and then grasp the object.
+            camera_data: Camera data associate with the image spot took.
+            image_timestamp: Uses the timestamp to get retrieve the associated transformation tree snapshot.
+            palm_placement_ratio: a float [0.0, 1.0] that indicates how far
+                in the edge of the object is into the palm cavity.
+                (0.0 will place the base of palm with camera against the object,
+                1.0 will be a 'finger pinch')
+            apply_grasp_params_func: A helper function that will apply grasp parameters
+                to modify default grasping behavior.
+                (see https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html?highlight=pickobjectinimage#graspparams)
+
+        Returns:
+            An ManipulationApiFeedbackResponse if the robot has an arm.
+        """  # noqa: E501
+        grasp_request = self._grasp_in_image(
+            pixel_xy, image_timestamp, camera_data, palm_placement_ratio, apply_grasp_params_func
+        )
         action_goal = self._convert_proto_to_manip_cmd_action_goal(grasp_request)
         return self.manipulation("grasp_in_image", action_goal, 10.0)
 
@@ -3583,6 +3587,7 @@ class SpotBasic(object):
         camera_data: CameraInfo,
         palm_placement_ratio: float,
         apply_grasp_params_func: Optional[Callable] = None,
+        *,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[], None]] = None,
@@ -3608,30 +3613,9 @@ class SpotBasic(object):
         Returns:
             An ManipulationApiFeedbackResponse if the robot has an arm.
         """  # noqa: E501
-
-        # Build manipulation command.
-        pinhole_model = image_pb2.ImageSource.PinholeModel()
-        pinhole_model.intrinsics.focal_length.x = camera_data.k[0]
-        pinhole_model.intrinsics.focal_length.y = camera_data.k[4]
-        pinhole_model.intrinsics.principal_point.x = camera_data.k[2]
-        pinhole_model.intrinsics.principal_point.y = camera_data.k[5]
-
-        pick_vec = geometry_pb2.Vec2(x=pixel_xy[0], y=pixel_xy[1])
-        grasp = manipulation_api_pb2.PickObjectInImage(
-            pixel_xy=pick_vec,
-            transforms_snapshot_for_camera=self._get_basic_tform_tree_snapshot(image_timestamp),
-            frame_name_image_sensor=camera_data.header.frame_id,
-            camera_model=pinhole_model,
+        grasp_request = self._grasp_in_image(
+            pixel_xy, image_timestamp, camera_data, palm_placement_ratio, apply_grasp_params_func
         )
-
-        # We can specify where in the gripper we want to grasp.
-        grasp.grasp_params.grasp_palm_to_fingertip = palm_placement_ratio
-
-        if apply_grasp_params_func is not None:
-            apply_grasp_params_func(grasp)
-
-        # Build the proto.
-        grasp_request = manipulation_api_pb2.ManipulationApiRequest(pick_object_in_image=grasp)
 
         action_goal = self._convert_proto_to_manip_cmd_action_goal(grasp_request)
         return self.manipulation_async(
@@ -3802,24 +3786,16 @@ class SpotBasic(object):
             timeout_sec=2.0,
         )
 
-    def shutdown(self) -> None:
-        """Shutdown all the internal components"""
-        self._node.shutdown()
 
-    def __del__(self) -> None:
-        """Destructor"""
-        self.shutdown()
-
-
-def main() -> None:
-    rclpy.init()
-
+def cli() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("robot_name", help="Name of the robot if the ROS driver is inside that namespace")
-    args = parser.parse_args()
+    return parser
 
-    node = rclpy.create_node("spot_basic_cli")
-    spot_basic = SpotBasic(robot_name=args.robot_name, parent_node_name=node.get_name())
+
+@ros_process.main(cli())
+def main(args: argparse.Namespace) -> None:
+    spot_basic = SpotBasic(args.robot_name)
 
     while rclpy.ok():
         cmd = input("Please enter a command:\n" + " ".join(SpotBasic.TRIGGER_SERVICES) + " exit\n> ")
@@ -3830,10 +3806,6 @@ def main() -> None:
             print(f"Error with command: {cmd}")
         else:
             print(f"Successfully executed command: {cmd}")
-
-    spot_basic.shutdown()
-    node.destroy_node()
-    rclpy.shutdown()
 
 
 if __name__ == "__main__":

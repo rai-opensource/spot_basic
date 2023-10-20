@@ -1,6 +1,7 @@
+import argparse
 import time
 
-import rclpy
+import bdai_ros2_wrappers.process as ros_process
 from spot_utilities.spot_basic import SpotBasic
 
 """ This is a test script to demo gazing at a point in space with the body.
@@ -13,28 +14,25 @@ Use:
 """
 
 
-def main() -> None:
+def cli() -> argparse.ArgumentParser:
     """Command-line interface."""
-    import argparse
-
-    ###############################################
-    # Boiler plate code
     parser = argparse.ArgumentParser()
     parser.add_argument("robot", help="Name of the robot.")
     parser.add_argument("asynchronous", help="Flag to exercise the async code.", action=argparse.BooleanOptionalAction)
-    options = parser.parse_args()
+    return parser
 
-    robot_name = options.robot
 
-    rclpy.init()
-    node = rclpy.create_node("gaze_at_example")
-    spot = SpotBasic(robot_name, parent_node_name=node.get_name())
+@ros_process.main(cli())
+def main(args: argparse.Namespace) -> None:
+    ###############################################
+    # Boiler plate code
+    spot = SpotBasic(args.robot)
     spot.initialize_robot()
     ###############################################
 
     # gaze at the origin of the vision frame, which should be where the robot started
     target_point = [0, 0, 0]
-    if options.asynchronous:
+    if args.asynchronous:
         print("Doing async arm gaze ...")
         spot.arm_gaze_at_async(
             point=target_point,
@@ -46,13 +44,6 @@ def main() -> None:
         spot.arm_gaze_at(point=target_point, frame=spot.FrameHint.VISION)
     time.sleep(5.0)
     print("TADA!")
-
-    ###############################################
-    # Boiler plate code
-    spot.shutdown()
-    node.destroy_node()
-    rclpy.shutdown()
-    ###############################################
 
 
 if __name__ == "__main__":

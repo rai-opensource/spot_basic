@@ -2,7 +2,7 @@
 import argparse
 import time
 
-import rclpy
+import bdai_ros2_wrappers.process as ros_process
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 from spot_utilities.spot_basic import SpotBasic
 from spot_utilities.spot_vision import CameraLocation, SpotImages
@@ -21,10 +21,8 @@ Use:
 """
 
 
-def main() -> None:
-    rclpy.init()
+def cli() -> argparse.ArgumentParser:
     """Command-line interface."""
-
     parser = argparse.ArgumentParser()
     parser.add_argument("robot", help="Name of the robot if the ROS driver is inside that namespace.")
     parser.add_argument(
@@ -33,23 +31,22 @@ def main() -> None:
         help=f"Choose a camera to get the image:\n{[e.value for e in CameraLocation]}.",
         default="frontleft",
     )
-    options = parser.parse_args()
+    return parser
 
+
+@ros_process.main(cli())
+def main(args: argparse.Namespace) -> None:
     ###############################################
     # Boiler plate code
-    node = rclpy.create_node("image_example")
-    spot = SpotBasic(options.robot, parent_node_name=node.get_name())
-    tf = TFListenerWrapper(
-        spot.robot_name + "_tf",
-        cache_time_s=30,
-        wait_for_transform=[spot.body_frame_name, spot.vision_frame_name],
-    )
+    spot = SpotBasic(args.robot)
+    tf = TFListenerWrapper(cache_time_s=30)
+    tf.wait_for_a_tform_b(spot.body_frame_name, spot.vision_frame_name)
     spot.set_tf_listener(tf)
-    cam_loc = CameraLocation(options.camera_location)
+    cam_loc = CameraLocation(args.camera_location)
     time.sleep(1.0)
     ###############################################
 
-    spot_images = SpotImages(node_name="spot_images", use_registered_depth=True)
+    spot_images = SpotImages(use_registered_depth=True)
 
     spot_images.display_pointcloud(cam_loc, spot, 10.0)
 
@@ -61,13 +58,6 @@ def main() -> None:
     [rgb, depth] = spot_images.rbg_and_depth_camera_from_location(cam_loc)
     spot_images.display_image(rgb, spot, rotation_angle=rotation_angle, timeout_sec=5.0)
     spot_images.display_image(depth, spot, rotation_angle=rotation_angle, timeout_sec=5.0)
-
-    ###############################################
-    # Boiler plate code
-    spot.shutdown()
-    node.destroy_node()
-    rclpy.shutdown()
-    ###############################################
 
 
 if __name__ == "__main__":

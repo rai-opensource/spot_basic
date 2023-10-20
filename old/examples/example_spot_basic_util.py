@@ -4,27 +4,22 @@ Super basic examples of using utility functions in spot_basic_util
 """
 import argparse
 
-import rclpy
+import bdai_ros2_wrappers.process as ros_process
 from spot_utilities.spot_basic_util import create_spot_basic_with_tf
 
 
-def main() -> None:
-    rclpy.init()
-
+def cli() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("robot", help="Name of the robot if the ROS driver is inside that namespace.")
-    options = parser.parse_args()
+    return parser
 
-    node = rclpy.create_node("example_spot_basic_util")
 
-    spot = create_spot_basic_with_tf(options.robot, node)
-    spot.initialize_robot()
-    spot.ready_arm()
-    spot.stow_arm()
-
-    spot.shutdown()
-    node.destroy_node()
-    rclpy.shutdown()
+@ros_process.main(cli())
+def main(args: argparse.Namespace) -> None:
+    spot = create_spot_basic_with_tf(args.robot)
+    if spot.initialize_robot():
+        spot.ready_arm()
+        spot.stow_arm()
 
 
 if __name__ == "__main__":

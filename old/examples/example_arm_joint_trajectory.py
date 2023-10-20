@@ -3,31 +3,32 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 import time
 from threading import Event
 from typing import Any, Optional, Sequence
 
+import bdai_ros2_wrappers.process as ros_process
 import numpy as np
-import rclpy
 from bdai_ros.utilities.manual_conversions import list_to_arm_joint_map
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
+from bdai_ros2_wrappers.utilities import fqn
 from bosdyn.client.frame_helpers import BODY_FRAME_NAME
-from rclpy.node import Node
 from spatialmath import SE3
 from spot_utilities.spot_basic import SpotBasic
 from spot_utilities.spot_dataclasses import ArmJointMap
 
 
-class SpotRunner(Node):
+class SpotRunner:
     """Class to run the Spot robot."""
 
     def __init__(
         self,
-        options: argparse.Namespace,
+        robot_name: str,
         root_frame_name: Optional[str] = None,
     ):
-        super().__init__("spot_runner", namespace=options.robot)
+        self.logger = logging.getLogger(fqn(self.__class__))
 
         self.root_frame_name = root_frame_name
 
@@ -37,21 +38,20 @@ class SpotRunner(Node):
         self._practice_config = list_to_arm_joint_map(self._practice_config_list)
         self.num_arm_joints = 6
 
-        self._robot = SpotBasic(robot_name=options.robot, parent_node_name=self.get_name())
-        self._tf_listener = TFListenerWrapper(
-            "joint_trajectory_tf", wait_for_transform=[self._robot.body_frame_name, self._robot.hand_frame_name]
-        )
+        self._robot = SpotBasic(robot_name)
+        self._tf_listener = TFListenerWrapper()
+        self._tf_listener.wait_for_a_tform_b(self._robot.body_frame_name, self._robot.hand_frame_name)
 
     def initialize_robot(self) -> None:
         self._robot.initialize_robot()
-        self.get_logger().info("Standing robot up")
+        self.logger.info("Standing robot up")
         self._robot.stand()
-        self.get_logger().info("Successfully stood up.")
+        self.logger.info("Successfully stood up.")
 
         # Move the arm to a specific location
-        self.get_logger().info("Moving arm to start config")
+        self.logger.info("Moving arm to start config")
         self._robot.stow_arm()
-        self.get_logger().info("Successfully moved arm to starting config")
+        self.logger.info("Successfully moved arm to starting config")
 
     def get_odom_to_hand_tf(self) -> SE3:
         return self._tf_listener.lookup_a_tform_b(self._robot.odom_frame_name, self._robot.hand_frame_name)
@@ -69,7 +69,7 @@ class SpotRunner(Node):
         joint_velocities: Optional[Sequence[ArmJointMap]] = None,
         ref_time: Optional[float] = None,
     ) -> None:
-        self.get_logger().info("Moving arm along trajectory")
+        self.logger.info("Moving arm along trajectory")
         """Invokes the arm follow some joint trajectory.
 
         Args:
@@ -90,14 +90,14 @@ class SpotRunner(Node):
             max_acc=self._max_acc,
             max_vel=self._max_vel,
         )
-        self.get_logger().info("Completed!")
+        self.logger.info("Completed!")
 
     def move_arm_to_joint_angles(
         self,
         joint_angles: Optional[ArmJointMap],
         time_since_reference_secs: Optional[float] = None,
     ) -> None:
-        self.get_logger().info("Moving arm to joint position")
+        self.logger.info("Moving arm to joint position")
         """Moves the arm to a specific set of joint angles.
 
         Args:
@@ -110,7 +110,7 @@ class SpotRunner(Node):
             joint_angles=joint_angles,
             time_since_reference_secs=time_since_reference_secs,
         )
-        self.get_logger().info("Completed!")
+        self.logger.info("Completed!")
 
     def test_run(self) -> None:
         # Test a variety of behaviours
@@ -172,7 +172,7 @@ class SpotRunner(Node):
         try:
             self.move_arm_along_joint_trajectory(joint_angles=joint_moves, times=times)
         except Exception as e:
-            self.get_logger().info(str(e))
+            self.logger.info(str(e))
 
         self.move_arm_to_start_config()
         time.sleep(1.0)
@@ -227,29 +227,25 @@ class SpotRunner(Node):
         """Moves the arm to the preferred starting configuration."""
         self.move_arm_to_joint_angles(joint_angles=self._practice_config)
 
-    def shutdown(self) -> None:
-        self._tf_listener.shutdown()
 
-
-def main() -> int:
-    rclpy.init()
+def cli() -> argparse.ArgumentParser:
     """Command-line interface."""
-
     parser = argparse.ArgumentParser()
     parser.add_argument("robot", help="Name of the robot if the ROS driver is inside that namespace")
-    options = parser.parse_args()
+    return parser
 
+
+@ros_process.main(cli())
+def main(args: argparse.Namespace) -> int:
     spot_runner = SpotRunner(
-        options,
+        args.robot,
         root_frame_name=BODY_FRAME_NAME,
     )
     spot_runner.initialize_robot()
 
-    spot_runner.get_logger().info("Check")
+    spot_runner.logger.info("Check")
 
     spot_runner.test_run()
-
-    spot_runner.shutdown()
     return 0
 
 

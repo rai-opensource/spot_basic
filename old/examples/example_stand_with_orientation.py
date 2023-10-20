@@ -1,8 +1,7 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 import argparse
 
-import rclpy
-from bdai_ros2_wrappers.node import NodeWrapper
+import bdai_ros2_wrappers.process as ros_process
 from spatialmath import SE3, SO3
 from spot_utilities.spot_basic_util import create_spot_basic_with_tf
 
@@ -16,15 +15,15 @@ To run this program:
 """
 
 
-def main() -> None:
-    rclpy.init()
-
+def cli() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("robot", help="Name of the robot if the ROS driver is inside that namespace")
-    options = parser.parse_args()
+    return parser
 
-    node = NodeWrapper("reproduce_stand_with_orientation_yaw_problem_", spin_thread=True)
-    spot = create_spot_basic_with_tf(options.robot, node)
+
+@ros_process.main(cli())
+def main(args: argparse.Namespace) -> None:
+    spot = create_spot_basic_with_tf(args.robot)
 
     # Let's define the goal poses in body frame.
     body_t_goals = [
@@ -48,10 +47,6 @@ def main() -> None:
 
     for gravbody_r_orien in gravbody_r_routine:
         spot.stand_with_orientation(gravbody_r_orien, body_height)
-
-    spot.shutdown()
-    node.destroy_node()
-    rclpy.shutdown()
 
 
 if __name__ == "__main__":

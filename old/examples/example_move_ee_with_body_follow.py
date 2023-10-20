@@ -9,12 +9,12 @@
 # python example_move_ee_with_body_follow.py Stitch 1.0 0.1 0.25 0 15 0 --ac
 # python example_move_ee_with_body_follow.py Stitch 1.0 0.1 0.25 0 15 0
 import argparse
-import threading
 
-import rclpy
+import bdai_ros2_wrappers.process as ros_process
 import spot_driver.conversions as conv
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 from bdai_ros2_wrappers.action_client import ActionClientWrapper
+from bdai_ros2_wrappers.utilities import namespace_with
 from bosdyn.client.frame_helpers import VISION_FRAME_NAME
 from bosdyn.client.robot_command import RobotCommandBuilder
 from spatialmath import SE3, UnitQuaternion
@@ -22,7 +22,7 @@ from spot_msgs.action import RobotCommand
 from spot_utilities.spot_basic import SpotBasic
 
 
-def main() -> None:
+def cli() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Command spot body")
     parser.add_argument("robot", type=str, help="name of the robot")
     parser.add_argument(
@@ -37,21 +37,17 @@ def main() -> None:
     )
     parser.add_argument("--manual", action="store_true", help="If True, use my own code; Otherwise, use SpotBasic")
     parser.add_argument("--ac", action="store_true", help="If True, call the async method")
-    args, _ = parser.parse_known_args()
+    return parser
 
-    rclpy.init()
-    node = rclpy.create_node("move_spot_ee_body_follow")
 
-    spot_basic = SpotBasic(robot_name=args.robot, parent_node_name=node.get_name())
+@ros_process.main(cli())
+def main(args: argparse.Namespace) -> None:
+    spot_basic = SpotBasic(args.robot)
     spot_basic.initialize_robot()
 
-    t = threading.Thread(target=rclpy.spin, args=(node,))
-    t.start()
-
-    robot_command_client = ActionClientWrapper(RobotCommand, "robot_command", "robot_node", namespace=args.robot)
-    tf_listener = TFListenerWrapper(
-        "action_exec_tf", wait_for_transform=[spot_basic.body_frame_name, spot_basic.vision_frame_name]
-    )
+    robot_command_client = ActionClientWrapper(RobotCommand, namespace_with(args.robot, "robot_command"))
+    tf_listener = TFListenerWrapper()
+    tf_listener.wait_for_a_tform_b(spot_basic.body_frame_name, spot_basic.vision_frame_name)
     spot_basic.set_tf_listener(tf_listener)
 
     if len(args.body_t_hand_goal) == 3:
@@ -83,7 +79,7 @@ def main() -> None:
                     result_callback=lambda feedback: print("MOVE COMPLETE!"),
                 )
                 print("ASYNC METHOD CALLED! ROBOT MAY BE MOVING NOW.")
-                rate = node.create_rate(1 / 5.0)
+                rate = main.node.create_rate(1 / 5.0)
                 rate.sleep()
         except KeyboardInterrupt:
             spot_basic.stop()
@@ -106,12 +102,9 @@ def main() -> None:
         action_goal = RobotCommand.Goal()
         conv.convert_proto_to_bosdyn_msgs_robot_command(synchro_command, action_goal.command)
         robot_command_client.send_goal_and_wait(action_goal)
-        node.get_logger().info("movement done.")
+        main.node.get_logger().info("movement done.")
 
     spot_basic.stow_arm()
-
-    node.destroy_node()
-    rclpy.shutdown()
 
 
 if __name__ == "__main__":

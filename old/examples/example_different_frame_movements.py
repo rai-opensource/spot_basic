@@ -2,10 +2,9 @@
 """Example illustrating how to command movements in frames other than the vision frame for some functions"""
 import argparse
 import time
-from threading import Event
 
+import bdai_ros2_wrappers.process as ros_process
 import numpy as np
-import rclpy
 from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai.trajectory.spot_se2_properties import MAX_SPEED_FORWARD
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
@@ -13,20 +12,20 @@ from spatialmath import SE2, SE3, SO3
 from spot_utilities.spot_basic import SpotBasic
 
 
-def main() -> None:
+def cli() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Command spot body")
     parser.add_argument("robot", type=str, help="name of the robot")
-    args, _ = parser.parse_known_args()
+    return parser
 
-    rclpy.init()
-    node = rclpy.create_node("move_spot_ee_body_follow")
 
-    robot = SpotBasic(robot_name=args.robot, parent_node_name=node.get_name())
+@ros_process.main(cli())
+def main(args: argparse.Namespace) -> None:
+    robot = SpotBasic(args.robot)
     robot.initialize_robot()
     robot.stand()
-    Event()
 
-    tf_listener = TFListenerWrapper("action_exec_tf", wait_for_transform=[robot.body_frame_name, robot.odom_frame_name])
+    tf_listener = TFListenerWrapper()
+    tf_listener.wait_for_a_tform_b(robot.body_frame_name, robot.odom_frame_name)
     robot.set_tf_listener(tf_listener)
     robot.stow_arm()
 
@@ -65,13 +64,10 @@ def main() -> None:
 
     except Exception as e:
         # If something happens, have the robot stop
-        node.get_logger().error(str(e))
+        main.node.get_logger().error(str(e))
         robot.stop()
-
-    robot.stow_arm()
-
-    node.destroy_node()
-    rclpy.shutdown()
+    finally:
+        robot.stow_arm()
 
 
 if __name__ == "__main__":

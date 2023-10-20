@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 #  Copyright (c) 2023 Boston Dynamics AI Institute Inc.  All rights reserved.
+import argparse
 import sys
-from argparse import ArgumentParser
 
-import rclpy
+import bdai_ros2_wrappers.process as ros_process
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
-from rclpy.node import Node
 from spot_utilities.spot_basic import SpotBasic
 
 """This example demonstrates using the WalkToObjectRayInWorld manipulation API request from the spot-sdk through the 
@@ -15,21 +14,17 @@ from spot_utilities.spot_basic import SpotBasic
 """
 
 
-def main() -> int:
-    parser = ArgumentParser(description="Example for running the WalkToObjectRayInWorld command")
+def cli() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Example for running the WalkToObjectRayInWorld command")
     parser.add_argument("robot", type=str, help="name of the robot")
-    args, ros_args = parser.parse_known_args()
+    return parser
 
-    rclpy.init(args=ros_args)
 
-    node = Node("walk_to_object_ray_in_world")
-
-    spot = SpotBasic(robot_name=args.robot, parent_node_name=node.get_name())
-    tf = TFListenerWrapper(
-        node.get_name() + "_tf",
-        cache_time_s=30,
-        wait_for_transform=[spot.body_frame_name, spot.vision_frame_name],
-    )
+@ros_process.main(cli())
+def main(args: argparse.Namespace) -> int:
+    spot = SpotBasic(robot_name=args.robot)
+    tf = TFListenerWrapper(cache_time_s=30)
+    tf.wait_for_a_tform_b(spot.body_frame_name, spot.vision_frame_name)
     spot.set_tf_listener(tf)
     spot.initialize_robot()
 
@@ -51,10 +46,6 @@ def main() -> int:
         )
     except KeyboardInterrupt:
         pass
-    finally:
-        node.destroy_node()
-        spot.shutdown()
-        rclpy.try_shutdown()
 
     return 0
 

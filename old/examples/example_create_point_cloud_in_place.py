@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+import argparse
 import time
 
+import bdai_ros2_wrappers.process as ros_process
 import open3d as o3d
-import rclpy
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 from spot_utilities.spot_basic import SpotBasic
 from spot_utilities.spot_vision import CameraLocation, create_point_cloud_in_place
@@ -21,12 +22,11 @@ Example command:
 If -C is not provided, pointcloud from all cameras will be grabbed.
 """
 
+
 AVAILABLE_CAMERA_NAMES = [loc.value for loc in CameraLocation]
 
 
-def main() -> None:
-    import argparse
-
+def cli() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("robot", help="Name of the robot if the ROS driver is inside that namespace.")
     parser.add_argument(
@@ -37,29 +37,22 @@ def main() -> None:
         choices=AVAILABLE_CAMERA_NAMES,
         default=AVAILABLE_CAMERA_NAMES,
     )
-    options = parser.parse_args()
+    return parser
 
-    rclpy.init()
-    node = rclpy.create_node("create_point_cloud_in_place_example")
 
-    spot = SpotBasic(options.robot, parent_node_name=node.get_name())
+@ros_process.main(cli())
+def main(args: argparse.Namespace) -> None:
+    spot = SpotBasic(args.robot)
     spot.initialize_robot()
 
-    tf = TFListenerWrapper(
-        spot.robot_name + "_tf",
-        cache_time_s=30,
-        wait_for_transform=[spot.body_frame_name, spot.vision_frame_name],
-    )
+    tf = TFListenerWrapper(cache_time_s=30)
+    tf.wait_for_a_tform_b(spot.body_frame_name, spot.vision_frame_name)
     spot.set_tf_listener(tf)
     time.sleep(1.0)
 
-    camera_locations = [CameraLocation(loc) for loc in options.cameras]
+    camera_locations = [CameraLocation(loc) for loc in args.cameras]
     pcd = create_point_cloud_in_place(spot, camera_locations, timeout_sec=15, down_voxel_size=0.02)
     o3d.visualization.draw_geometries([pcd])
-
-    spot.shutdown()
-    node.destroy_node()
-    rclpy.shutdown()
 
 
 if __name__ == "__main__":

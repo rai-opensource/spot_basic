@@ -1,17 +1,18 @@
 #  Copyright (c) 2023 Boston Dynamics AI Institute, Inc. All rights reserved.
 import argparse
+import logging
 import sys
 from typing import Any
 
+import bdai_ros2_wrappers.process as ros_process
 import cv2
 import numpy as np
-import rclpy
-from bdai_ros.utilities.wait_for_message import wait_for_message
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
+from bdai_ros2_wrappers.subscription import wait_for_message
+from bdai_ros2_wrappers.utilities import fqn, namespace_with
 from bosdyn.api import manipulation_api_pb2
 from bosdyn.client.frame_helpers import BODY_FRAME_NAME, VISION_FRAME_NAME
 from cv_bridge import CvBridge
-from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image
 from spot_utilities.spot_basic import SpotBasic
 from tf2_ros import ExtrapolationException
@@ -66,85 +67,80 @@ def cv_mouse_callback(event: Any, x: float, y: float, flags: Any, param: Any) ->
         cv2.imshow(image_title, clone)
 
 
-class ObjectGrasp(Node):
-    def __init__(self, options: argparse.Namespace) -> None:
-        super().__init__("object_grasp", namespace=options.robot)
-
-        self._body_frame_name = options.robot + "/" + BODY_FRAME_NAME
-        self._vision_frame_name = options.robot + "/" + VISION_FRAME_NAME
-        self._tf_listener = TFListenerWrapper(
-            "object_grasp_tf", cache_time_s=30, wait_for_transform=[self._body_frame_name, self._vision_frame_name]
-        )
-        self._robot = SpotBasic(robot_name=options.robot, parent_node_name=self.get_name())
-        self._robot.set_tf_listener(self._tf_listener)
+class ObjectGrasp:
+    def __init__(self, robot_name: str, camera_name: str) -> None:
+        self._logger = logging.getLogger(fqn(self.__class__))
         self.cv_bridge: CvBridge = CvBridge()
+        self._camera_image_topic = namespace_with(robot_name, "camera", camera_name, "image")
+        self._camera_image_info_topic = namespace_with(robot_name, "camera", camera_name, "camera_info")
 
-        self._camera_image_topic = f"/{options.robot}/camera/{options.camera_name}/image"
-        self._camera_image_info_topic = f"/{options.robot}/camera/{options.camera_name}/camera_info"
+        self._body_frame_name = namespace_with(robot_name, BODY_FRAME_NAME)
+        self._vision_frame_name = namespace_with(robot_name, VISION_FRAME_NAME)
+        self._tf_listener = TFListenerWrapper(cache_time_s=30)
+        self._tf_listener.wait_for_a_tform_b(self._body_frame_name, self._vision_frame_name)
+
+        self._robot = SpotBasic(robot_name)
+        self._robot.set_tf_listener(self._tf_listener)
 
     def initialize_robot(self) -> bool:
         """Initializes the robot.
 
         Claims, powers on and stands up spot.
         """
-        self.get_logger().info("Claiming robot.")
+        self._logger.info("Claiming robot.")
         success = self._robot.claim()
         if not success:
             return False
-        self.get_logger().info("Claimed robot.")
+        self._logger.info("Claimed robot.")
 
         # Check if robot has arm.
         if not self._robot.has_arm():
-            self._node.get_logger().error("Robot has no arm.")
+            self._logger.error("Robot has no arm.")
             return False
 
         # Stand the robot up and stow the arm.
-        self.get_logger().info("Powering robot on.")
+        self._logger.info("Powering robot on.")
         success = self._robot.power_on()
         if not success:
             return False
 
-        self.get_logger().info("Opening gripper.")
+        self._logger.info("Opening gripper.")
         success = self._robot.claw_gripper_open()
         if not success:
             return False
 
-        self.get_logger().info("Stowing arm.")
+        self._logger.info("Stowing arm.")
         success = self._robot.stow_arm()
         if not success:
             return False
 
-        self.get_logger().info("Standing robot up.")
+        self._logger.info("Standing robot up.")
         success = self._robot.stand()
         if not success:
             return False
-        self.get_logger().info("Successfully stood up.")
+        self._logger.info("Successfully stood up.")
         return True
 
     def take_image_and_grasp(self) -> None:
         """Takes an image and attempts to grasp an object based on what the user selected."""
-        self.get_logger().info("Waiting for images...")
+        self._logger.info("Waiting for images...")
 
         # Get image.
-        (image_msg_received, image_message) = wait_for_message(
-            msg_type=Image, node=self, topic=self._camera_image_topic
-        )
+        image_message = wait_for_message(Image, self._camera_image_topic)
 
-        if image_msg_received:
-            self.get_logger().info("Got image.")
+        if image_message is not None:
+            self._logger.info("Got image.")
         else:
-            self.get_logger().error(f"Failed to get message on topic {self._camera_image_topic}")
+            self._logger.error(f"Failed to get message on topic {self._camera_image_topic}")
             return
 
         # Get camera info.
-        (cam_info_msg_received, cam_info_msg) = wait_for_message(
-            msg_type=CameraInfo, node=self, topic=self._camera_image_info_topic
-        )
+        cam_info_msg = wait_for_message(CameraInfo, self._camera_image_info_topic)
 
-        if cam_info_msg_received:
-            self.get_logger().info("Got camera info.")
+        if cam_info_msg is not None:
+            self._logger.info("Got camera info.")
         else:
-            self.get_logger().error(f"Failed to get message on topic {self._camera_image_topic}")
+            self._logger.error(f"Failed to get message on topic {self._camera_image_topic}")
             return
 
         image = self.cv_bridge.imgmsg_to_cv2(image_message, "passthrough")
@@ -161,7 +157,7 @@ class ObjectGrasp(Node):
             key = cv2.waitKey(1) & 0xFF
             if key == ord("q") or key == ord("Q"):
                 # Quit
-                self.get_logger().info("'q' pressed, exiting GUI.")
+                self._logger.info("'q' pressed, exiting GUI.")
                 cv2.destroyAllWindows()
                 return
         cv2.destroyAllWindows()
@@ -175,37 +171,28 @@ class ObjectGrasp(Node):
                 apply_grasp_params_func=_grasp_params_function,
             )
         except ExtrapolationException:
-            self.get_logger().info("Camera image expired. You waited to long to click on the image.")
-
-    def shutdown(self) -> None:
-        self._tf_listener.shutdown()
+            self._logger.info("Camera image expired. You waited to long to click on the image.")
 
 
-def main() -> int:
-    rclpy.init()
+def cli() -> argparse.ArgumentParser:
     """Command-line interface."""
-    import argparse
-
     parser = argparse.ArgumentParser()
     parser.add_argument("robot", help="Name of the robot if the ROS driver is inside that namespace.")
     parser.add_argument(
         "-c",
         "--camera-name",
+        choices=AVAILABLE_CAMERA_NAMES,
         help=f"Choose a camera to get the image {AVAILABLE_CAMERA_NAMES}.",
         default="frontleft",
     )
-    options = parser.parse_args()
+    return parser
 
-    if options.camera_name not in AVAILABLE_CAMERA_NAMES:
-        raise ValueError(
-            f"Invalid camera name '{options.camera_name}'. Select a camera name from {AVAILABLE_CAMERA_NAMES}."
-        )
 
-    goto = ObjectGrasp(options)
-    success = goto.initialize_robot()
-    if success:
+@ros_process.main(cli())
+def main(args: argparse.Namespace) -> int:
+    goto = ObjectGrasp(args.robot, args.camera_name)
+    if goto.initialize_robot():
         goto.take_image_and_grasp()
-    goto.shutdown()
     return 0
 
 
