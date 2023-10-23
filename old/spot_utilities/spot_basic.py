@@ -56,6 +56,7 @@ from bosdyn_msgs.msg import (
 )
 from geometry_msgs.msg import Twist
 from google.protobuf import wrappers_pb2
+from overrides import override
 from rcl_interfaces.srv import GetParameters
 from rclpy.action import ActionClient
 from rclpy.client import Client
@@ -103,7 +104,6 @@ from spot_utilities.spot_dataclasses import (
 )
 from std_msgs.msg import ColorRGBA as Color
 from std_srvs.srv import SetBool, Trigger
-from typing_extensions import override
 from visualization_msgs.msg import Marker
 
 
