@@ -56,7 +56,6 @@ from bosdyn_msgs.msg import (
 )
 from geometry_msgs.msg import Twist
 from google.protobuf import wrappers_pb2
-from overrides import override
 from rcl_interfaces.srv import GetParameters
 from rclpy.action import ActionClient
 from rclpy.client import Client
@@ -122,7 +121,6 @@ class SpotActionHandle(ActionHandle):
     def result(self) -> Optional[RobotCommandFeedback]:
         return self._result_internal
 
-    @override
     def set_result_callback(self, result_callback: Callable[[RobotCommandFeedback], None]) -> None:
         """Sets the callback for processing the result from executing an Action"""
         self._result_callback_internal = result_callback
@@ -138,7 +136,6 @@ class SpotActionHandle(ActionHandle):
         if self._result_callback_internal is not None:
             self._result_callback_internal(self._result_internal)
 
-    @override
     def set_feedback_callback(self, feedback_callback: Callable[[RobotCommandFeedback], None]) -> None:
         """Sets the callback for processing the feedback during execution of an Action"""
         self._feedback_callback_internal = feedback_callback
