@@ -930,7 +930,7 @@ class SpotBasic:
         """
 
         request = ExecuteDance.Request()
-        request.choreo_sequence_bytes = choreography_sequence.SerializeToString()
+        request.choreo_sequence_serialized = choreography_sequence.SerializeToString()
         future = self._execute_dance_client.call_async(request)
         if not wait_for_future(future, context=self.node.context):
             return False, "Call to wait_for_future timed out"
