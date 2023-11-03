@@ -3778,7 +3778,7 @@ class SpotBasic:
             wrist_t_tool=SE3(),
             trajectory=stationary_traj,
             stiffness=SpatialVector([0, 0, 0, 0, 0, 0]),
-            damping=SpatialVector([2.5, 2.5, 2.5, 1.0, 1.0, 1.0]),
+            damping=SpatialVector([0.25, 0.25, 0.25, 0.10, 0.10, 0.10]),
             wrench_nm=SpatialForce([0, 0, 0, 0, 0, 0]),
             timeout_sec=2.0,
         )
