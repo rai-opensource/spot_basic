@@ -45,7 +45,11 @@ from bosdyn.client.frame_helpers import (
     ODOM_FRAME_NAME,
     VISION_FRAME_NAME,
 )
-from bosdyn.client.robot_command import RobotCommandBuilder
+from bosdyn.client.robot_command import (
+    _CLAW_GRIPPER_CLOSED_ANGLE,
+    _CLAW_GRIPPER_OPEN_ANGLE,
+    RobotCommandBuilder,
+)
 from bosdyn.geometry import Quaternion, to_euler_zxy
 from bosdyn.util import seconds_to_duration
 from bosdyn_msgs.msg import (
@@ -3287,10 +3291,26 @@ class SpotBasic:
             on_failure_callback=on_failure_callback,
         )
 
-    def claw_gripper_open(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
+    def _get_goal_claw_gripper_open(self, theta_rad: Optional[float] = None) -> RobotCommand.Goal:
+        if theta_rad is not None:
+            if not (theta_rad >= _CLAW_GRIPPER_CLOSED_ANGLE and theta_rad <= abs(_CLAW_GRIPPER_OPEN_ANGLE)):
+                raise ValueError("Invalid gripper command: theta must be within range [0, pi/2]")
+            # negating theta here to match with gripper bounds from spot_sdk
+            action_goal = self._convert_proto_to_robot_cmd_action_goal(
+                RobotCommandBuilder.claw_gripper_open_angle_command(-theta_rad)
+            )
+        else:
+            action_goal = self._convert_proto_to_robot_cmd_action_goal(RobotCommandBuilder.claw_gripper_open_command())
+        return action_goal
+
+    def claw_gripper_open(
+        self, *, theta_rad: Optional[float] = None, timeout_sec: Optional[float] = None
+    ) -> Optional[RobotCommandFeedback]:
         """Send a command to open the gripper
 
         Args:
+            theta: Angle in radians (between 0 and pi/2) to open the gripper. Not passing a value defaults
+                the gripper to open completely.
             timeout_sec: A timeout for waiting on a response/result from the action server. Setting to None creates no
                 timeout
 
@@ -3298,12 +3318,13 @@ class SpotBasic:
             The feedback from the SpotDriver about the result of the command if it was accepted and a result was
                 successfully received, None otherwise
         """
-        action_goal = self._convert_proto_to_robot_cmd_action_goal(RobotCommandBuilder.claw_gripper_open_command())
+        action_goal = self._get_goal_claw_gripper_open(theta_rad)
         return self.command("claw_gripper_open", action_goal, timeout_sec)
 
     def claw_gripper_open_async(
         self,
         *,
+        theta_rad: Optional[float] = None,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[], None]] = None,
@@ -3311,6 +3332,8 @@ class SpotBasic:
         """Send a command to open the gripper asynchronously
 
         Args:
+            theta: Angle in radians (between 0 and pi/2) to open the gripper. Not passing a value defaults
+                the gripper to open completely.
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
             on_failure_callback: A callback to process/handle when the action fails for various reasons
@@ -3319,7 +3342,7 @@ class SpotBasic:
             The feedback from the SpotDriver about the result of the command if it was accepted and a result was
                 successfully received, None otherwise
         """
-        action_goal = self._convert_proto_to_robot_cmd_action_goal(RobotCommandBuilder.claw_gripper_open_command())
+        action_goal = self._get_goal_claw_gripper_open(theta_rad)
         return self.command_async(
             "claw_gripper_open",
             action_goal,
