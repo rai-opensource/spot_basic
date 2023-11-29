@@ -18,6 +18,7 @@ from bdai_ros.utilities.manual_conversions import (
     arm_joint_map_to_list,
     se3_to_se3pose_proto,
     to_ros_pose,
+    to_se3,
 )
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 from bdai_ros2_wrappers.action_client import ActionClientWrapper
@@ -241,6 +242,7 @@ class SpotBasic:
         LEFT_CAMERA = "left_fisheye"
         RIGHT_CAMERA = "right_fisheye"
         HAND_CAMERA = "hand_color_image_sensor"
+        HAND_DEPTH_CAMERA = "hand_depth_sensor"
 
     def __init__(
         self,
@@ -1605,8 +1607,10 @@ class SpotBasic:
         if isinstance(frame_b, self.FrameHint):
             frame_b = frame_b.value
 
-        return self._tf_listener.lookup_a_tform_b(
-            f"{self.robot_name}/{frame_a}", f"{self.robot_name}/{frame_b}", transform_time, timeout, wait_for_frames
+        return to_se3(
+            self._tf_listener.lookup_a_tform_b(
+                f"{self.robot_name}/{frame_a}", f"{self.robot_name}/{frame_b}", transform_time, timeout, wait_for_frames
+            )
         )
 
     def _get_basic_tform_tree_snapshot(
