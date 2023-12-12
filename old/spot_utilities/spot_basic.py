@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import os
+import tempfile
 from enum import Enum, IntEnum
 from functools import partial
 from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 
+import bdai.interactive_choreo.choreo_builders.serialization_utils as serialization_utils
 import bdai_ros2_wrappers.process as ros_process
 import bdai_ros2_wrappers.scope as ros_scope
 import geometry_msgs
@@ -74,12 +77,14 @@ from spatialmath.base.types import R3
 from spatialmath.spatialvector import SpatialVector
 from spot_msgs.action import Manipulation, RobotCommand
 from spot_msgs.srv import (
+    ChoreographyRecordedStateToAnimation,
     ChoreographyStartRecordingState,
     ChoreographyStopRecordingState,
     ClearBehaviorFault,
     DeleteSound,
     Dock,
     ExecuteDance,
+    GetChoreographyStatus,
     GetVolume,
     GraphNavClearGraph,
     GraphNavGetLocalizationPose,
@@ -298,7 +303,9 @@ class SpotBasic:
         self._locomotion_mode_client = self.node.create_client(
             SetLocomotion, spot_namespaced(self.robot_name, "locomotion_mode")
         )
-
+        self._get_choreo_status_client = self.node.create_client(
+            GetChoreographyStatus, spot_namespaced(self.robot_name, "get_choreography_status")
+        )
         self._start_recording_state_client = self.node.create_client(
             ChoreographyStartRecordingState, spot_namespaced(self.robot_name, "start_recording_state")
         )
@@ -318,7 +325,10 @@ class SpotBasic:
         self._list_all_moves_client = self.node.create_client(
             ListAllMoves, spot_namespaced(self.robot_name, "list_all_moves")
         )
-
+        self._recorded_state_to_animation_client = self.node.create_client(
+            ChoreographyRecordedStateToAnimation,
+            spot_namespaced(self.robot_name, "recorded_state_to_animation"),
+        )
         self._max_velocity_client = self.node.create_client(
             SetVelocity, spot_namespaced(self.robot_name, "max_velocity")
         )
@@ -1023,6 +1033,17 @@ class SpotBasic:
             return False, response.message, []
         return True, "success", response.moves
 
+    def get_choreo_status(self) -> tuple[bool, str, int]:
+        request = GetChoreographyStatus.Request()
+        future = self._get_choreo_status_client.call_async(request)
+        if not wait_for_future(future):
+            return False, "Call to wait_for_future timed out", GetChoreographyStatus.Request.STATUS_UNKNOWN
+        response = future.result()
+        if not response.success:
+            self.node.get_logger().debug(f"Failed to get choreo status. Msg: {response.message}.")
+            return False, response.message, GetChoreographyStatus.Request.STATUS_UNKNOWN
+        return True, "success", response.status
+
     def start_recording_state(self, duration: float) -> tuple[bool, str]:
         request = ChoreographyStartRecordingState.Request()
         request.duration_seconds = duration
@@ -1046,6 +1067,28 @@ class SpotBasic:
             self.node.get_logger().error(f"Failed to stop recording state. Msg: {response.message}.")
             return False, response.message
         return True, "success"
+
+    def recorded_state_to_animation(self, has_arm: bool) -> tuple[bool, str, Animation]:
+        animation_proto = Animation()
+
+        request = ChoreographyRecordedStateToAnimation.Request()
+        request.has_arm = has_arm
+        future = self._recorded_state_to_animation_client.call_async(request)
+        if not wait_for_future(future):
+            return False, "Call to wait_for_future timed out", animation_proto
+        response = future.result()
+        if not response.success:
+            self.node.get_logger().error(f"Failed to start recording state. Msg: {response.message}.")
+            return False, response.message, animation_proto
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            filename = "temporary_animation.cha"
+            full_path = os.path.join(temp_dir, filename)
+            with open(full_path, "w") as animation_file:
+                animation_file.write(response.animation_file_contents)
+
+            animation_proto = serialization_utils.load_animation(full_path)
+        return True, "success", animation_proto
 
     def list_sounds(self) -> tuple[bool, str, list[str]]:
         """
