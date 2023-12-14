@@ -2519,7 +2519,9 @@ class SpotBasic:
             synchro_command = RobotCommandBuilder.build_synchro_command(follow_arm_command, arm_pose_command)
             return self._convert_proto_to_robot_cmd_action_goal(synchro_command)
         else:
-            return self._convert_proto_to_robot_cmd_action_goal(arm_pose_command)
+            stand_command = RobotCommandBuilder.synchro_stand_command()
+            synchro_command = RobotCommandBuilder.build_synchro_command(stand_command, arm_pose_command)
+            return self._convert_proto_to_robot_cmd_action_goal(synchro_command)
 
     def move_end_effector_cartesian(
         self,
