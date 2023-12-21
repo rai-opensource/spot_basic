@@ -1596,6 +1596,10 @@ class SpotBasic:
         self._vis_pub.publish(marker)
 
     @staticmethod
+    def convert_proto_to_robot_cmd_action_goal(proto: robot_command_pb2.RobotCommand) -> RobotCommand.Goal:
+        return SpotBasic._convert_proto_to_robot_cmd_action_goal(proto)
+
+    @staticmethod
     def _convert_proto_to_robot_cmd_action_goal(proto: robot_command_pb2.RobotCommand) -> RobotCommand.Goal:
         action_goal = RobotCommand.Goal()
         conv.convert_proto_to_bosdyn_msgs_robot_command(proto, action_goal.command)
@@ -1838,8 +1842,27 @@ class SpotBasic:
         )
         return spot_command_pb2.MobilityParams(obstacle_params=obstacles)
 
+    def get_walk_to_robot_cmd(self, frame_t_goal: SE2, height: float, base_frame: FrameHint) -> RobotCommand.Goal:
+        """
+        Args:
+            frame_t_goal: A SE2 transform from the base frame to where the user wants the spot to walk to
+            height: The height of the body
+            base_frame: The frame in which the goal is specified
+
+        Returns:
+            A protobuf representing the command for a spot to walk to a specific goal location
+        """
+        return RobotCommandBuilder.synchro_se2_trajectory_point_command(
+            goal_x=frame_t_goal.x,
+            goal_y=frame_t_goal.y,
+            goal_heading=frame_t_goal.theta(),
+            frame_name=base_frame.value,
+            body_height=height,
+            params=self._get_mobility_params(),
+        )
+
     def _get_walk_to_action_goal(self, frame_t_goal: SE2, height: float, base_frame: FrameHint) -> RobotCommand.Goal:
-        """TODO
+        """
 
         Args:
             frame_t_goal: A SE2 transform from the base frame to where the user wants the spot to walk to
@@ -1856,15 +1879,9 @@ class SpotBasic:
                 f"{self._robot_name}/{base_frame.value}", self.body_frame_name, frame_t_goal, color=Color(g=1.0, a=1.0)
             )
 
-        proto_goal = RobotCommandBuilder.synchro_se2_trajectory_point_command(
-            goal_x=frame_t_goal.x,
-            goal_y=frame_t_goal.y,
-            goal_heading=frame_t_goal.theta(),
-            frame_name=base_frame.value,
-            body_height=height,
-            params=self._get_mobility_params(),
+        return self._convert_proto_to_robot_cmd_action_goal(
+            self.get_walk_to_robot_cmd(frame_t_goal, height, base_frame)
         )
-        return self._convert_proto_to_robot_cmd_action_goal(proto_goal)
 
     def walk_to(
         self,
@@ -2258,14 +2275,15 @@ class SpotBasic:
         velocity_cmd_msg.angular.z = body_velocity.w
         self._velocity_cmd_publisher.publish(velocity_cmd_msg)
 
-    def _get_walk_trajectory_action_goal(
+    def get_walk_trajectory_robot_cmd(
         self,
         frame_t_trajectory: SE2Trajectory,
         base_frame: FrameHint,
         timestep_sec: float = 0.1,
         interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
-    ) -> RobotCommand.Goal:
-        """Create an action goal for visiting a sequence of poses with a given time schedule and interpolation settings
+    ) -> robot_command_pb2.RobotCommand:
+        """Create a robot command protobuf for visiting a sequence of poses with a given time schedule and
+        interpolation settings
 
         Args:
             frame_t_trajectory: SE2Trajectory, i.e., time-parameterization of sequence of poses in the base frame
@@ -2281,7 +2299,26 @@ class SpotBasic:
             mobility_params=self._get_mobility_params(),
             base_frame=base_frame.value,
         )
-        return self._convert_proto_to_robot_cmd_action_goal(proto_goal)
+        return proto_goal
+
+    def _get_walk_trajectory_action_goal(
+        self,
+        frame_t_trajectory: SE2Trajectory,
+        base_frame: FrameHint,
+        timestep_sec: float = 0.1,
+        interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
+    ) -> RobotCommand.Goal:
+        """Create an action goal for visiting a sequence of poses with a given time schedule and interpolation settings
+
+        Args:
+            frame_t_trajectory: SE2Trajectory, i.e., time-parameterization of sequence of poses in the base frame
+            timestep_sec: time step used to sample poses from the trajectory
+            interpolation: method used to interpolate between sampled poses (0 = none, 1 = linear, 2 = cubic)
+            base_frame: frame that the trajectory poses are specified in
+        """
+        return self._convert_proto_to_robot_cmd_action_goal(
+            self.get_walk_trajectory_robot_cmd(frame_t_trajectory, base_frame, timestep_sec, interpolation)
+        )
 
     def walk_trajectory(
         self,
@@ -2488,7 +2525,12 @@ class SpotBasic:
         )
 
     def _get_arm_pose_action_goal(
-        self, frame_t_goal: SE3, move_duration_sec: float, base_frame: FrameHint, body_follow: bool = False
+        self,
+        frame_t_goal: SE3,
+        move_duration_sec: float,
+        base_frame: FrameHint,
+        body_follow: bool = False,
+        disable_collisions: bool = False,
     ) -> RobotCommand.Goal:
         """Create the ROS Msg for moving the end effector to specific pose.
 
@@ -2517,6 +2559,18 @@ class SpotBasic:
         if body_follow:
             follow_arm_command = RobotCommandBuilder.follow_arm_command()
             synchro_command = RobotCommandBuilder.build_synchro_command(follow_arm_command, arm_pose_command)
+            """
+            if disable_collisions:
+                print('DISABLING COLLISIONS')
+                obstacles = spot_command_pb2.ObstacleParams(
+                    disable_vision_body_obstacle_avoidance=True,
+                    disable_vision_foot_obstacle_avoidance=True,
+                    disable_vision_foot_constraint_avoidance=True,
+                    obstacle_avoidance_padding=0.001,
+                )
+                params = spot_command_pb2.MobilityParams(obstacle_params=obstacles)
+                synchro_command.mobility_command.params.Pack(params)
+            """
             return self._convert_proto_to_robot_cmd_action_goal(synchro_command)
         else:
             stand_command = RobotCommandBuilder.synchro_stand_command()
@@ -2531,6 +2585,7 @@ class SpotBasic:
         timeout_sec: Optional[float] = None,
         *,
         base_frame: Optional[FrameHint] = None,
+        disable_collisions: bool = False,
     ) -> Optional[RobotCommandFeedback]:
         """Send command to move the end effector to a specific pose synchronously
 
@@ -2551,7 +2606,11 @@ class SpotBasic:
         """
         base_frame = self.get_set_base_frame(base_frame)
         action_goal = self._get_arm_pose_action_goal(
-            frame_t_goal, move_duration_sec, base_frame, body_follow=body_follow
+            frame_t_goal,
+            move_duration_sec,
+            base_frame,
+            body_follow=body_follow,
+            disable_collisions=disable_collisions,
         )
         return self.command("move_end_effector_cartesian", action_goal, timeout_sec)
 
@@ -2565,6 +2624,7 @@ class SpotBasic:
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[], None]] = None,
+        disable_collisions: bool = False,
     ) -> Optional[SpotActionHandle]:
         """Send command to move the end effector to a specific pose asynchronously
 
@@ -2583,7 +2643,11 @@ class SpotBasic:
         """
         base_frame = self.get_set_base_frame(base_frame)
         action_goal = self._get_arm_pose_action_goal(
-            frame_t_goal, move_duration_sec, base_frame, body_follow=body_follow
+            frame_t_goal,
+            move_duration_sec,
+            base_frame,
+            body_follow=body_follow,
+            disable_collisions=disable_collisions,
         )
         return self.command_async(
             "move_end_effector_cartesian",
@@ -3207,7 +3271,7 @@ class SpotBasic:
         """
         raise NotImplementedError()
 
-    def _get_arm_impedance_action_goal(
+    def get_arm_impedance_robot_cmd(
         self,
         root_frame_name: FrameHint,
         root_t_task: SE3,
@@ -3216,8 +3280,8 @@ class SpotBasic:
         stiffness: Optional[SpatialVector] = None,
         damping: Optional[SpatialVector] = None,
         wrench_nm: Optional[SpatialForce] = None,
-    ) -> RobotCommand.Goal:
-        """Create the ROS Msg for moving the end effector to specific
+    ) -> robot_command_pb2.RobotCommand:
+        """Create the robot command proto for moving the end effector to specific
         pose using hybrid position/impedance control.
 
         The stiffness and damping gains are defaulted to their maximum values.
@@ -3257,7 +3321,31 @@ class SpotBasic:
             point.time_since_reference.CopyFrom(seconds_to_duration(duration))
             point.pose.CopyFrom(se3_to_se3pose_proto(pose))
 
-        return self._convert_proto_to_robot_cmd_action_goal(robot_cmd)
+        return robot_cmd
+
+    def _get_arm_impedance_action_goal(
+        self,
+        root_frame_name: FrameHint,
+        root_t_task: SE3,
+        wrist_t_tool: SE3,
+        trajectory: list[Tuple[SE3, float]],
+        stiffness: Optional[SpatialVector] = None,
+        damping: Optional[SpatialVector] = None,
+        wrench_nm: Optional[SpatialForce] = None,
+    ) -> RobotCommand.Goal:
+        """Create the ROS Msg for moving the end effector to specific
+        pose using hybrid position/impedance control.
+
+        The stiffness and damping gains are defaulted to their maximum values.
+        Note that this is in the task frame, so these were probably empirically obtained.
+        (See code comment in here
+        https://github.com/boston-dynamics/spot-sdk/blob/master/python/examples/arm_impedance_control/arm_impedance_control.py.)
+        """  # noqa: E501
+        return self._convert_proto_to_robot_cmd_action_goal(
+            self.get_arm_impedance_robot_cmd(
+                root_frame_name, root_t_task, wrist_t_tool, trajectory, stiffness, damping, wrench_nm
+            )
+        )
 
     def move_end_effector_impedance(
         self,
@@ -3290,7 +3378,13 @@ class SpotBasic:
                 successfully received, None otherwise
         """
         action_goal = self._get_arm_impedance_action_goal(
-            root_frame_name, root_t_task, wrist_t_tool, trajectory, stiffness, damping, wrench_nm
+            root_frame_name,
+            root_t_task,
+            wrist_t_tool,
+            trajectory,
+            stiffness,
+            damping,
+            wrench_nm,
         )
         return self.command("move_end_effector_impedance", action_goal, timeout_sec)
 
