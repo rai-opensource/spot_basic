@@ -40,6 +40,7 @@ def main(args: argparse.Namespace) -> None:
     spot_basic = SpotBasic(robot_name=args.robot)
     try:
         if spot_basic.initialize_robot():
+            spot_basic.stand()
             spot_basic.walk_velocity(body_velocity, duration=args.duration)
     except KeyboardInterrupt:
         pass
