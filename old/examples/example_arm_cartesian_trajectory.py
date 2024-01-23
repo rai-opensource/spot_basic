@@ -178,7 +178,7 @@ class SpotRunner:
         self.logger.info("Moving arm, body following along trajectory")
         """Calls arm trajectory movements with the body following the arm.
 
-        Trajectories must be described in the odometry frame for this method. 
+        Trajectories must be described in the odometry frame for this method.
         Specifying in the body frame will not work as these motions are intended
         to go outside the body frame.
 

@@ -7,7 +7,7 @@ from spot_utilities.spot_basic import SpotBasic
 """ This is a test script to demo gazing at a point in space with the body.
 
 Use:
-    1) tele op the robot so that the origin of the vision frame won't be obstructed by spot's own body 
+    1) tele op the robot so that the origin of the vision frame won't be obstructed by spot's own body
         (the arm might run into the body if you fail to do this?)
     1) start spot driver
     2) execute this script, pass in the robot name
