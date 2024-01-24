@@ -18,7 +18,6 @@ import rclpy
 import spot_driver.conversions as conv
 from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai_ros.utilities.manual_conversions import (
-    arm_joint_map_to_list,
     se3_to_se3pose_proto,
     to_ros_pose,
     to_se3,
@@ -2701,12 +2700,12 @@ class SpotBasic:
         # Convert the joint angles to a list
         joint_angles_list = []
         for joint_angle in joint_angles:
-            joint_angles_list.append(arm_joint_map_to_list(joint_angle))
+            joint_angles_list.append(joint_angle.to_list())
         # Convert the joint velocities to a list
         if joint_velocities is not None:
             joint_velocities_list = []
             for joint_vel in joint_velocities:
-                joint_velocities_list.append(arm_joint_map_to_list(joint_vel))
+                joint_velocities_list.append(joint_vel.to_list())
             robot_cmd = RobotCommandBuilder.arm_joint_move_helper(
                 joint_positions=joint_angles_list,
                 times=times,

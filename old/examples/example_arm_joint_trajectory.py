@@ -11,7 +11,6 @@ from typing import Any, Optional, Sequence
 
 import bdai_ros2_wrappers.process as ros_process
 import numpy as np
-from bdai_ros.utilities.manual_conversions import list_to_arm_joint_map
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 from bdai_ros2_wrappers.utilities import fqn
 from bosdyn.client.frame_helpers import BODY_FRAME_NAME
@@ -35,7 +34,7 @@ class SpotRunner:
         self._max_acc = 100.0  # rad/sec^2
         self._max_vel = 10.0  # rad/sec
         self._practice_config_list = [0.0, -np.pi / 2, np.pi / 2, np.pi / 2, 0.0, -np.pi / 2]
-        self._practice_config = list_to_arm_joint_map(self._practice_config_list)
+        self._practice_config = ArmJointMap.from_list(self._practice_config_list)
         self.num_arm_joints = 6
 
         self._robot = SpotBasic(robot_name)
@@ -139,7 +138,7 @@ class SpotRunner:
             # Perturb the joint in either direction
             new_angle = self._practice_config_list[angle_ind] + signs[i % 2] * 0.2
             individual_joint_move[angle_ind] = new_angle
-            joint_moves.append(list_to_arm_joint_map(individual_joint_move))
+            joint_moves.append(ArmJointMap.from_list(individual_joint_move))
             times.append((i + 1) * suite_delay)
 
         # Test each joint individually from a good starting position, synchronously
@@ -191,12 +190,12 @@ class SpotRunner:
         wrist_0_vel[4] = wrist_0_amt
 
         arm_joint_position = [
-            list_to_arm_joint_map(wrist_1_move),
-            list_to_arm_joint_map(wrist_0_move),
+            ArmJointMap.from_list(wrist_1_move),
+            ArmJointMap.from_list(wrist_0_move),
         ]
         arm_joint_velocity = [
-            list_to_arm_joint_map(wrist_1_vel),
-            list_to_arm_joint_map(wrist_0_vel),
+            ArmJointMap.from_list(wrist_1_vel),
+            ArmJointMap.from_list(wrist_0_vel),
         ]
 
         self.move_arm_along_joint_trajectory(
