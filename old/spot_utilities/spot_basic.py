@@ -3180,7 +3180,7 @@ class SpotBasic:
             axis_mode_map: dataclass in robot_command_helpers.py which maps axis to control modes (position or force).
             timestamps_between_poses: array of timestamps of when each pose point is traversed (seconds)
             timestamps_between_wrenches: array of timestamps of when each wrench point is traversed (seconds)
-            pose_vecs: vector of SE3 poses for the end effector to pass through described by the spatialmath library
+            pose_vecs: vector of (spatialmath) SE3 poses (wrt the task frame) for the end effector to pass through
             vel_vecs: vector of velocities to pass through at each point
             wrench_vecs: vector of SpatialForces for the end effector to output in the spatialmath library
             wrist_t_tool: tool pose relative to the parent link (wrist)
