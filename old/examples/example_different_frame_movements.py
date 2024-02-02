@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 """Example illustrating how to command movements in frames other than the vision frame for some functions"""
 import argparse
 import time
