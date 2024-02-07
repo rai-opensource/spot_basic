@@ -40,6 +40,7 @@ from bosdyn.api import (
 )
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.api.spot.choreography_sequence_pb2 import Animation, ChoreographySequence
+from bosdyn.api.spot.inverse_kinematics_pb2 import InverseKinematicsRequest, InverseKinematicsResponse
 from bosdyn.client.frame_helpers import (
     BODY_FRAME_NAME,
     GRAV_ALIGNED_BODY_FRAME_NAME,
@@ -84,6 +85,7 @@ from spot_msgs.srv import (
     Dock,
     ExecuteDance,
     GetChoreographyStatus,
+    GetInverseKinematicSolutions,
     GetVolume,
     GraphNavClearGraph,
     GraphNavGetLocalizationPose,
@@ -314,6 +316,9 @@ class SpotBasic:
 
         self._execute_dance_client = self.node.create_client(
             ExecuteDance, spot_namespaced(self.robot_name, "execute_dance")
+        )
+        self._ik_client = self.node.create_client(
+            GetInverseKinematicSolutions, spot_namespaced(self.robot_name, "get_inverse_kinematic_solutions")
         )
         self._upload_animation_client = self.node.create_client(
             UploadAnimation, spot_namespaced(self.robot_name, "upload_animation")
@@ -912,6 +917,23 @@ class SpotBasic:
             )
             return False
         return True
+
+    def get_inverse_kinematic_solutions(self, ik_request: InverseKinematicsRequest) -> InverseKinematicsResponse:
+        """Query an IK solution for a given pose.
+        Returns:
+            A solution to the IK query, if any.
+        """
+        self.node.get_logger().info(f"Query IK solutions on {self.robot_name}")
+        request = GetInverseKinematicSolutions.Request()
+        conv.convert_proto_to_bosdyn_msgs_inverse_kinematics_request(ik_request, request.request)
+        future = self._ik_client.call_async(request)
+        if not wait_for_future(future, context=self.node.context):
+            return None
+        response = future.result()
+
+        proto = InverseKinematicsResponse()
+        conv.convert_bosdyn_msgs_inverse_kinematics_response_to_proto(response.response, proto)
+        return proto
 
     def execute_dance(self, path: str) -> tuple[bool, str]:
         """Upload and execute dance file (found at path) through Spot Driver
