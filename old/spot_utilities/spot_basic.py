@@ -3309,7 +3309,7 @@ class SpotBasic:
         Note that this is in the task frame, so these were probably empirically obtained.
         (See code comment in here
         https://github.com/boston-dynamics/spot-sdk/blob/master/python/examples/arm_impedance_control/arm_impedance_control.py.)
-        """  # noqa: E501
+        """
 
         if stiffness is None:
             stiffness = SpatialVector([500, 500, 500, 60, 60, 60])
@@ -3361,7 +3361,7 @@ class SpotBasic:
         Note that this is in the task frame, so these were probably empirically obtained.
         (See code comment in here
         https://github.com/boston-dynamics/spot-sdk/blob/master/python/examples/arm_impedance_control/arm_impedance_control.py.)
-        """  # noqa: E501
+        """
         return self._convert_proto_to_robot_cmd_action_goal(
             self.get_arm_impedance_robot_cmd(
                 root_frame_name, root_t_task, wrist_t_tool, trajectory, stiffness, damping, wrench_nm
@@ -3757,7 +3757,7 @@ class SpotBasic:
 
         Returns:
             An ManipulationApiFeedbackResponse if the robot has an arm.
-        """  # noqa: E501
+        """
         grasp_request = self._grasp_in_image(
             pixel_xy, image_timestamp, camera_data, palm_placement_ratio, apply_grasp_params_func
         )
@@ -3796,7 +3796,7 @@ class SpotBasic:
 
         Returns:
             An ManipulationApiFeedbackResponse if the robot has an arm.
-        """  # noqa: E501
+        """
         grasp_request = self._grasp_in_image(
             pixel_xy, image_timestamp, camera_data, palm_placement_ratio, apply_grasp_params_func
         )
