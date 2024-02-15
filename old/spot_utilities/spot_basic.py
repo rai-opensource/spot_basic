@@ -57,6 +57,7 @@ from bosdyn.client.robot_command import (
 from bosdyn.geometry import Quaternion, to_euler_zxy
 from bosdyn.util import seconds_to_duration
 from bosdyn_msgs.msg import (
+    GripperCameraParams,
     ListWorldObjectRequest,
     ListWorldObjectResponse,
     ManipulationApiFeedbackResponse,
@@ -85,6 +86,7 @@ from spot_msgs.srv import (
     Dock,
     ExecuteDance,
     GetChoreographyStatus,
+    GetGripperCameraParameters,
     GetInverseKinematicSolutions,
     GetVolume,
     GraphNavClearGraph,
@@ -98,6 +100,7 @@ from spot_msgs.srv import (
     ListWorldObjects,
     LoadSound,
     PlaySound,
+    SetGripperCameraParameters,
     SetLocomotion,
     SetVelocity,
     SetVolume,
@@ -358,6 +361,12 @@ class SpotBasic:
         )
         self._graph_nav_get_localization_pose_client = self.node.create_client(
             GraphNavGetLocalizationPose, spot_namespaced(self.robot_name, "graph_nav_get_localization_pose")
+        )
+        self.get_gripper_camera_parameters_client = self.node.create_client(
+            GetGripperCameraParameters, spot_namespaced(self.robot_name, "get_gripper_camera_parameters")
+        )
+        self.set_gripper_camera_parameters_client = self.node.create_client(
+            SetGripperCameraParameters, spot_namespaced(self.robot_name, "set_gripper_camera_parameters")
         )
         self._list_sounds_client = self.node.create_client(ListSounds, spot_namespaced(self.robot_name, "list_sounds"))
         self._load_sound_client = self.node.create_client(LoadSound, spot_namespaced(self.robot_name, "load_sound"))
@@ -3555,6 +3564,47 @@ class SpotBasic:
             feedback_callback=feedback_callback,
             on_failure_callback=on_failure_callback,
         )
+
+    def get_gripper_camera_parameters(self) -> tuple[bool, str, GripperCameraParams]:
+        """Get the gripper camera parameters on the SpotDriver
+
+        Returns: A tuple containing [success, message, response]
+        """
+        self.node.get_logger().info(f"Getting gripper camera parameters for {self.robot_name}")
+        request = GetGripperCameraParameters.Request()
+        future = self.get_gripper_camera_parameters_client.call_async(request)
+        if not wait_for_future(future, context=self.node.context):
+            return False, "Call to wait_for_future timed out", None
+        response = future.result()
+        if not response.success:
+            self.node.get_logger().warning(
+                f"Getting gripper camera parameters for {self.robot_name} failed. Msg: {response.message}."
+            )
+        return response.success, response.message, response.response.params
+
+    def set_gripper_camera_parameters(self, gripper_camera_params: GripperCameraParams) -> bool:
+        """Set the gripper camera parameters on the SpotDriver
+
+        Args:
+            gripper_camera_params: the gripper camera parameters and their desired values.
+                                    Of type bosdyn_msgs/GripperCameraParams
+
+        Returns: a boolean indicating if the service was successful or not
+        """
+        self.node.get_logger().info(f"Setting gripper camera parameters for {self.robot_name}")
+        request = SetGripperCameraParameters.Request()
+        request.request.params = gripper_camera_params
+        request.request.params_is_set = True
+        future = self.set_gripper_camera_parameters_client.call_async(request)
+        if not wait_for_future(future, context=self.node.context):
+            return False
+        response = future.result()
+        if not response.success:
+            self.node.get_logger().warning(
+                f"Setting gripper camera parameters for {self.robot_name} failed. Msg: {response.message}."
+            )
+            return False
+        return True
 
     @staticmethod
     def set_tight_top_down_grasp(grasp: manipulation_api_pb2.PickObjectInImage) -> None:
