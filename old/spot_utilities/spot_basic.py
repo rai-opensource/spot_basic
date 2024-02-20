@@ -282,7 +282,7 @@ class SpotBasic:
         self._rviz = rviz
 
         # A tf listener instance can be connected to the robot.
-        self._tf_listener: TFListenerWrapper = None
+        self._tf_listener: TFListenerWrapper = ros_process.tf_listener()
 
         # TODO: are there other frame names to grab?
         self._body_frame_name = namespace_with(self.robot_name, BODY_FRAME_NAME)
@@ -415,6 +415,10 @@ class SpotBasic:
     @property
     def odom_frame_name(self) -> str:
         return self._odom_frame_name
+
+    @property
+    def tf_listener(self) -> Optional[TFListenerWrapper]:
+        return self._tf_listener
 
     def get_set_base_frame(self, base_frame: Optional[FrameHint]) -> FrameHint:
         """Function which returns the provided frame, or the VISION frame if base_frame is not provided"""
@@ -1676,7 +1680,9 @@ class SpotBasic:
             All the possible TransformExceptions. ValueError if no TFListenerWrapper instance is connected.
         """
         if self._tf_listener is None:
-            raise ValueError("TFListenerWrapper is not connected. Use set_tf_listener().")
+            raise ValueError(
+                "TFListenerWrapper is not connected. Use set_tf_listener() or ros_process.main(uses_tf=True)."
+            )
 
         if isinstance(frame_a, self.FrameHint):
             frame_a = frame_a.value
