@@ -2052,6 +2052,26 @@ class SpotBasic:
             on_failure_callback=on_failure_callback,
         )
 
+    @staticmethod
+    def _activate_body_assist(hip_assist: bool, yaw_assist: bool) -> spot_command_pb2.RobotCommand:
+        """Creates a command that allows the body to assist the movements.
+
+        Args:
+            hip_assist: whether or not the hips can raise and lower to assist whole-body motions
+            yaw_assist: whether or not the body can twist in the yaw to assist whole-body motions
+
+        Returns:
+            A robot stand command that can be composed with another command to activate the body assist.
+        """
+        body_control_params = spot_command_pb2.MobilityParams(
+            body_control=spot_command_pb2.BodyControlParams(
+                body_assist_for_manipulation=spot_command_pb2.BodyControlParams.BodyAssistForManipulation(
+                    enable_hip_height_assist=hip_assist, enable_body_yaw_assist=yaw_assist
+                )
+            )
+        )
+        return RobotCommandBuilder.synchro_stand_command(params=body_control_params)
+
     def _body_gaze_at_frame_t_body_desired(
         self,
         base_frame: FrameHint,
@@ -2566,6 +2586,8 @@ class SpotBasic:
         move_duration_sec: float,
         base_frame: FrameHint,
         body_follow: bool = False,
+        body_hip_assist: bool = False,
+        body_yaw_assist: bool = False,
         disable_collisions: bool = False,
     ) -> RobotCommand.Goal:
         """Create the ROS Msg for moving the end effector to specific pose.
@@ -2575,6 +2597,8 @@ class SpotBasic:
             move_duration_sec: The duration of the move
             base_frame: frame that the trajectory poses are specified in
             body_follow: If True, the robot's body would automatically follow the arm to achieve the goal
+            body_hip_assist: Whether or not to have the robot hips move to assist the end effector movements
+            body_yaw_assist: Whether or not to have the robot yaw to assist the end effector movements
 
         Returns:
             ROS2 Action goal containing information about the end effector pose
@@ -2592,7 +2616,12 @@ class SpotBasic:
             frame_name=base_frame.value,
             seconds=move_duration_sec,
         )
-        if body_follow:
+        if body_hip_assist or body_yaw_assist:
+            stand_assist_command = SpotBasic._activate_body_assist(
+                hip_assist=body_hip_assist, yaw_assist=body_yaw_assist
+            )
+            synchro_command = RobotCommandBuilder.build_synchro_command(stand_assist_command, arm_pose_command)
+        elif body_follow:
             follow_arm_command = RobotCommandBuilder.follow_arm_command()
             synchro_command = RobotCommandBuilder.build_synchro_command(follow_arm_command, arm_pose_command)
             """
@@ -2607,17 +2636,18 @@ class SpotBasic:
                 params = spot_command_pb2.MobilityParams(obstacle_params=obstacles)
                 synchro_command.mobility_command.params.Pack(params)
             """
-            return self._convert_proto_to_robot_cmd_action_goal(synchro_command)
         else:
             stand_command = RobotCommandBuilder.synchro_stand_command()
             synchro_command = RobotCommandBuilder.build_synchro_command(stand_command, arm_pose_command)
-            return self._convert_proto_to_robot_cmd_action_goal(synchro_command)
+        return self._convert_proto_to_robot_cmd_action_goal(synchro_command)
 
     def move_end_effector_cartesian(
         self,
         frame_t_goal: SE3,
         move_duration_sec: float = 5.0,
         body_follow: bool = False,
+        body_hip_assist: bool = False,
+        body_yaw_assist: bool = False,
         timeout_sec: Optional[float] = None,
         *,
         base_frame: Optional[FrameHint] = None,
@@ -2629,6 +2659,8 @@ class SpotBasic:
             frame_t_goal: A pose for the end effector to move to relative to the base frame
             move_duration_sec: The duration of the move
             body_follow: If True, the robot's body would automatically follow the arm to achieve the goal
+            body_hip_assist: Whether or not to have the robot hips move to assist the end effector movements
+            body_yaw_assist: Whether or not to have the robot yaw to assist the end effector movements
             timeout_sec: A timeout for waiting on a response/result from the action server. Setting to None creates no
                 timeout
             base_frame: Frame the goal is specified in. Defaults to VISION frame in get_set_base_frame
@@ -2646,6 +2678,8 @@ class SpotBasic:
             move_duration_sec,
             base_frame,
             body_follow=body_follow,
+            body_hip_assist=body_hip_assist,
+            body_yaw_assist=body_yaw_assist,
             disable_collisions=disable_collisions,
         )
         return self.command("move_end_effector_cartesian", action_goal, timeout_sec)
@@ -2655,6 +2689,8 @@ class SpotBasic:
         frame_t_goal: SE3,
         move_duration_sec: float = 5.0,
         body_follow: bool = False,
+        body_hip_assist: bool = False,
+        body_yaw_assist: bool = False,
         *,
         base_frame: Optional[FrameHint] = None,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
@@ -2667,6 +2703,9 @@ class SpotBasic:
         Args:
             frame_t_goal: A pose for the end effector to move to relative to the base frame
             move_duration_sec: The duration of the move
+            body_follow: If True, the robot's body would automatically follow the arm to achieve the goal
+            body_hip_assist: Whether or not to have the robot hips move to assist the end effector movements
+            body_yaw_assist: Whether or not to have the robot yaw to assist the end effector movements
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
             on_failure_callback: A callback to process/handle when the action fails for various reasons
@@ -2683,6 +2722,8 @@ class SpotBasic:
             move_duration_sec,
             base_frame,
             body_follow=body_follow,
+            body_hip_assist=body_hip_assist,
+            body_yaw_assist=body_yaw_assist,
             disable_collisions=disable_collisions,
         )
         return self.command_async(
