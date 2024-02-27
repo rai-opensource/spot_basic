@@ -162,7 +162,7 @@ class SpotRunner:
         )
 
         # Send IK requests.
-        for task_T_desired_tool in enumerate(task_T_desired_tools):
+        for task_T_desired_tool in task_T_desired_tools:
             ik_response = self._send_ik_request(
                 odom_T_task=odom_T_task, wr1_T_tool=wr1_T_tool, task_T_desired_tool=task_T_desired_tool
             )
