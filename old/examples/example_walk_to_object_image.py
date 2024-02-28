@@ -35,7 +35,7 @@ g_image_click, g_image_display = None, np.zeros((460, 640, 3))
 
 
 def cv_mouse_callback(event: Any, x: float, y: float, flags: Any, param: Any) -> None:
-    global g_image_click, g_image_display
+    global g_image_click
     clone = g_image_display.copy()
     if event == cv2.EVENT_LBUTTONUP:
         g_image_click = (x, y)
@@ -97,7 +97,7 @@ class ObjectWalk:
         cv2.namedWindow(image_title)
         cv2.setMouseCallback(image_title, cv_mouse_callback)
 
-        global g_image_click, g_image_display
+        global g_image_display
         g_image_display = image
         cv2.imshow(image_title, g_image_display)
         while g_image_click is None:
