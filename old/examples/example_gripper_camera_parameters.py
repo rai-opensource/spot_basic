@@ -15,6 +15,7 @@ import logging
 
 import bdai_ros2_wrappers.process as ros_process
 from bdai_ros2_wrappers.utilities import fqn
+from bosdyn_msgs.msg import GripperCameraParams
 from spot_utilities.spot_basic import SpotBasic
 
 
@@ -47,14 +48,16 @@ class SpotGripperCameraParameters:
         if not success:
             self._logger.error("Failed to get gripper camera parameters")
             return False
-        gamma_init = response.gamma
+        gamma_init = response.gamma.data
         print("Initially gamma value is: {}".format(gamma_init))
-        gripper_params = response
 
+        gripper_params = GripperCameraParams()
         # set gripper camera parameters with a new gamma value, leaving all others unchanged
         new_gamma = 0.8
         self._logger.info("Setting a new gamma in the gripper camera")
-        gripper_params.gamma = new_gamma
+
+        gripper_params.gamma.data = new_gamma
+        gripper_params.has_field = GripperCameraParams.GAMMA_FIELD_SET
         success = self._robot.set_gripper_camera_parameters(gripper_params)
         if not success:
             self._logger.error("Failed to set gripper camera parameters")
@@ -66,11 +69,11 @@ class SpotGripperCameraParameters:
         if not success:
             self._logger.error("Failed to get gripper camera parameters")
             return False
-        print("Updated gamma value: {}".format(response.gamma))
+        print("Updated gamma value: {}".format(response.gamma.data))
 
         # reset camera parameters
         self._logger.info("Resetting gripper camera parameters")
-        gripper_params.gamma = gamma_init
+        gripper_params.gamma.data = gamma_init
         success = self._robot.set_gripper_camera_parameters(gripper_params)
         if not success:
             self._logger.error("Failed to set gripper camera parameters")
@@ -83,7 +86,7 @@ class SpotGripperCameraParameters:
         if not success:
             self._logger.error("Failed to get gripper camera parameters")
             return False
-        print("Final gamma value: {}".format(response.gamma))
+        print("Final gamma value: {}".format(response.gamma.data))
 
         return True
 

@@ -15,7 +15,6 @@ import bdai_ros2_wrappers.scope as ros_scope
 import geometry_msgs
 import numpy as np
 import rclpy
-import spot_driver.conversions as conv
 from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai_ros.utilities.manual_conversions import (
     se3_to_se3pose_proto,
@@ -56,6 +55,7 @@ from bosdyn.client.robot_command import (
 )
 from bosdyn.geometry import Quaternion, to_euler_zxy
 from bosdyn.util import seconds_to_duration
+from bosdyn_msgs.conversions import convert
 from bosdyn_msgs.msg import (
     GripperCameraParams,
     ListWorldObjectRequest,
@@ -938,14 +938,14 @@ class SpotBasic:
         """
         self.node.get_logger().info(f"Query IK solutions on {self.robot_name}")
         request = GetInverseKinematicSolutions.Request()
-        conv.convert_proto_to_bosdyn_msgs_inverse_kinematics_request(ik_request, request.request)
+        convert(ik_request, request.request)
         future = self._ik_client.call_async(request)
         if not wait_for_future(future, context=self.node.context):
             return None
         response = future.result()
 
         proto = InverseKinematicsResponse()
-        conv.convert_bosdyn_msgs_inverse_kinematics_response_to_proto(response.response, proto)
+        convert(response.response, proto)
         return proto
 
     def execute_dance(self, path: str) -> tuple[bool, str]:
@@ -1636,7 +1636,7 @@ class SpotBasic:
     @staticmethod
     def _convert_proto_to_robot_cmd_action_goal(proto: robot_command_pb2.RobotCommand) -> RobotCommand.Goal:
         action_goal = RobotCommand.Goal()
-        conv.convert_proto_to_bosdyn_msgs_robot_command(proto, action_goal.command)
+        convert(proto, action_goal.command)
         return action_goal
 
     @staticmethod
@@ -1644,7 +1644,7 @@ class SpotBasic:
         proto: manipulation_api_pb2.ManipulationApiRequest,
     ) -> RobotCommand.Goal:
         action_goal = Manipulation.Goal()
-        conv.convert_proto_to_bosdyn_msgs_manipulation_api_request(proto, action_goal.command)
+        convert(proto, action_goal.command)
         return action_goal
 
     def _get_battery_change_pose(self, dir_hint: BatteryChangeDirHint) -> RobotCommand.Goal:
@@ -3641,7 +3641,6 @@ class SpotBasic:
         self.node.get_logger().info(f"Setting gripper camera parameters for {self.robot_name}")
         request = SetGripperCameraParameters.Request()
         request.request.params = gripper_camera_params
-        request.request.params_is_set = True
         future = self.set_gripper_camera_parameters_client.call_async(request)
         if not wait_for_future(future, context=self.node.context):
             return False

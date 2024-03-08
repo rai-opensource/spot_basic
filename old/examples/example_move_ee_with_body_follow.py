@@ -12,12 +12,12 @@
 import argparse
 
 import bdai_ros2_wrappers.process as ros_process
-import spot_driver.conversions as conv
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 from bdai_ros2_wrappers.action_client import ActionClientWrapper
 from bdai_ros2_wrappers.utilities import namespace_with
 from bosdyn.client.frame_helpers import VISION_FRAME_NAME
 from bosdyn.client.robot_command import RobotCommandBuilder
+from bosdyn_msgs.conversions import convert
 from spatialmath import SE3, UnitQuaternion
 from spot_msgs.action import RobotCommand
 from spot_utilities.spot_basic import SpotBasic
@@ -101,7 +101,7 @@ def main(args: argparse.Namespace) -> None:
         follow_arm_command = RobotCommandBuilder.follow_arm_command()
         synchro_command = RobotCommandBuilder.build_synchro_command(follow_arm_command, arm_command)
         action_goal = RobotCommand.Goal()
-        conv.convert_proto_to_bosdyn_msgs_robot_command(synchro_command, action_goal.command)
+        convert(synchro_command, action_goal.command)
         robot_command_client.send_goal_and_wait(action_goal)
         main.node.get_logger().info("movement done.")
 

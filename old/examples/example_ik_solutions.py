@@ -16,7 +16,6 @@ import logging
 
 import bdai_ros2_wrappers.process as ros_process
 import numpy as np
-import spot_driver.conversions as conv
 from bdai_ros.utilities.manual_conversions import se3_to_se3pose
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 from bdai_ros2_wrappers.action_client import ActionClientWrapper
@@ -31,6 +30,7 @@ from bosdyn.client.frame_helpers import (
 )
 from bosdyn.client.math_helpers import Quat, SE3Pose
 from bosdyn.client.robot_command import RobotCommandBuilder
+from bosdyn_msgs.conversions import convert
 from spot_msgs.action import RobotCommand  # type: ignore
 from spot_utilities.spot_basic import SpotBasic
 
@@ -202,7 +202,7 @@ class SpotRunner:
             )
 
             arm_command_goal = RobotCommand.Goal()
-            conv.convert_proto_to_bosdyn_msgs_robot_command(arm_command, arm_command_goal.command)
+            convert(arm_command, arm_command_goal.command)
             result = self._robot_command_client.send_goal_and_wait(
                 action_name="arm_move_one", goal=arm_command_goal, timeout_sec=5
             )
