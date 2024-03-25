@@ -115,6 +115,7 @@ from spot_utilities.spot_dataclasses import (
     ArmJointMap,
     AxisModeMap,
 )
+from spot_utilities.spot_util import spot_namespaced
 from std_msgs.msg import ColorRGBA as Color
 from std_srvs.srv import SetBool, Trigger
 from visualization_msgs.msg import Marker
@@ -185,11 +186,6 @@ class RobotComposeCommandHandle(object):
             self._action_list[self._index]()
         elif self._result_callback is not None:
             self._result_callback(feedback)
-
-
-def spot_namespaced(robot_name: Optional[str], name: str) -> str:
-    """Compute spot namespaced `name`."""
-    return namespace_with("/", robot_name, name)
 
 
 class SpotBasic:
