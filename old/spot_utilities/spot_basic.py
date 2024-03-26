@@ -196,6 +196,7 @@ class SpotBasic:
         "release",
         "stop",
         "self_right",
+        "stop_dance",
         "power_on",
         "power_off",
         "estop/hard",
@@ -985,6 +986,13 @@ class SpotBasic:
             self.node.get_logger().debug(f"Executing dance on '{self.robot_name}' failed. Msg: {response.message}.")
             return False, response.message
         return True, "success"
+
+    def stop_dance(self) -> Union[bool, SpotServiceHandle]:
+        """Stops a dance sequence through Spot Driver
+        Returns:
+            (True, "success") if the command succeeded, (False, <error_message>) otherwise
+        """
+        return self.trigger_service_async("stop_dance")
 
     def upload_animation(self, move_name: str, path: str) -> tuple[bool, str]:
         """Upload an animation file through spot driver
