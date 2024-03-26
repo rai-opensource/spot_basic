@@ -279,7 +279,8 @@ class SpotBasic:
         self._rviz = rviz
 
         # A tf listener instance can be connected to the robot.
-        self._tf_listener: TFListenerWrapper = ros_process.tf_listener()
+        # Note that for testing at least this does need to be ros_scope and not ros_process
+        self._tf_listener: TFListenerWrapper = ros_scope.tf_listener()
 
         # TODO: are there other frame names to grab?
         self._body_frame_name = namespace_with(self.robot_name, BODY_FRAME_NAME)
