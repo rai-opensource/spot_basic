@@ -235,7 +235,7 @@ class SpotBasic:
         HAND = HAND_FRAME_NAME
         GRAV_ALIGNED_BODY = GRAV_ALIGNED_BODY_FRAME_NAME
         GROUND_PLANE = GROUND_PLANE_FRAME_NAME
-        WRIST = "link_wr1"
+        WRIST = "arm_link_wr1"
         HEAD = "head"
         BACK = "back"
         LEFT = "left"
@@ -3446,7 +3446,7 @@ class SpotBasic:
         Args:
             root_frame_name: name of root frame as a string (without 'RobotName/' as the prefix)
             root_t_task: the transform from the root frame to the "task frame" (this doesn't need a name)
-            wrist_t_tool: The tool pose relative to the parent link (link_wr1).
+            wrist_t_tool: The tool pose relative to the parent link (arm_link_wr1).
                 This can also be thought of as the "remote center" frame.
             trajectory: Discrete waypoints of where we want the tool to be relative to the task frame
                 and the duration of time to slerp over.
@@ -3490,7 +3490,7 @@ class SpotBasic:
         Args:
             root_frame_name: name of root frame as a string
             root_t_task: the transform from the root frame to the "task frame" (this doesn't need a name)
-            wrist_t_tool: The tool pose relative to the parent link (link_wr1).
+            wrist_t_tool: The tool pose relative to the parent link (arm_link_wr1).
                 This can also be thought of as the "remote center" frame.
             trajectory: Discrete waypoints of where we want the tool to be relative to the task frame
                 and the duration of time to slerp over.
