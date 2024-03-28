@@ -21,11 +21,11 @@ from bdai_ros.utilities.manual_conversions import (
     to_ros_pose,
     to_se3,
 )
-from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 from bdai_ros2_wrappers.action_client import ActionClientWrapper
 from bdai_ros2_wrappers.action_handle import ActionHandle
 from bdai_ros2_wrappers.futures import wait_for_future
 from bdai_ros2_wrappers.service_handle import ServiceHandle
+from bdai_ros2_wrappers.tf_listener_wrapper import TFListenerWrapper
 from bdai_ros2_wrappers.type_hints import Action, SrvTypeRequest
 from bdai_ros2_wrappers.utilities import namespace_with
 from bosdyn.api import (
@@ -1689,17 +1689,21 @@ class SpotBasic:
                 "TFListenerWrapper is not connected. Use set_tf_listener() or ros_process.main(uses_tf=True)."
             )
 
+        # Check if the frames are FrameHints and just get the str value if true
         if isinstance(frame_a, self.FrameHint):
             frame_a = frame_a.value
-
         if isinstance(frame_b, self.FrameHint):
             frame_b = frame_b.value
 
-        return to_se3(
-            self._tf_listener.lookup_a_tform_b(
-                f"{self.robot_name}/{frame_a}", f"{self.robot_name}/{frame_b}", transform_time, timeout, wait_for_frames
-            )
-        )
+        # Check if namespaced and add robot_name if not
+        # Not using spot_namespaced() because it adds a / to the front and TF2 doesn't like that
+        if not frame_a.startswith(self.robot_name):
+            frame_a = f"{self.robot_name}/{frame_a}"
+        if not frame_b.startswith(self.robot_name):
+            frame_b = f"{self.robot_name}/{frame_b}"
+
+        # Return transform as SE3
+        return to_se3(self._tf_listener.lookup_a_tform_b(frame_a, frame_b, transform_time, timeout, wait_for_frames))
 
     def _get_basic_tform_tree_snapshot(
         self, transform_time: Optional[Union[Time, float]] = None
