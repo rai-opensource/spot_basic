@@ -76,7 +76,7 @@ from sklearn.preprocessing import normalize
 from spatialmath import SE2, SE3, SO3, SpatialForce, Twist2, Twist3, UnitQuaternion
 from spatialmath.base.types import R3
 from spatialmath.spatialvector import SpatialVector
-from spot_msgs.action import Manipulation
+from spot_msgs.action import ExecuteDance, Manipulation
 from spot_msgs.action import RobotCommand as RobotCommandAction
 from spot_msgs.srv import (
     ChoreographyRecordedStateToAnimation,
@@ -85,7 +85,6 @@ from spot_msgs.srv import (
     ClearBehaviorFault,
     DeleteSound,
     Dock,
-    ExecuteDance,
     GetChoreographyStatus,
     GetGripperCameraParameters,
     GetInverseKinematicSolutions,
@@ -319,10 +318,6 @@ class SpotBasic(SpotBase):
         self._stop_recording_state_client = self.node.create_client(
             ChoreographyStopRecordingState, spot_namespaced(self.robot_name, "stop_recording_state")
         )
-
-        self._execute_dance_client = self.node.create_client(
-            ExecuteDance, spot_namespaced(self.robot_name, "execute_dance")
-        )
         self._ik_client = self.node.create_client(
             GetInverseKinematicSolutions, spot_namespaced(self.robot_name, "get_inverse_kinematic_solutions")
         )
@@ -379,6 +374,10 @@ class SpotBasic(SpotBase):
         )
         self._get_volume_client = self.node.create_client(GetVolume, spot_namespaced(self.robot_name, "get_volume"))
         self._set_volume_client = self.node.create_client(SetVolume, spot_namespaced(self.robot_name, "set_volume"))
+
+        self._execute_dance_ac = ActionClientWrapper(
+            ExecuteDance, spot_namespaced(robot_name, "execute_dance"), self.node
+        )
 
         self._robot_command_client = self.node.create_client(
             RobotCommandService, spot_namespaced(self.robot_name, "robot_command")
@@ -974,7 +973,7 @@ class SpotBasic(SpotBase):
             (True, "success") if the command succeeded, (False, <error_message>) otherwise
         """
         self.node.get_logger().info(f"Uploading dance at '{path}' to {self.robot_name}")
-        request = ExecuteDance.Request()
+        request = ExecuteDance.Goal()
         try:
             dance_file = open(path, "r")
             request.choreo_file_content = dance_file.read()
@@ -982,7 +981,7 @@ class SpotBasic(SpotBase):
         except FileNotFoundError:
             return False, "Specified filepath does not exist!"
 
-        future = self._execute_dance_client.call_async(request)
+        future = self._execute_dance_ac.send_goal_async(request)
         if not wait_for_future(future, context=self.node.context):
             return False, "Call to wait_for_future timed out"
         response = future.result()
@@ -999,9 +998,9 @@ class SpotBasic(SpotBase):
             (True, "success") if the command succeeded, (False, <error_message>) otherwise
         """
 
-        request = ExecuteDance.Request()
+        request = ExecuteDance.Goal()
         request.choreo_sequence_serialized = choreography_sequence.SerializeToString()
-        future = self._execute_dance_client.call_async(request)
+        future = self._execute_dance_ac.send_goal_async(request)
         if not wait_for_future(future, context=self.node.context):
             return False, "Call to wait_for_future timed out"
         response = future.result()
