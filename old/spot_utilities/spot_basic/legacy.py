@@ -115,6 +115,7 @@ from spot_utilities.robot_command_helpers import (
     timestamped_se3_poses_to_se3_trajectory,
     timestamped_spatialforces_to_wrench_protos,
 )
+from spot_utilities.spot_basic.base import SpotBase
 from spot_utilities.spot_dataclasses import (
     ArmJointMap,
     AxisModeMap,
@@ -192,7 +193,7 @@ class RobotComposeCommandHandle(object):
             self._result_callback(feedback)
 
 
-class SpotBasic:
+class SpotBasic(SpotBase):
     """Base ROS2 Node that provides interfaces to calling various commands"""
 
     TRIGGER_SERVICES = [
@@ -272,12 +273,7 @@ class SpotBasic:
             dry: True if this is a dry run and commands should not actually be sent, False otherwise
             rviz: True if visuals should be published, False otherwise
         """
-        node = node or ros_scope.node()
-        if node is None:
-            raise ValueError("no process-wide ROS 2 node available (did you use bdai_ros2_wrapper.process.main?)")
-        self.node = node
-
-        self._robot_name = robot_name
+        super().__init__(robot_name, node=node)
         self._disable_collisions = disable_collisions
         self._dry = dry
         self._rviz = rviz
@@ -408,10 +404,6 @@ class SpotBasic:
 
     def _handle_joint_states(self, message: JointState) -> None:
         self._joint_states = message
-
-    @property
-    def robot_name(self) -> str:
-        return self._robot_name
 
     @property
     def body_frame_name(self) -> str:
@@ -1403,22 +1395,6 @@ class SpotBasic:
             return None
         response = future.result()
         return response.response
-
-    def has_arm(self) -> Optional[bool]:
-        """Queries if the spot has an arm
-
-        Returns:
-            True if the spot has an arm, False if it does not, and None if the query failed
-        """
-        self.node.get_logger().info(f"Checking if {self.robot_name} has an arm")
-        request = GetParameters.Request()
-        request.names = ["has_arm"]
-        future = self._get_parameters_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return None
-        response = future.result()
-        param = response.values[0]
-        return param.bool_value
 
     def _send_action_goal_async(
         self,
