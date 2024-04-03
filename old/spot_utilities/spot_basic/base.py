@@ -1,12 +1,17 @@
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
-from typing import Any, Optional
+from typing import Any, Optional, Protocol
 
 import bdai_ros2_wrappers.scope as ros_scope
 from bdai_ros2_wrappers.service import Serviced
 from rcl_interfaces.srv import GetParameters
 from rclpy.node import Node
 from spot_utilities.spot_util import spot_namespaced
+
+
+class SpotBaseProtocol(Protocol):
+    robot_name: str
+    node: Node
 
 
 class SpotBase:
@@ -24,6 +29,8 @@ class SpotBase:
             raise ValueError("no process-wide ROS 2 node available (did you use bdai_ros2_wrapper.process.main?)")
         self._node = node
 
+        # make sure robot name and node properties are initialized before constructing mixins
+        super().__init__(*args, **kwargs)
         self._get_spot_parameters = Serviced(
             GetParameters, spot_namespaced(self.robot_name, "spot_ros2/get_parameters"), node=self.node
         )

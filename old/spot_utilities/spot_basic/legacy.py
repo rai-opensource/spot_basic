@@ -115,6 +115,7 @@ from spot_utilities.robot_command_helpers import (
     timestamped_spatialforces_to_wrench_protos,
 )
 from spot_utilities.spot_basic.base import SpotBase
+from spot_utilities.spot_basic.lease import SpotLeaseMixin
 from spot_utilities.spot_dataclasses import (
     ArmJointMap,
     AxisModeMap,
@@ -192,12 +193,10 @@ class RobotComposeCommandHandle(object):
             self._result_callback(feedback)
 
 
-class SpotBasic(SpotBase):
+class SpotBasic(SpotBase, SpotLeaseMixin):
     """Base ROS2 Node that provides interfaces to calling various commands"""
 
     TRIGGER_SERVICES = [
-        "claim",
-        "release",
         "stop",
         "self_right",
         "stop_dance",
@@ -515,55 +514,6 @@ class SpotBasic(SpotBase):
             result_callback=result_callback,
             on_failure_callback=on_failure_callback,
         )
-
-    def claim(
-        self,
-        *,
-        asynchronous: bool = False,
-        result_callback: Optional[Callable[[Future], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Union[bool, SpotServiceHandle]:
-        """Triggers the 'claim' service on the SpotDriver
-
-        Args:
-            asynchronous: whether or not to execute the function asynchronously
-            result_callback: callback executing on the future returned from a service call
-            on_failure_callback: callback executing if a service fails
-
-        Returns:
-            If synchronous, True if command succeeded, False otherwise
-            If asynchronous, Service handle containing the updated results
-        """
-        if asynchronous:
-            return self.trigger_service_async(
-                service_name="claim", result_callback=result_callback, on_failure_callback=on_failure_callback
-            )
-
-        return self.trigger_service("claim")
-
-    def release(
-        self,
-        *,
-        asynchronous: bool = False,
-        result_callback: Optional[Callable[[Future], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Union[bool, SpotServiceHandle]:
-        """Triggers the 'release' service on the SpotDriver
-
-        Args:
-            asynchronous: whether or not to execute the function asynchronously
-            result_callback: callback executing on the future returned from a service call
-            on_failure_callback: callback executing if a service fails
-
-        Returns:
-            If synchronous, True if command succeeded, False otherwise
-            If asynchronous, Service handle containing the updated results
-        """
-        if asynchronous:
-            return self.trigger_service_async(
-                service_name="release", result_callback=result_callback, on_failure_callback=on_failure_callback
-            )
-        return self.trigger_service("release")
 
     def stop(
         self,
