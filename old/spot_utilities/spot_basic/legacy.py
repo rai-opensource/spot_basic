@@ -116,10 +116,7 @@ from spot_utilities.robot_command_helpers import (
 )
 from spot_utilities.spot_basic.base import SpotBase
 from spot_utilities.spot_basic.lease import SpotLeaseMixin
-from spot_utilities.spot_dataclasses import (
-    ArmJointMap,
-    AxisModeMap,
-)
+from spot_utilities.spot_dataclasses import ArmJointMap, AxisModeMap, LegJointMap
 from spot_utilities.spot_util import spot_namespaced
 from std_msgs.msg import ColorRGBA as Color
 from std_srvs.srv import SetBool, Trigger
@@ -436,6 +433,27 @@ class SpotBasic(SpotBase, SpotLeaseMixin):
             el1=joint_positions[namespace_with(self.robot_name, "arm_el1")],
             wr0=joint_positions[namespace_with(self.robot_name, "arm_wr0")],
             wr1=joint_positions[namespace_with(self.robot_name, "arm_wr1")],
+        )
+
+    @property
+    def leg_joint_positions(self) -> LegJointMap:
+        if self._joint_states is None:
+            return LegJointMap.from_list([0.0] * 12)
+        joint_positions = dict(zip(self._joint_states.name, self._joint_states.position, strict=True))
+        # self.node.get_logger().info(joint_positions)
+        return LegJointMap(
+            front_left_hip_x=joint_positions[namespace_with(self.robot_name, "front_left_hip_x")],
+            front_left_hip_y=joint_positions[namespace_with(self.robot_name, "front_left_hip_y")],
+            front_left_knee=joint_positions[namespace_with(self.robot_name, "front_left_knee")],
+            front_right_hip_x=joint_positions[namespace_with(self.robot_name, "front_right_hip_x")],
+            front_right_hip_y=joint_positions[namespace_with(self.robot_name, "front_right_hip_y")],
+            front_right_knee=joint_positions[namespace_with(self.robot_name, "front_right_knee")],
+            rear_left_hip_x=joint_positions[namespace_with(self.robot_name, "rear_left_hip_x")],
+            rear_left_hip_y=joint_positions[namespace_with(self.robot_name, "rear_left_hip_y")],
+            rear_left_knee=joint_positions[namespace_with(self.robot_name, "rear_left_knee")],
+            rear_right_hip_x=joint_positions[namespace_with(self.robot_name, "rear_right_hip_x")],
+            rear_right_hip_y=joint_positions[namespace_with(self.robot_name, "rear_right_hip_y")],
+            rear_right_knee=joint_positions[namespace_with(self.robot_name, "rear_right_knee")],
         )
 
     def get_set_base_frame(self, base_frame: Optional[FrameHint]) -> FrameHint:
