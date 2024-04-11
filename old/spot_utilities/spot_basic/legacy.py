@@ -115,6 +115,7 @@ from spot_utilities.robot_command_helpers import (
     timestamped_spatialforces_to_wrench_protos,
 )
 from spot_utilities.spot_basic.base import SpotBase
+from spot_utilities.spot_basic.estop import SpotEStopMixin
 from spot_utilities.spot_basic.lease import SpotLeaseMixin
 from spot_utilities.spot_dataclasses import ArmJointMap, AxisModeMap, LegJointMap
 from spot_utilities.spot_util import spot_namespaced
@@ -190,7 +191,7 @@ class RobotComposeCommandHandle(object):
             self._result_callback(feedback)
 
 
-class SpotBasic(SpotBase, SpotLeaseMixin):
+class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin):
     """Base ROS2 Node that provides interfaces to calling various commands"""
 
     TRIGGER_SERVICES = [
@@ -199,9 +200,6 @@ class SpotBasic(SpotBase, SpotLeaseMixin):
         "stop_dance",
         "power_on",
         "power_off",
-        "estop/hard",
-        "estop/gentle",
-        "estop/release",
         "undock",
     ]
 
@@ -822,81 +820,6 @@ class SpotBasic(SpotBase, SpotLeaseMixin):
 
     # Alias for the power_off function
     power_motors_off = power_off
-
-    def estop_hard(
-        self,
-        *,
-        asynchronous: bool = False,
-        result_callback: Optional[Callable[[Future], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Union[bool, SpotServiceHandle]:
-        """Triggers the 'estop/hard' service on the SpotDriver. The robot will immediately cut power to the motors
-
-        Args:
-            asynchronous: whether or not to execute the function asynchronously
-            result_callback: callback executing on the future returned from a service call
-            on_failure_callback: callback executing if a service fails
-
-        Returns:
-            If synchronous, True if command succeeded, False otherwise
-            If asynchronous, Service handle containing the updated results
-        """
-        if asynchronous:
-            return self.trigger_service_async(
-                service_name="estop/hard", result_callback=result_callback, on_failure_callback=on_failure_callback
-            )
-
-        return self.trigger_service("estop/hard")
-
-    def estop_gentle(
-        self,
-        *,
-        asynchronous: bool = False,
-        result_callback: Optional[Callable[[Future], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Union[bool, SpotServiceHandle]:
-        """Triggers the 'estop/gentle' service on the SpotDriver. The robot will try to settle on the ground before
-                cutting power to the motors.
-
-        Args:
-            asynchronous: whether or not to execute the function asynchronously
-            result_callback: callback executing on the future returned from a service call
-            on_failure_callback: callback executing if a service fails
-
-        Returns:
-            If synchronous, True if command succeeded, False otherwise
-            If asynchronous, Service handle containing the updated results
-        """
-        if asynchronous:
-            return self.trigger_service_async(
-                service_name="estop/gentle", result_callback=result_callback, on_failure_callback=on_failure_callback
-            )
-
-        return self.trigger_service("estop/gentle")
-
-    def estop_release(
-        self,
-        *,
-        asynchronous: bool = False,
-        result_callback: Optional[Callable[[Future], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Union[bool, SpotServiceHandle]:
-        """Triggers the 'estop/release' service on the SpotDriver
-
-        Args:
-            asynchronous: whether or not to execute the function asynchronously
-            result_callback: callback executing on the future returned from a service call
-            on_failure_callback: callback executing if a service fails
-
-        Returns:
-            If synchronous, True if command succeeded, False otherwise
-            If asynchronous, Service handle containing the updated results
-        """
-        if asynchronous:
-            return self.trigger_service_async(
-                service_name="estop/release", result_callback=result_callback, on_failure_callback=on_failure_callback
-            )
-        return self.trigger_service("estop/release")
 
     def set_stair_mode(self, value: bool) -> bool:
         """Sets whether to be in stair_mode on the SpotDriver
