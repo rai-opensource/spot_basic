@@ -55,8 +55,8 @@ from bosdyn.client.robot_command import (
 )
 from bosdyn.geometry import Quaternion, to_euler_zxy
 from bosdyn.util import seconds_to_duration
-from bosdyn_msgs.conversions import convert
-from bosdyn_msgs.msg import (
+from bosdyn_api_msgs.conversions import convert
+from bosdyn_api_msgs.msg import (
     GripperCameraParams,
     ListWorldObjectRequest,
     ListWorldObjectResponse,
