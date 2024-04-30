@@ -17,3 +17,4 @@ def test_basic_motion_inplace(hardware_spot_interface: SpotBasic, prompt_session
     assert prompt_session.boolean_ask("has the robot arm been stowed?")
     assert hardware_spot_interface.sit(timeout_sec=5.0) is not None
     assert prompt_session.boolean_ask("has the robot sat down?")
+    assert hardware_spot_interface.release()

@@ -7,7 +7,7 @@ from spot_wrapper.testing.fixtures import SpotFixture
 
 
 @pytest.mark.usefixtures("simple_spot_node")
-def test_spot_leasing(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
+def test_manual_spot_leasing(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
 
     assert spot_interface.claim()

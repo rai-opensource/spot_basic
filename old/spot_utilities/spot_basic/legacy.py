@@ -117,6 +117,7 @@ from spot_utilities.robot_command_helpers import (
 from spot_utilities.spot_basic.base import SpotBase
 from spot_utilities.spot_basic.estop import SpotEStopMixin
 from spot_utilities.spot_basic.lease import SpotLeaseMixin
+from spot_utilities.spot_basic.power import SpotPowerMixin
 from spot_utilities.spot_dataclasses import ArmJointMap, AxisModeMap, LegJointMap
 from spot_utilities.spot_util import spot_namespaced
 from std_msgs.msg import ColorRGBA as Color
@@ -191,15 +192,13 @@ class RobotComposeCommandHandle(object):
             self._result_callback(feedback)
 
 
-class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin):
+class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin):
     """Base ROS2 Node that provides interfaces to calling various commands"""
 
     TRIGGER_SERVICES = [
         "stop",
         "self_right",
         "stop_dance",
-        "power_on",
-        "power_off",
         "undock",
     ]
 
@@ -764,62 +763,6 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin):
             feedback_callback=feedback_callback,
             on_failure_callback=on_failure_callback,
         )
-
-    def power_on(
-        self,
-        *,
-        asynchronous: bool = False,
-        result_callback: Optional[Callable[[Future], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Union[bool, SpotServiceHandle]:
-        """Triggers the 'power_on' service on the SpotDriver
-
-        Args:
-            asynchronous: whether or not to execute the function asynchronously
-            result_callback: callback executing on the future returned from a service call
-            on_failure_callback: callback executing if a service fails
-
-        Returns:
-            True if command succeeded, False otherwise if synchronous
-            Service handle containing the updated results if asynchronous
-        """
-        if asynchronous:
-            return self.trigger_service_async(
-                service_name="power_on", result_callback=result_callback, on_failure_callback=on_failure_callback
-            )
-
-        return self.trigger_service("power_on")
-
-    # Alias for the power_on function
-    power_motors_on = power_on
-
-    def power_off(
-        self,
-        *,
-        asynchronous: bool = False,
-        result_callback: Optional[Callable[[Future], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Union[bool, SpotServiceHandle]:
-        """Triggers the 'power_off' service on the SpotDriver
-
-        Args:
-            asynchronous: whether or not to execute the function asynchronously
-            result_callback: callback executing on the future returned from a service call
-            on_failure_callback: callback executing if a service fails
-
-        Returns:
-            If synchronous, True if command succeeded, False otherwise
-            If asynchronous, Service handle containing the updated results
-        """
-        if asynchronous:
-            return self.trigger_service_async(
-                service_name="power_off", result_callback=result_callback, on_failure_callback=on_failure_callback
-            )
-
-        return self.trigger_service("power_off")
-
-    # Alias for the power_off function
-    power_motors_off = power_off
 
     def set_stair_mode(self, value: bool) -> bool:
         """Sets whether to be in stair_mode on the SpotDriver
