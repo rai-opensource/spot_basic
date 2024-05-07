@@ -8,10 +8,10 @@ from spot_utilities.spot_util import spot_namespaced
 from std_srvs.srv import Trigger
 
 
-class SpotEStopMixin:
+class SpotEStopMixin(SpotBaseProtocol):
     """Mixin that manages Spot emergency stops (or eStops)."""
 
-    def __init__(self: SpotBaseProtocol, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.estop_hard = SpotServiced(Trigger, spot_namespaced(self.robot_name, "estop/hard"), node=self.node)
         self.estop_gentle = SpotServiced(Trigger, spot_namespaced(self.robot_name, "estop/gentle"), node=self.node)

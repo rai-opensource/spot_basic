@@ -5,13 +5,12 @@ from __future__ import annotations
 import argparse
 import os
 import tempfile
-from enum import Enum, IntEnum
+from enum import IntEnum
 from functools import partial
 from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 
 import bdai.interactive_choreo.choreo_builders.serialization_utils as serialization_utils
 import bdai_ros2_wrappers.process as ros_process
-import bdai_ros2_wrappers.scope as ros_scope
 import geometry_msgs
 import numpy as np
 import rclpy
@@ -19,15 +18,12 @@ from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai_ros.utilities.manual_conversions import (
     se3_to_se3pose_proto,
     to_ros_pose,
-    to_se3,
 )
 from bdai_ros2_wrappers.action_client import ActionClientWrapper
 from bdai_ros2_wrappers.action_handle import ActionHandle
 from bdai_ros2_wrappers.futures import wait_for_future
 from bdai_ros2_wrappers.service_handle import ServiceHandle
-from bdai_ros2_wrappers.tf_listener_wrapper import TFListenerWrapper
 from bdai_ros2_wrappers.type_hints import Action, SrvTypeRequest
-from bdai_ros2_wrappers.utilities import namespace_with
 from bosdyn.api import (
     arm_command_pb2,
     basic_command_pb2,
@@ -42,11 +38,6 @@ from bosdyn.api.spot.choreography_sequence_pb2 import Animation, ChoreographySeq
 from bosdyn.api.spot.inverse_kinematics_pb2 import InverseKinematicsRequest, InverseKinematicsResponse
 from bosdyn.client.frame_helpers import (
     BODY_FRAME_NAME,
-    GRAV_ALIGNED_BODY_FRAME_NAME,
-    GROUND_PLANE_FRAME_NAME,
-    HAND_FRAME_NAME,
-    ODOM_FRAME_NAME,
-    VISION_FRAME_NAME,
 )
 from bosdyn.client.robot_command import (
     _CLAW_GRIPPER_CLOSED_ANGLE,
@@ -71,7 +62,7 @@ from rclpy.client import Client
 from rclpy.node import Node
 from rclpy.task import Future
 from rclpy.time import Duration, Time
-from sensor_msgs.msg import CameraInfo, JointState
+from sensor_msgs.msg import CameraInfo
 from sklearn.preprocessing import normalize
 from spatialmath import SE2, SE3, SO3, SpatialForce, Twist2, Twist3, UnitQuaternion
 from spatialmath.base.types import R3
@@ -118,7 +109,8 @@ from spot_utilities.spot_basic.base import SpotBase
 from spot_utilities.spot_basic.estop import SpotEStopMixin
 from spot_utilities.spot_basic.lease import SpotLeaseMixin
 from spot_utilities.spot_basic.power import SpotPowerMixin
-from spot_utilities.spot_dataclasses import ArmJointMap, AxisModeMap, LegJointMap
+from spot_utilities.spot_basic.state import FrameHint, SpotStateMixin
+from spot_utilities.spot_dataclasses import ArmJointMap, AxisModeMap
 from spot_utilities.spot_util import spot_namespaced
 from std_msgs.msg import ColorRGBA as Color
 from std_srvs.srv import SetBool, Trigger
@@ -192,7 +184,7 @@ class RobotComposeCommandHandle(object):
             self._result_callback(feedback)
 
 
-class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin):
+class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotStateMixin):
     """Base ROS2 Node that provides interfaces to calling various commands"""
 
     TRIGGER_SERVICES = [
@@ -225,28 +217,6 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin):
         RIGHT = 1
         LEFT = 2
 
-    class FrameHint(str, Enum):
-        BODY = BODY_FRAME_NAME
-        VISION = VISION_FRAME_NAME
-        ODOM = ODOM_FRAME_NAME
-        HAND = HAND_FRAME_NAME
-        GRAV_ALIGNED_BODY = GRAV_ALIGNED_BODY_FRAME_NAME
-        GROUND_PLANE = GROUND_PLANE_FRAME_NAME
-        WRIST = "arm_link_wr1"
-        HEAD = "head"
-        BACK = "back"
-        LEFT = "left"
-        RIGHT = "right"
-        FRONT_LEFT = "frontleft"
-        FRONT_RIGHT = "frontright"
-        BACK_CAMERA = "back_fisheye"
-        FRONT_LEFT_CAMERA = "frontleft_fisheye"
-        FRONT_RIGHT_CAMERA = "frontright_fisheye"
-        LEFT_CAMERA = "left_fisheye"
-        RIGHT_CAMERA = "right_fisheye"
-        HAND_CAMERA = "hand_color_image_sensor"
-        HAND_DEPTH_CAMERA = "hand_depth_sensor"
-
     def __init__(
         self,
         robot_name: str,
@@ -270,26 +240,11 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin):
         self._dry = dry
         self._rviz = rviz
 
-        # A tf listener instance can be connected to the robot.
-        # Note that for testing at least this does need to be ros_scope and not ros_process
-        self._tf_listener: TFListenerWrapper = ros_scope.tf_listener()
-
-        # TODO: are there other frame names to grab?
-        self._body_frame_name = namespace_with(self.robot_name, BODY_FRAME_NAME)
-        self._hand_frame_name = namespace_with(self.robot_name, HAND_FRAME_NAME)
-        self._vision_frame_name = namespace_with(self.robot_name, VISION_FRAME_NAME)
-        self._odom_frame_name = namespace_with(self.robot_name, ODOM_FRAME_NAME)
-
         if self._rviz:
             self._vis_pub = self.node.create_publisher(Marker, "/visualization_marker", 10)
 
         self._velocity_cmd_publisher = self.node.create_publisher(
             Twist, spot_namespaced(self.robot_name, "cmd_vel"), 10
-        )
-
-        self._joint_states: Optional[JointState] = None
-        self._joint_states_subscription = self.node.create_subscription(
-            JointState, spot_namespaced(self.robot_name, "joint_states"), self._handle_joint_states, 10
         )
 
         self._trigger_clients = {}
@@ -394,70 +349,11 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin):
                     f"No 'Manipulation' action server for {self.robot_name} found. Assuming it has no arm."
                 )
 
-    def _handle_joint_states(self, message: JointState) -> None:
-        self._joint_states = message
-
-    @property
-    def body_frame_name(self) -> str:
-        return self._body_frame_name
-
-    @property
-    def hand_frame_name(self) -> str:
-        return self._hand_frame_name
-
-    @property
-    def vision_frame_name(self) -> str:
-        return self._vision_frame_name
-
-    @property
-    def odom_frame_name(self) -> str:
-        return self._odom_frame_name
-
-    @property
-    def tf_listener(self) -> Optional[TFListenerWrapper]:
-        return self._tf_listener
-
-    @property
-    def arm_joint_positions(self) -> ArmJointMap:
-        if self._joint_states is None:
-            return ArmJointMap.from_list(sh0=0.0, sh1=0.0, el0=0.0, el1=0.0, wr0=0.0, wr1=0.0)
-        joint_positions = dict(zip(self._joint_states.name, self._joint_states.position, strict=True))
-        # self.node.get_logger().info(joint_positions)
-        return ArmJointMap(
-            sh0=joint_positions[namespace_with(self.robot_name, "arm_sh0")],
-            sh1=joint_positions[namespace_with(self.robot_name, "arm_sh1")],
-            el0=joint_positions[namespace_with(self.robot_name, "arm_el0")],
-            el1=joint_positions[namespace_with(self.robot_name, "arm_el1")],
-            wr0=joint_positions[namespace_with(self.robot_name, "arm_wr0")],
-            wr1=joint_positions[namespace_with(self.robot_name, "arm_wr1")],
-        )
-
-    @property
-    def leg_joint_positions(self) -> LegJointMap:
-        if self._joint_states is None:
-            return LegJointMap.from_list([0.0] * 12)
-        joint_positions = dict(zip(self._joint_states.name, self._joint_states.position, strict=True))
-        # self.node.get_logger().info(joint_positions)
-        return LegJointMap(
-            front_left_hip_x=joint_positions[namespace_with(self.robot_name, "front_left_hip_x")],
-            front_left_hip_y=joint_positions[namespace_with(self.robot_name, "front_left_hip_y")],
-            front_left_knee=joint_positions[namespace_with(self.robot_name, "front_left_knee")],
-            front_right_hip_x=joint_positions[namespace_with(self.robot_name, "front_right_hip_x")],
-            front_right_hip_y=joint_positions[namespace_with(self.robot_name, "front_right_hip_y")],
-            front_right_knee=joint_positions[namespace_with(self.robot_name, "front_right_knee")],
-            rear_left_hip_x=joint_positions[namespace_with(self.robot_name, "rear_left_hip_x")],
-            rear_left_hip_y=joint_positions[namespace_with(self.robot_name, "rear_left_hip_y")],
-            rear_left_knee=joint_positions[namespace_with(self.robot_name, "rear_left_knee")],
-            rear_right_hip_x=joint_positions[namespace_with(self.robot_name, "rear_right_hip_x")],
-            rear_right_hip_y=joint_positions[namespace_with(self.robot_name, "rear_right_hip_y")],
-            rear_right_knee=joint_positions[namespace_with(self.robot_name, "rear_right_knee")],
-        )
-
     def get_set_base_frame(self, base_frame: Optional[FrameHint]) -> FrameHint:
         """Function which returns the provided frame, or the VISION frame if base_frame is not provided"""
         if base_frame is not None:
             return base_frame
-        return self.FrameHint.VISION
+        return FrameHint.VISION
 
     def initialize_robot(self) -> bool:
         """Returns true/false based on success of claiming and powering up Spot."""
@@ -469,17 +365,6 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin):
         if not self.power_motors_on():
             return False
         return True
-
-    def set_tf_listener(self, tf_listener: TFListenerWrapper) -> None:
-        """Attaches a TFListenerWrapper instance to the robot.
-
-        Args:
-            tf_listener: An instance of the TFListenerWrapper.
-        """
-        self._tf_listener = tf_listener
-
-    def unset_tf_listener(self) -> None:
-        self._tf_listener = None
 
     def trigger_service(self, command_name: str) -> bool:
         """Triggers a command service on the SpotDriver
@@ -1556,178 +1441,6 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin):
         proto = RobotCommandBuilder.battery_change_pose_command(int(dir_hint))
         return self._convert_proto_to_robot_cmd_action_goal(proto)
 
-    def lookup_a_tform_b(
-        self,
-        frame_a: Union[FrameHint, str],
-        frame_b: Union[FrameHint, str],
-        transform_time: Optional[Union[Time, float]] = None,
-        timeout: Optional[float] = None,
-        wait_for_frames: bool = False,
-    ) -> SE3:
-        """A robot specific transform from frame_a to frame_b.
-
-        The transform returned will be frame_a_t_frame_b, which is robot robot specific.
-        So instead if frame_a is VISION, we internally append it to the robot name
-        s.t. "<Robot Name>/VISION", will be called.
-
-        Args:
-            frame_a: Base frame for transform.
-            frame_b: Tip frame for transform.
-            transform_time: Time the transform is to be published.
-            timeout: The time to wait for the transform to become available if the transform_time is beyond the most
-                recent transform in the buffer.
-            wait_for_frames: If true, waits timeout amount of time for a path to exist from frame_a to frame_b in the
-                buffer. If false, this will return immediately if a path does not exist even if timeout is not
-                None.
-        Returns:
-            The timestamp from the latest recorded transform frame_a_t_frame_b
-        Raises:
-            All the possible TransformExceptions. ValueError if no TFListenerWrapper instance is connected.
-        """
-        if self._tf_listener is None:
-            raise ValueError(
-                "TFListenerWrapper is not connected. Use set_tf_listener() or ros_process.main(uses_tf=True)."
-            )
-
-        # Check if the frames are FrameHints and just get the str value if true
-        if isinstance(frame_a, self.FrameHint):
-            frame_a = frame_a.value
-        if isinstance(frame_b, self.FrameHint):
-            frame_b = frame_b.value
-
-        # Check if namespaced and add robot_name if not
-        # Not using spot_namespaced() because it adds a / to the front and TF2 doesn't like that
-        if not frame_a.startswith(self.robot_name):
-            frame_a = f"{self.robot_name}/{frame_a}"
-        if not frame_b.startswith(self.robot_name):
-            frame_b = f"{self.robot_name}/{frame_b}"
-
-        # Return transform as SE3
-        return to_se3(self._tf_listener.lookup_a_tform_b(frame_a, frame_b, transform_time, timeout, wait_for_frames))
-
-    def _get_basic_tform_tree_snapshot(
-        self, transform_time: Optional[Union[Time, float]] = None
-    ) -> geometry_pb2.FrameTreeSnapshot:
-        """A tree-based collection of transformation containing common frames.
-
-        Common frames include transformations to: BODY, VISION, ODOM, HAND, GRAV_ALIGNED_BODY, GROUND_PLANE and WRIST.
-        Camera sensor related frames are also included: HEAD, BACK, LEFT, RIGHT, FRONT_LEFT, FRONT_RIGHT, BACK_CAMERA,
-        FRONT_LEFT_CAMERA, FRONT_RIGHT_CAMERA, LEFT_CAMERA, RIGHT_CAMERA and HAND_CAMERA.
-
-        Returns:
-            A tree-based collection of transformation to common frames.
-        """
-        child_to_parent_edge_map = {}
-
-        # Add root frame.
-        child_to_parent_edge_map[self.FrameHint.BODY.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
-            parent_tform_child=se3_to_se3pose_proto(SE3())
-        )
-
-        # Add head frame.
-        child_to_parent_edge_map[self.FrameHint.HEAD.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
-            parent_frame_name=self.FrameHint.BODY.value, parent_tform_child=se3_to_se3pose_proto(SE3())
-        )
-
-        # The ground plane is relative to the odom frame.
-        child_to_parent_edge_map[self.FrameHint.GROUND_PLANE.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
-            parent_frame_name=self.FrameHint.ODOM.value,
-            parent_tform_child=se3_to_se3pose_proto(
-                self.lookup_a_tform_b(self.FrameHint.ODOM, self.FrameHint.GROUND_PLANE, transform_time)
-            ),
-        )
-
-        # Add frames relative to the body frame.
-        frames_relative_to_body = [
-            self.FrameHint.VISION,
-            self.FrameHint.ODOM,
-            self.FrameHint.GRAV_ALIGNED_BODY,
-            self.FrameHint.BACK,
-            self.FrameHint.LEFT,
-            self.FrameHint.RIGHT,
-        ]
-
-        if self.has_arm():
-            frames_relative_to_body += [self.FrameHint.WRIST]
-
-        for target_frame in frames_relative_to_body:
-            child_to_parent_edge_map[target_frame.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
-                parent_frame_name=self.FrameHint.BODY.value,
-                parent_tform_child=se3_to_se3pose_proto(
-                    self.lookup_a_tform_b(self.FrameHint.BODY, target_frame, transform_time)
-                ),
-            )
-
-        if self.has_arm():
-            # Add hand frame relative to wrist frame.
-            child_to_parent_edge_map[self.FrameHint.HAND.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
-                parent_frame_name=self.FrameHint.WRIST.value,
-                parent_tform_child=se3_to_se3pose_proto(
-                    self.lookup_a_tform_b(self.FrameHint.WRIST, self.FrameHint.HAND, transform_time)
-                ),
-            )
-
-            # Add hand camera frame.
-            child_to_parent_edge_map[self.FrameHint.HAND_CAMERA.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
-                parent_frame_name=self.FrameHint.WRIST.value,
-                parent_tform_child=se3_to_se3pose_proto(
-                    self.lookup_a_tform_b(self.FrameHint.WRIST, self.FrameHint.HAND_CAMERA, transform_time)
-                ),
-            )
-
-        # Add frames relative to head frame.
-        child_to_parent_edge_map[self.FrameHint.FRONT_LEFT.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
-            parent_frame_name=self.FrameHint.HEAD.value,
-            parent_tform_child=se3_to_se3pose_proto(
-                self.lookup_a_tform_b(self.FrameHint.HEAD, self.FrameHint.FRONT_LEFT, transform_time)
-            ),
-        )
-
-        child_to_parent_edge_map[self.FrameHint.FRONT_RIGHT.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
-            parent_frame_name=self.FrameHint.HEAD.value,
-            parent_tform_child=se3_to_se3pose_proto(
-                self.lookup_a_tform_b(self.FrameHint.HEAD, self.FrameHint.FRONT_RIGHT, transform_time)
-            ),
-        )
-
-        # Add camera sensor frames.
-        child_to_parent_edge_map[self.FrameHint.FRONT_LEFT_CAMERA.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
-            parent_frame_name=self.FrameHint.FRONT_LEFT.value,
-            parent_tform_child=se3_to_se3pose_proto(
-                self.lookup_a_tform_b(self.FrameHint.FRONT_LEFT, self.FrameHint.FRONT_LEFT_CAMERA, transform_time)
-            ),
-        )
-
-        child_to_parent_edge_map[self.FrameHint.FRONT_RIGHT_CAMERA.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
-            parent_frame_name=self.FrameHint.FRONT_RIGHT.value,
-            parent_tform_child=se3_to_se3pose_proto(
-                self.lookup_a_tform_b(self.FrameHint.FRONT_RIGHT, self.FrameHint.FRONT_RIGHT_CAMERA, transform_time)
-            ),
-        )
-
-        child_to_parent_edge_map[self.FrameHint.LEFT_CAMERA.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
-            parent_frame_name=self.FrameHint.LEFT.value,
-            parent_tform_child=se3_to_se3pose_proto(
-                self.lookup_a_tform_b(self.FrameHint.LEFT, self.FrameHint.LEFT_CAMERA, transform_time)
-            ),
-        )
-
-        child_to_parent_edge_map[self.FrameHint.RIGHT_CAMERA.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
-            parent_frame_name=self.FrameHint.RIGHT.value,
-            parent_tform_child=se3_to_se3pose_proto(
-                self.lookup_a_tform_b(self.FrameHint.RIGHT, self.FrameHint.RIGHT_CAMERA, transform_time)
-            ),
-        )
-
-        child_to_parent_edge_map[self.FrameHint.BACK_CAMERA.value] = geometry_pb2.FrameTreeSnapshot.ParentEdge(
-            parent_frame_name=self.FrameHint.BACK.value,
-            parent_tform_child=se3_to_se3pose_proto(
-                self.lookup_a_tform_b(self.FrameHint.BACK, self.FrameHint.BACK_CAMERA, transform_time)
-            ),
-        )
-
-        return geometry_pb2.FrameTreeSnapshot(child_to_parent_edge_map=child_to_parent_edge_map)
-
     def go_to_battery_change_pose(
         self, dir_hint: BatteryChangeDirHint = BatteryChangeDirHint.RIGHT, timeout_sec: Optional[float] = None
     ) -> Optional[RobotCommandFeedback]:
@@ -2011,7 +1724,7 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin):
         body_current_t_body_pointed_at_target = SE3.AngleAxis(angle, normal_axis)
 
         if frame_t_body is None:
-            frame_t_body = self.lookup_a_tform_b(base_frame.value, self.FrameHint.BODY.value, wait_for_frames=True)
+            frame_t_body = self.lookup_a_tform_b(base_frame.value, FrameHint.BODY.value, wait_for_frames=True)
 
         frame_t_body_desired = frame_t_body * body_current_t_body_pointed_at_target
         return frame_t_body_desired
@@ -2105,19 +1818,19 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin):
         # is handled by walk_to (doesn't mean yaw rotation in any other frame should be 0!)
         frame_t_orien_se3 = SE3.RPY(frame_t_goal.rpy())
         gravbody_t_frame = self.lookup_a_tform_b(
-            self.FrameHint.GRAV_ALIGNED_BODY.value, base_frame.value, wait_for_frames=True
+            FrameHint.GRAV_ALIGNED_BODY.value, base_frame.value, wait_for_frames=True
         )
         gravbody_t_orien_se3 = gravbody_t_frame * frame_t_orien_se3
         rpy = gravbody_t_orien_se3.rpy()
         gravbody_t_orien = SE3.RPY(rpy[0], rpy[1], 0)
         if body_height is None:
-            if self._tf_listener is None:
+            if self.tf_listener is None:
                 raise ValueError(
                     "unable to infer body height from frame_t_goal. "
                     "Either pass in 'body_height' explicitly, or call set_tf_listener(tflistener) "
                     "where tflistener should be a TFListenerWrapper"
                 )
-            body_t_frame = self.lookup_a_tform_b(self.FrameHint.BODY.value, base_frame.value, wait_for_frames=True)
+            body_t_frame = self.lookup_a_tform_b(FrameHint.BODY.value, base_frame.value, wait_for_frames=True)
             body_t_goal = body_t_frame * frame_t_goal
             body_height = body_t_goal.z
 
@@ -3971,7 +3684,7 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin):
         stationary_traj = [(SE3(), 1.0)]
 
         return self.move_end_effector_impedance(
-            root_frame_name=SpotBasic.FrameHint.BODY,
+            root_frame_name=FrameHint.BODY,
             root_t_task=root_t_task,
             wrist_t_tool=SE3(),
             trajectory=stationary_traj,

@@ -6,7 +6,7 @@ from spot_utilities.spot_basic import SpotBasic
 from spot_wrapper.testing.fixtures import SpotFixture
 
 
-@pytest.mark.usefixtures("reconfigurable_spot_node")
+@pytest.mark.launch(fixture=pytest.reconfigurable_spot_graph_description)
 def test_spot_base_interface(reconfigurable_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(reconfigurable_spot.api.name, node=ros.node)
     assert spot_interface.robot_name == reconfigurable_spot.api.name

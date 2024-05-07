@@ -9,10 +9,10 @@ from spot_utilities.spot_util import spot_namespaced
 from std_srvs.srv import Trigger
 
 
-class SpotLeaseMixin:
+class SpotLeaseMixin(SpotBaseProtocol):
     """Mixin that manages Spot leases."""
 
-    def __init__(self: SpotBaseProtocol, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.claim = SpotServiced(Trigger, spot_namespaced(self.robot_name, "claim"), node=self.node)
         self.release = SpotServiced(Trigger, spot_namespaced(self.robot_name, "release"), node=self.node)

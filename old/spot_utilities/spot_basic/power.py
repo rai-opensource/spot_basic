@@ -10,10 +10,10 @@ from spot_utilities.spot_util import spot_namespaced
 from std_srvs.srv import Trigger
 
 
-class SpotPowerMixin:
+class SpotPowerMixin(SpotBaseProtocol):
     """Mixin that manages Spot power."""
 
-    def __init__(self: SpotBaseProtocol, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.power_states = Subscription(
             PowerState, spot_namespaced(self.robot_name, "status/power_states"), node=self.node

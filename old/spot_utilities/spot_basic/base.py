@@ -10,8 +10,14 @@ from spot_utilities.spot_util import spot_namespaced
 
 
 class SpotBaseProtocol(Protocol):
-    robot_name: str
-    node: Node
+
+    @property
+    def robot_name(self) -> str: ...
+
+    @property
+    def node(self) -> Node: ...
+
+    def has_arm(self) -> Optional[bool]: ...
 
 
 class SpotBase:
@@ -49,6 +55,6 @@ class SpotBase:
             True if the spot has an arm, False if it does not, and None if the query failed
         """
         self.node.get_logger().info(f"Checking if {self.robot_name} has an arm")
-        response = self._get_spot_parameters(GetParameters.Request(names=["has_arm"]), timeout_sec=1.0)
+        response = self._get_spot_parameters(GetParameters.Request(names=["has_arm"]), timeout_sec=5.0)
         param = response.values[0]
         return param.bool_value

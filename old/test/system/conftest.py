@@ -35,15 +35,17 @@ def hardware_bound_domain_id() -> Iterator[int]:
         yield domain_id
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def hardware_bound_ros(hardware_bound_domain_id: int) -> Iterator[ROSAwareScope]:
-    with ros_scope.top(global_=True, domain_id=hardware_bound_domain_id) as top:
+    with ros_scope.top(global_=True, domain_id=hardware_bound_domain_id, uses_tf=True) as top:
         yield top
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def hardware_spot_interface(hardware_robot_name: str, hardware_bound_ros: ROSAwareScope) -> SpotBasic:
-    return SpotBasic(hardware_robot_name, node=hardware_bound_ros.node)
+    robot_interface = SpotBasic(hardware_robot_name, node=hardware_bound_ros.node)
+    assert robot_interface.initialize_robot()
+    return robot_interface
 
 
 @launch_pytest.fixture(scope="session")

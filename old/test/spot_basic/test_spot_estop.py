@@ -7,7 +7,7 @@ from spot_utilities.spot_basic import SpotBasic
 from spot_wrapper.testing.fixtures import SpotFixture
 
 
-@pytest.mark.usefixtures("simple_spot_node")
+@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_hard_estop(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
 
@@ -23,7 +23,7 @@ def test_spot_hard_estop(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     assert spot_interface.release()
 
 
-@pytest.mark.usefixtures("simple_spot_node")
+@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_gentle_estop(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
 

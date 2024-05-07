@@ -11,7 +11,7 @@ from spot_wrapper.testing.fixtures import SpotFixture
 MotorPowerState = PowerState.MotorPowerState
 
 
-@pytest.mark.usefixtures("simple_spot_node")
+@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_power_cycle(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
     power_state = simple_spot.api.robot_state.power_state
