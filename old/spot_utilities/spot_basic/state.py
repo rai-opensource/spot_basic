@@ -68,7 +68,7 @@ class SpotStateMixin(SpotBaseProtocol):
         self.joint_states = Subscription(JointState, spot_namespaced(self.robot_name, "joint_states"), node=self.node)
 
     def set_tf_listener(self, tf_listener: TFListenerWrapper) -> None:
-        """Attaches a TFListenerWrapper instance to the robot.
+        """Attach a TFListenerWrapper instance to the robot.
 
         Args:
             tf_listener: An instance of the TFListenerWrapper.
@@ -80,6 +80,10 @@ class SpotStateMixin(SpotBaseProtocol):
 
     @property
     def arm_joint_positions(self) -> ArmJointMap:
+        """Get current arm joint joint positions.
+
+        Includes shoulder, elbow, and wrist.
+        """
         joint_states = self.joint_states.latest
         if joint_states is None:
             return ArmJointMap(sh0=0.0, sh1=0.0, el0=0.0, el1=0.0, wr0=0.0, wr1=0.0)
@@ -95,6 +99,10 @@ class SpotStateMixin(SpotBaseProtocol):
 
     @property
     def leg_joint_positions(self) -> LegJointMap:
+        """Get current legs' joint positions.
+
+        Includes left and right hips and knees.
+        """
         joint_states = self.joint_states.latest
         if joint_states is None:
             return LegJointMap.from_list([0.0] * 12)
@@ -122,7 +130,7 @@ class SpotStateMixin(SpotBaseProtocol):
         timeout: Optional[float] = None,
         wait_for_frames: bool = False,
     ) -> SE3:
-        """A robot specific transform from frame_a to frame_b.
+        """Lookup a robot specific transform from `frame_a` to `frame_b`.
 
         The transform returned will be frame_a_t_frame_b, which is robot robot specific.
         So instead if frame_a is VISION, we internally append it to the robot name
@@ -164,7 +172,7 @@ class SpotStateMixin(SpotBaseProtocol):
         return to_se3(self.tf_listener.lookup_a_tform_b(frame_a, frame_b, transform_time, timeout, wait_for_frames))
 
     def get_basic_tform_tree_snapshot(self, transform_time: Optional[Union[Time, float]] = None) -> FrameTreeSnapshot:
-        """A tree-based collection of transformation containing common frames.
+        """Take a snapshot of all transforms involving common frames.
 
         Common frames include transformations to: BODY, VISION, ODOM, HAND, GRAV_ALIGNED_BODY, GROUND_PLANE and WRIST.
         Camera sensor related frames are also included: HEAD, BACK, LEFT, RIGHT, FRONT_LEFT, FRONT_RIGHT, BACK_CAMERA,
@@ -285,4 +293,5 @@ class SpotStateMixin(SpotBaseProtocol):
         return FrameTreeSnapshot(child_to_parent_edge_map=child_to_parent_edge_map)
 
 
+# Alias
 FrameHint = SpotStateMixin.FrameHint

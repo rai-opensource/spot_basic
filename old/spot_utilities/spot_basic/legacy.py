@@ -22,7 +22,6 @@ from bdai_ros.utilities.manual_conversions import (
 from bdai_ros2_wrappers.action_client import ActionClientWrapper
 from bdai_ros2_wrappers.action_handle import ActionHandle
 from bdai_ros2_wrappers.futures import wait_for_future
-from bdai_ros2_wrappers.service_handle import ServiceHandle
 from bdai_ros2_wrappers.type_hints import Action, SrvTypeRequest
 from bosdyn.api import (
     arm_command_pb2,
@@ -110,6 +109,7 @@ from spot_utilities.spot_basic.estop import SpotEStopMixin
 from spot_utilities.spot_basic.lease import SpotLeaseMixin
 from spot_utilities.spot_basic.power import SpotPowerMixin
 from spot_utilities.spot_basic.state import FrameHint, SpotStateMixin
+from spot_utilities.spot_basic.utilities import SpotServiceHandle
 from spot_utilities.spot_dataclasses import ArmJointMap, AxisModeMap
 from spot_utilities.spot_util import spot_namespaced
 from std_msgs.msg import ColorRGBA as Color
@@ -155,11 +155,6 @@ class SpotActionHandle(ActionHandle):
         """Intermediate step to pull the feedback out of the feedback"""
         if self._feedback_callback_internal is not None:
             self._feedback_callback_internal(feedback.feedback)
-
-
-class SpotServiceHandle(ServiceHandle):
-    def __init__(self, robot_name: str, service_name: str, **kwargs: Any):
-        super().__init__(service_name=f"{robot_name}.{service_name}", **kwargs)
 
 
 class RobotComposeCommandHandle(object):

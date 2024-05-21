@@ -26,7 +26,7 @@ def test_walk_and_orient(hardware_spot_interface: SpotBasic, prompt_session: Tes
 
     vision_t_body = hardware_spot_interface.lookup_a_tform_b(FrameHint.VISION, FrameHint.BODY)
     assert hardware_spot_interface.walk_and_orient(vision_t_body) is not None
-    assert prompt_session.boolean_ask("did the robot stay in place?")
+    assert prompt_session.boolean_ask("did the robot stand up in its place?")
 
     vision_t_goal = vision_t_body * SE3.Rt(R=SO3.RPY([0.0, 0.0, 90.0], unit="deg"), t=[0.0, 0.0, 0.5])
     assert hardware_spot_interface.walk_and_orient(vision_t_goal) is not None
