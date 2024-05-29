@@ -1,11 +1,14 @@
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Union
 
+from bdai_ros2_wrappers.action import Actionable
+from bdai_ros2_wrappers.action_handle import ActionHandle
 from bdai_ros2_wrappers.service import Serviced
 from bdai_ros2_wrappers.service_handle import ServiceHandle
-from bdai_ros2_wrappers.type_hints import Msg, SrvTypeRequest
+from bdai_ros2_wrappers.type_hints import Action, Msg, SrvTypeRequest
 from bosdyn_msgs.conversions import convert
+from rclpy.action.client import ActionClient
 from rclpy.client import Client
 from rclpy.context import Context
 
@@ -71,6 +74,30 @@ class SpotServiced(Serviced):
         return super().asynchronous(make_message(self.service_type.Request, *args, **kwargs))
 
 
+class SpotActionable(Actionable):
+    """Ergonomic ROS 2 action wrapper subclass.
+
+    Supports legacy invocation signatures and piecewise goal specifications (see `make_message`).
+    """
+
+    def synchronous(
+        self,
+        *args: Any,
+        timeout_sec: Optional[float] = None,
+        feedback_callback: Optional[Callable] = None,
+        **kwargs: Any,
+    ) -> Any:
+        return super().synchronous(
+            make_message(self.action_type.Goal, *args, **kwargs),
+            feedback_callback=feedback_callback,
+            timeout_sec=timeout_sec,
+        )
+
+    def asynchronous(self, *args: Any, track_feedback: Union[int, bool] = False, **kwargs: Any) -> Any:
+        goal = make_message(self.action_type.Goal, *args, **kwargs)
+        return super().asynchronous(goal, track_feedback=track_feedback)
+
+
 class SpotServiceHandle(ServiceHandle):
     """Extends legacy ServiceHandle for spot specific services"""
 
@@ -114,3 +141,91 @@ class SpotServiceHandle(ServiceHandle):
     def __init__(self, robot_name: str, service_name: str, *args: Any, **kwargs: Any) -> None:
         """ """
         super().__init__(f"{robot_name}.{service_name}", *args, **kwargs)
+
+
+class SpotActionHandle(ActionHandle):
+    """Extends legacy ActionHandle for spot specific actions"""
+
+    @classmethod
+    def call(
+        cls,
+        robot_name: str,
+        action_name: str,
+        action_client: ActionClient,
+        goal: Action.Goal,
+        result_callback: Optional[Callable[[Action.Result], None]] = None,
+        feedback_callback: Optional[Callable[[Action.Feedback], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
+        context: Optional[Context] = None,
+    ) -> "SpotActionHandle":
+        """Call action asynchronously.
+
+        Args:
+            robot_name: name of the robot.
+            action_name: name of the action.
+            action_client: action client instance.
+            goal: action goal.
+            result_callback: optional action result callback.
+            feedback_callback: optional action feedback callback.
+            on_failure_callback: optional action failure callback.
+            context: optional context, will default to the global
+            context if none is provided.
+
+        Returns:
+            an action handle.
+        """
+        handle = cls(robot_name, action_name, context=context)
+        if result_callback is not None:
+            handle.set_result_callback(result_callback)
+        if on_failure_callback is not None:
+            handle.set_on_failure_callback(on_failure_callback)
+        if feedback_callback is not None:
+            handle.set_feedback_callback(feedback_callback)
+            feedback_callback = handle.get_feedback_callback
+        send_goal_future = action_client.send_goal_async(goal, feedback_callback=feedback_callback)
+        handle.set_send_goal_future(send_goal_future)
+        return handle
+
+    def __init__(self, robot_name: str, action_name: str, *args: Any, **kwargs: Any):
+        """Initializes `SpotActionHandle`.
+
+        Args:
+            robot_name: name of the robot.
+            action_name: name of the action.
+            args: positional arguments for base class.
+            kwargs: keyword arguments for base class.
+        """
+        super().__init__(f"{robot_name}.{action_name}", *args, **kwargs)
+        self._result_callback = self._result_callback_intermediate
+        self._result_callback_internal: Optional[Callable[[Action.Result], None]] = None
+        self._result_internal: Optional[Action.Result] = None
+        self._feedback_callback = self._feedback_callback_intermediate
+        self._feedback_callback_internal: Optional[Callable[[Action.Result], None]] = None
+
+    @property
+    def result(self) -> Optional[Action.Result]:
+        return self._result_internal
+
+    def set_result_callback(self, result_callback: Callable[[Action.Result], None]) -> None:
+        """Sets the callback for processing the result from executing an Action"""
+        self._result_callback_internal = result_callback
+
+    def _result_callback_intermediate(self, result: Action.Result) -> None:
+        """Callback for pulling the result out of the result and passing it to a user provided callback"""
+        if not result.success:
+            self._logger.error(f"Action resulted in failure. Msg: {result.message}")
+            self._failure()
+            return
+
+        self._result_internal = result.result
+        if self._result_callback_internal is not None:
+            self._result_callback_internal(self._result_internal)
+
+    def set_feedback_callback(self, feedback_callback: Callable[[Action.Feedback], None]) -> None:
+        """Sets the callback for processing the feedback during execution of an Action"""
+        self._feedback_callback_internal = feedback_callback
+
+    def _feedback_callback_intermediate(self, feedback: Action.Feedback) -> None:
+        """Intermediate step to pull the feedback out of the feedback"""
+        if self._feedback_callback_internal is not None:
+            self._feedback_callback_internal(feedback.feedback)

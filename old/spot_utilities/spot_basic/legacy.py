@@ -7,7 +7,7 @@ import os
 import tempfile
 from enum import IntEnum
 from functools import partial
-from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
+from typing import Callable, List, Optional, Sequence, Tuple, Union
 
 import bdai.interactive_choreo.choreo_builders.serialization_utils as serialization_utils
 import bdai_ros2_wrappers.process as ros_process
@@ -20,7 +20,6 @@ from bdai_ros.utilities.manual_conversions import (
     to_ros_pose,
 )
 from bdai_ros2_wrappers.action_client import ActionClientWrapper
-from bdai_ros2_wrappers.action_handle import ActionHandle
 from bdai_ros2_wrappers.futures import wait_for_future
 from bdai_ros2_wrappers.type_hints import Action, SrvTypeRequest
 from bosdyn.api import (
@@ -60,7 +59,7 @@ from rclpy.action import ActionClient
 from rclpy.client import Client
 from rclpy.node import Node
 from rclpy.task import Future
-from rclpy.time import Duration, Time
+from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo
 from sklearn.preprocessing import normalize
 from spatialmath import SE2, SE3, SO3, SpatialForce, Twist2, Twist3, UnitQuaternion
@@ -72,7 +71,6 @@ from spot_msgs.srv import (
     ChoreographyRecordedStateToAnimation,
     ChoreographyStartRecordingState,
     ChoreographyStopRecordingState,
-    ClearBehaviorFault,
     DeleteSound,
     Dock,
     GetChoreographyStatus,
@@ -91,13 +89,8 @@ from spot_msgs.srv import (
     LoadSound,
     PlaySound,
     SetGripperCameraParameters,
-    SetLocomotion,
-    SetVelocity,
     SetVolume,
     UploadAnimation,
-)
-from spot_msgs.srv import (
-    RobotCommand as RobotCommandService,
 )
 from spot_utilities.robot_command_helpers import (
     timestamped_se2_vecs_to_robot_command_proto,
@@ -105,56 +98,17 @@ from spot_utilities.robot_command_helpers import (
     timestamped_spatialforces_to_wrench_protos,
 )
 from spot_utilities.spot_basic.base import SpotBase
+from spot_utilities.spot_basic.command import SpotCommandMixin
 from spot_utilities.spot_basic.estop import SpotEStopMixin
 from spot_utilities.spot_basic.lease import SpotLeaseMixin
 from spot_utilities.spot_basic.power import SpotPowerMixin
 from spot_utilities.spot_basic.state import FrameHint, SpotStateMixin
-from spot_utilities.spot_basic.utilities import SpotServiceHandle
+from spot_utilities.spot_basic.utilities import SpotActionHandle, SpotServiceHandle
 from spot_utilities.spot_dataclasses import ArmJointMap, AxisModeMap
 from spot_utilities.spot_util import spot_namespaced
 from std_msgs.msg import ColorRGBA as Color
-from std_srvs.srv import SetBool, Trigger
+from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker
-
-
-class SpotActionHandle(ActionHandle):
-    """Extends the ActionHandle for spot specific actions"""
-
-    def __init__(self, robot_name: str, command_name: str, **kwargs: Any):
-        super().__init__(action_name=f"{robot_name}.{command_name}", **kwargs)
-        self._result_callback = self._result_callback_intermediate
-        self._result_callback_internal: Optional[Callable[[RobotCommandFeedback], None]] = None
-        self._result_internal: Optional[RobotCommandFeedback] = None
-        self._feedback_callback = self._feedback_callback_intermediate
-        self._feedback_callback_internal: Optional[Callable[[RobotCommandFeedback], None]] = None
-
-    @property
-    def result(self) -> Optional[RobotCommandFeedback]:
-        return self._result_internal
-
-    def set_result_callback(self, result_callback: Callable[[RobotCommandFeedback], None]) -> None:
-        """Sets the callback for processing the result from executing an Action"""
-        self._result_callback_internal = result_callback
-
-    def _result_callback_intermediate(self, result: RobotCommandAction.Result) -> None:
-        """Callback for pulling the result out of the result and passing it to a user provided callback"""
-        if not result.success:
-            self._logger.error(f"Action resulted in failure. Msg: {result.message}")
-            self._failure()
-            return
-
-        self._result_internal = result.result
-        if self._result_callback_internal is not None:
-            self._result_callback_internal(self._result_internal)
-
-    def set_feedback_callback(self, feedback_callback: Callable[[RobotCommandFeedback], None]) -> None:
-        """Sets the callback for processing the feedback during execution of an Action"""
-        self._feedback_callback_internal = feedback_callback
-
-    def _feedback_callback_intermediate(self, feedback: RobotCommandAction.Feedback) -> None:
-        """Intermediate step to pull the feedback out of the feedback"""
-        if self._feedback_callback_internal is not None:
-            self._feedback_callback_internal(feedback.feedback)
 
 
 class RobotComposeCommandHandle(object):
@@ -179,34 +133,14 @@ class RobotComposeCommandHandle(object):
             self._result_callback(feedback)
 
 
-class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotStateMixin):
+class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotStateMixin, SpotCommandMixin):
     """Base ROS2 Node that provides interfaces to calling various commands"""
 
     TRIGGER_SERVICES = [
-        "stop",
         "self_right",
         "stop_dance",
         "undock",
     ]
-
-    class LocomotionHint(IntEnum):
-        """Enumeration of the locomotion hints
-
-        See
-        https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html?highlight=mobilityparams#locomotionhint
-        Note: Comments below for each enumerator come directly from the above link
-        """
-
-        UNKNOWN = 0  # Listed for completeness, but the docs say do not use
-        AUTO = 1  # No hint, robot chooses an appropriate gait (typically trot.)
-        TROT = 2  # Most robust gait which moves diagonal legs together.
-        SPEED_SELECT_TROT = 3  # Trot which comes to a stand when not commanded to move.
-        CRAWL = 4  # Slow and steady gait which moves only one foot at a time.
-        SPEED_SELECT_CRAWL = 10  # Crawl which comes to a stand when not commanded to move.
-        AMBLE = 5  # Four beat gait where one foot touches down at a time.
-        SPEED_SELECT_AMBLE = 6  # Amble which comes to a stand when not commanded to move.
-        JOG = 7  # Demo gait which moves diagonal leg pairs together with an aerial phase.
-        HOP = 8  # Demo gait which hops while holding some feet in the air.
 
     class BatteryChangeDirHint(IntEnum):
         RIGHT = 1
@@ -230,8 +164,7 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
             dry: True if this is a dry run and commands should not actually be sent, False otherwise
             rviz: True if visuals should be published, False otherwise
         """
-        super().__init__(robot_name, node=node)
-        self._disable_collisions = disable_collisions
+        super().__init__(robot_name, dry=dry, disable_collisions=disable_collisions, node=node)
         self._dry = dry
         self._rviz = rviz
 
@@ -248,10 +181,6 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
                 Trigger, spot_namespaced(self.robot_name, command_name)
             )
         self._dock_client = self.node.create_client(Dock, spot_namespaced(self.robot_name, "dock"))
-        self._stair_mode_client = self.node.create_client(SetBool, spot_namespaced(self.robot_name, "stair_mode"))
-        self._locomotion_mode_client = self.node.create_client(
-            SetLocomotion, spot_namespaced(self.robot_name, "locomotion_mode")
-        )
         self._get_choreo_status_client = self.node.create_client(
             GetChoreographyStatus, spot_namespaced(self.robot_name, "get_choreography_status")
         )
@@ -276,12 +205,6 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
         self._recorded_state_to_animation_client = self.node.create_client(
             ChoreographyRecordedStateToAnimation,
             spot_namespaced(self.robot_name, "recorded_state_to_animation"),
-        )
-        self._max_velocity_client = self.node.create_client(
-            SetVelocity, spot_namespaced(self.robot_name, "max_velocity")
-        )
-        self._clear_behavior_fault_client = self.node.create_client(
-            ClearBehaviorFault, spot_namespaced(self.robot_name, "clear_behavior_fault")
         )
         self._list_graph_client = self.node.create_client(ListGraph, spot_namespaced(self.robot_name, "list_graph"))
         self._list_world_objects_client = self.node.create_client(
@@ -322,14 +245,8 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
             ExecuteDance, spot_namespaced(robot_name, "execute_dance"), self.node
         )
 
-        self._robot_command_client = self.node.create_client(
-            RobotCommandService, spot_namespaced(self.robot_name, "robot_command")
-        )
-        self._robot_command_action_client = ActionClientWrapper(
-            RobotCommandAction, spot_namespaced(self.robot_name, "robot_command"), self.node
-        )
         self.node.get_logger().info(f"Waiting for the 'RobotCommand' action server for {self.robot_name} ...")
-        self._robot_command_action_client.wait_for_server()
+        self.execute.wait_for_server()
         self.node.get_logger().info(f"Found the 'RobotCommand' action server for {self.robot_name}.")
         # Check for arm and manipulation client
         if self.has_arm():
@@ -409,34 +326,6 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
             result_callback=result_callback,
             on_failure_callback=on_failure_callback,
         )
-
-    def stop(
-        self,
-        *,
-        asynchronous: bool = False,
-        result_callback: Optional[Callable[[Future], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Union[bool, SpotServiceHandle]:
-        """Triggers the 'stop' service on the SpotDriver
-
-        Args:
-            asynchronous: whether or not to execute the function asynchronously
-            result_callback: callback executing on the future returned from a service call
-            on_failure_callback: callback executing if a service fails
-
-        Returns:
-            True if command succeeded, False otherwise if synchronous
-            Service handle containing the updated results if asynchronous
-
-        Returns:
-            If synchronous, True if command succeeded, False otherwise
-            If asynchronous, Service handle containing the updated results
-        """
-        if asynchronous:
-            return self.trigger_service_async(
-                service_name="stop", result_callback=result_callback, on_failure_callback=on_failure_callback
-            )
-        return self.trigger_service("stop")
 
     def _dock(self, dock_id: int) -> bool:
         """Triggers the 'dock' service on the SpotDriver
@@ -552,7 +441,7 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
         Returns:
             True if the command succeeded, False otherwise
         """
-        mobility_params = self._get_mobility_params()
+        mobility_params = self.mobility_params
         command = RobotCommandBuilder.synchro_sit_command(params=mobility_params)
         action_goal = self._convert_proto_to_robot_cmd_action_goal(command)
         return self.command(command_name="sit", goal=action_goal, timeout_sec=timeout_sec)
@@ -570,7 +459,7 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
           feedback_callback: A callback to process/handle the feedback received during the execution of the command
           on_failure_callback: A callback to process/handle when the action fails for various reasons
         """
-        mobility_params = self._get_mobility_params()
+        mobility_params = self.mobility_params
         command = RobotCommandBuilder.synchro_sit_command(params=mobility_params)
         action_goal = self._convert_proto_to_robot_cmd_action_goal(command)
         return self.command_async(
@@ -587,7 +476,7 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
         Returns:
             True if the command succeeded, False otherwise
         """
-        mobility_params = self._get_mobility_params()
+        mobility_params = self.mobility_params
         command = RobotCommandBuilder.synchro_stand_command(params=mobility_params)
         action_goal = self._convert_proto_to_robot_cmd_action_goal(command)
         return self.command("stand", action_goal, timeout_sec=timeout_sec)
@@ -605,7 +494,7 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
           feedback_callback: A callback to process/handle the feedback received during the execution of the command
           on_failure_callback: A callback to process/handle when the action fails for various reasons
         """
-        mobility_params = self._get_mobility_params()
+        mobility_params = self.mobility_params
         command = RobotCommandBuilder.synchro_stand_command(params=mobility_params)
         action_goal = self._convert_proto_to_robot_cmd_action_goal(command)
         return self.command_async(
@@ -643,26 +532,6 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
             feedback_callback=feedback_callback,
             on_failure_callback=on_failure_callback,
         )
-
-    def set_stair_mode(self, value: bool) -> bool:
-        """Sets whether to be in stair_mode on the SpotDriver
-
-        Returns:
-            True if the command succeeded, False otherwise
-        """
-        self.node.get_logger().info(f"Setting stair_mode to '{value}' for {self.robot_name}")
-        request = SetBool.Request()
-        request.data = value
-        future = self._stair_mode_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False
-        response = future.result()
-        if not response.success:
-            self.node.get_logger().debug(
-                f"Setting stair_mode to '{value}' for {self.robot_name} failed. Msg: {response.message}."
-            )
-            return False
-        return True
 
     def get_inverse_kinematic_solutions(self, ik_request: InverseKinematicsRequest) -> InverseKinematicsResponse:
         """Query an IK solution for a given pose.
@@ -960,66 +829,6 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
         response = future.result()
         return response.success, response.message
 
-    def set_locomotion_mode(self, l_hint: LocomotionHint) -> bool:
-        """Set the locomotion mode on the SpotDriver
-
-        Returns:
-            True if the command succeeded, False otherwise
-        """
-        self.node.get_logger().info(f"Setting locomotion_mode to '{l_hint}' for {self.robot_name}")
-        request = SetLocomotion.Request()
-        request.locomotion_mode = int(l_hint)
-        future = self._locomotion_mode_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False
-        response = future.result()
-        if not response.success:
-            self.node.get_logger().debug(
-                f"Setting locomotion_mode to '{l_hint}' for {self.robot_name} failed. Msg: {response.message}."
-            )
-            return False
-        return True
-
-    def set_max_velocity(self, velocity_limit: Twist) -> SetVelocity.Response:
-        """Set the maximum velocity on the SpotDriver
-
-        Returns:
-            True if the command succeeded, False otherwise
-        """
-        self.node.get_logger().info(f"Setting max_velocity to '{velocity_limit}' for {self.robot_name}")
-        request = SetVelocity.Request()
-        request.velocity = velocity_limit
-        future = self._max_velocity_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False
-        response = future.result()
-        if not response.success:
-            self.node.get_logger().debug(
-                f"Setting stair_mode to '{velocity_limit}' for {self.robot_name} failed. Msg: {response.message}."
-            )
-            return False
-        return True
-
-    def clear_behavior_fault(self, bid: int) -> ClearBehaviorFault.Response:
-        """Clear a behavior fault on the SpotDriver
-
-        Returns:
-            True if the command succeeded, False otherwise
-        """
-        self.node.get_logger().info(f"Clearing behavior fault {bid} for {self.robot_name}")
-        request = ClearBehaviorFault.Request()
-        request.id = bid
-        future = self._clear_behavior_fault_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False
-        response = future.result()
-        if not response.success:
-            self.node.get_logger().debug(
-                f"Clearing behavior fault {bid} for {self.robot_name} failed. Msg: {response.message}"
-            )
-            return False
-        return True
-
     def set_localization(self, method: str, waypoint_id: Optional[str] = None) -> bool:
         """Calls the SetLocalization RPC through spot_ros2.
         The 'waypoint_id' is only necessary if 'method'
@@ -1126,7 +935,7 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
             # TODO: What to return on a dry run? Just success?
             return None
 
-        handle = SpotActionHandle(robot_name=self._robot_name, command_name=command_name, context=self.node.context)
+        handle = SpotActionHandle(self._robot_name, command_name, context=self.node.context)
         if result_callback is not None:
             handle.set_result_callback(result_callback)
         if on_failure_callback is not None:
@@ -1176,136 +985,6 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
         service_future = service_client.call_async(request)
         handle.set_send_service_future(service_future)
         return handle
-
-    def start_executing(
-        self,
-        command: robot_command_pb2.RobotCommand,
-        duration_sec: Optional[float] = None,
-        *,
-        timeout_sec: Optional[float] = None,
-    ) -> int:
-        """Starts execution of the given robot `command`.
-
-        Args:
-            command: Robot command to start executing.
-            duration_sec: Optional duration for the command, in seconds.
-            timeout_sec: Optional timeout for command to start, in seconds.
-
-        Returns:
-            Robot command ID for the command started.
-        """
-        future = self.start_executing_async(command, duration_sec)
-        if not wait_for_future(future, timeout_sec):
-            raise RuntimeError("Robot command timed out")
-        response = future.result()
-        if not response.success:
-            raise RuntimeError(response.message)
-        return response.robot_command_id
-
-    def start_executing_async(
-        self,
-        command: robot_command_pb2.RobotCommand,
-        duration_sec: Optional[float] = None,
-    ) -> Future:
-        """Starts execution of the given robot `command` asynchronously.
-
-        Args:
-            command: Robot command to start executing.
-            duration_sec: Optional duration for the command, in seconds.
-
-        Returns:
-            A future robot command ID for the command started.
-        """
-        request = RobotCommandService.Request()
-        convert(command, request.command)
-        if duration_sec is not None:
-            request.duration = Duration(nanoseconds=duration_sec * 1e9).to_msg()
-        return self._robot_command_client.call_async(request)
-
-    def execute(
-        self, command: robot_command_pb2.RobotCommand, *, timeout_sec: Optional[float] = None
-    ) -> Optional[RobotCommandFeedback]:
-        """Executes the given robot `command` and waits for its completion.
-
-        Args:
-            command: Robot command to be executed.
-            timeout_sec: Optional timeout for command execution, in seconds.
-
-        Returns:
-            Robot command feedback on completion, or None on failure or cancellation.
-        """
-        goal = RobotCommandAction.Goal()
-        convert(command, goal.command)
-        return self.command("robot_command", goal, timeout_sec)
-
-    def command(
-        self, command_name: str, goal: RobotCommandAction.Goal, timeout_sec: Optional[float] = None
-    ) -> Optional[RobotCommandFeedback]:
-        """Runs the `RobotCommand` action
-
-        Args:
-            command_name: A representative name of the command for logging
-            goal: The Action Goal sent to the action server
-            timeout_sec: A timeout for waiting on a response/result from the action server. Setting to None creates no
-                timeout
-
-        Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
-                successfully received, None otherwise
-
-        See https://github.com/bdaiinstitute/spot_ros2/blob/main/spot_msgs/action/RobotCommand.action
-        """
-        failed = False
-
-        def _on_failure() -> None:
-            nonlocal failed
-            failed = True
-
-        handle = self._send_action_goal_async(
-            command_name=command_name,
-            goal=goal,
-            action_client=self._robot_command_action_client,
-            on_failure_callback=_on_failure,
-        )
-        if handle is None:
-            return None
-        if not handle.wait_for_result(timeout_sec=timeout_sec):
-            return None
-        if failed:
-            return None
-        return handle.result
-
-    def command_async(
-        self,
-        command_name: str,
-        goal: RobotCommandAction.Goal,
-        *,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[SpotActionHandle]:
-        """Runs the `RobotCommand` action asynchronously
-
-        Args:
-            command_name: A representative name of the command for logging
-            goal: The Action Goal sent to the action server
-            result_callback: A callback to process/handle the resulting feedback from executing the command
-            feedback_callback: A callback to process/handle the feedback received during the execution of the command
-            on_failure_callback: A callback to process/handle when the action fails for various reasons
-
-        Returns:
-            Optional[SpotActionHandle]: A handle for the asynchronous lifecycle of the action
-
-        See https://github.com/bdaiinstitute/spot_ros2/blob/main/spot_msgs/action/RobotCommand.action
-        """
-        return self._send_action_goal_async(
-            command_name,
-            goal,
-            self._robot_command_action_client,
-            result_callback=result_callback,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
 
     def _call_service_async(
         self,
@@ -1482,23 +1161,6 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
             on_failure_callback=on_failure_callback,
         )
 
-    def _get_mobility_params(self) -> spot_command_pb2.MobilityParams:
-        """Create the MobilityParams object for use when building robot commands"""
-
-        # NOTE so far there is no way to change this, and it might as well be set as an attribute during init.
-        # but possibly we'll want to change some of these parameters on the fly someday
-        obstacles = spot_command_pb2.ObstacleParams(
-            disable_vision_body_obstacle_avoidance=self._disable_collisions,
-            disable_vision_foot_obstacle_avoidance=self._disable_collisions,
-            disable_vision_foot_constraint_avoidance=self._disable_collisions,
-            obstacle_avoidance_padding=0.001,
-        )
-        return spot_command_pb2.MobilityParams(obstacle_params=obstacles)
-
-    @property
-    def mobility_params(self) -> spot_command_pb2.MobilityParams:
-        return self._get_mobility_params()
-
     def get_walk_to_robot_cmd(self, frame_t_goal: SE2, height: float, base_frame: FrameHint) -> RobotCommandAction.Goal:
         """
         Args:
@@ -1515,7 +1177,7 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
             goal_heading=frame_t_goal.theta(),
             frame_name=base_frame.value,
             body_height=height,
-            params=self._get_mobility_params(),
+            params=self.mobility_params,
         )
 
     def _get_walk_to_action_goal(
@@ -1975,7 +1637,7 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
         proto_goal = timestamped_se2_vecs_to_robot_command_proto(
             *frame_t_trajectory(timestep_sec=timestep_sec, with_timestamps=True),
             interpolation=interpolation,
-            mobility_params=self._get_mobility_params(),
+            mobility_params=self.mobility_params,
             base_frame=base_frame.value,
         )
         return proto_goal
