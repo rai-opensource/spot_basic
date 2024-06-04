@@ -1,7 +1,7 @@
 # Copyright (c) 2023-2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
 from enum import IntEnum
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Optional, Protocol, Union
 
 from bdai_ros2_wrappers.callables import generalized_method
 from bosdyn.api import robot_command_pb2
@@ -14,12 +14,38 @@ from spot_msgs.action import RobotCommand as RobotCommandAction
 from spot_msgs.srv import ClearBehaviorFault, SetLocomotion, SetVelocity
 from spot_msgs.srv import RobotCommand as RobotCommandService
 from spot_utilities.spot_basic.base import SpotBaseProtocol
+from spot_utilities.spot_basic.state import SpotStateProtocol
 from spot_utilities.spot_basic.utilities import SpotActionable, SpotActionHandle, SpotServiced, SpotServiceHandle
 from spot_utilities.spot_util import spot_namespaced
 from std_srvs.srv import SetBool, Trigger
 
 
-class SpotCommandMixin(SpotBaseProtocol):
+class SpotCommandProtocol(SpotStateProtocol):
+
+    @generalized_method
+    def execute(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    @property
+    def mobility_params(self) -> spot_command_pb2.MobilityParams: ...
+
+    def command_async(
+        self,
+        command_name: str,
+        goal: RobotCommandAction.Goal,
+        *,
+        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
+        on_failure_callback: Optional[Callable[[], None]] = None,
+    ) -> Optional[SpotActionHandle]: ...
+
+
+class SpotCommandBuilder:
+
+    def __init__(self, target: SpotCommandProtocol) -> None:
+        self.target = target
+
+
+class SpotCommandMixin(SpotCommandProtocol):
     """Mixin that enables execution of Spot commands."""
 
     class LocomotionHint(IntEnum):

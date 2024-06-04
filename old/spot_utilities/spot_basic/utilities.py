@@ -1,5 +1,7 @@
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
+import functools
+from collections.abc import Sequence
 from typing import Any, Callable, Optional, Union
 
 from bdai_ros2_wrappers.action import Actionable
@@ -7,7 +9,8 @@ from bdai_ros2_wrappers.action_handle import ActionHandle
 from bdai_ros2_wrappers.service import Serviced
 from bdai_ros2_wrappers.service_handle import ServiceHandle
 from bdai_ros2_wrappers.type_hints import Action, Msg, SrvTypeRequest
-from bosdyn_msgs.conversions import convert
+from bosdyn_api_msgs.conversions import convert
+from bosdyn_api_msgs.msg import RobotCommandFeedback
 from rclpy.action.client import ActionClient
 from rclpy.client import Client
 from rclpy.context import Context
@@ -66,9 +69,9 @@ class SpotServiced(Serviced):
     Supports legacy invocation signatures and piecewise request specifications (see `make_message`).
     """
 
-    def synchronous(self, *args: Any, timeout_sec: Optional[float] = None, **kwargs: Any) -> Any:
+    def synchronous(self, *args: Any, timeout_sec: Optional[float] = None, nothrow: bool = False, **kwargs: Any) -> Any:
         request = make_message(self.service_type.Request, *args, **kwargs)
-        return super().synchronous(request, timeout_sec=timeout_sec)
+        return super().synchronous(request, timeout_sec=timeout_sec, nothrow=nothrow)
 
     def asynchronous(self, *args: Any, **kwargs: Any) -> Any:
         return super().asynchronous(make_message(self.service_type.Request, *args, **kwargs))
@@ -83,14 +86,16 @@ class SpotActionable(Actionable):
     def synchronous(
         self,
         *args: Any,
-        timeout_sec: Optional[float] = None,
         feedback_callback: Optional[Callable] = None,
+        timeout_sec: Optional[float] = None,
+        nothrow: bool = False,
         **kwargs: Any,
     ) -> Any:
         return super().synchronous(
             make_message(self.action_type.Goal, *args, **kwargs),
             feedback_callback=feedback_callback,
             timeout_sec=timeout_sec,
+            nothrow=nothrow,
         )
 
     def asynchronous(self, *args: Any, track_feedback: Union[int, bool] = False, **kwargs: Any) -> Any:
@@ -229,3 +234,25 @@ class SpotActionHandle(ActionHandle):
         """Intermediate step to pull the feedback out of the feedback"""
         if self._feedback_callback_internal is not None:
             self._feedback_callback_internal(feedback.feedback)
+
+
+class RobotComposeCommandHandle(object):
+    """Handle for sequentially composing multiple asynchronous RobotCommand sent via an action client"""
+
+    def __init__(
+        self, actions: Sequence[functools.partial], result_callback: Optional[Callable[[RobotCommandFeedback], None]]
+    ) -> None:
+        self._index = 0
+        self._number_actions = len(actions)
+        self._action_list = list(actions)
+        self._result_callback = result_callback
+        self._action_list[self._index].keywords["result_callback"] = self.result_callback
+        self._action_list[self._index]()
+
+    def result_callback(self, feedback: RobotCommandFeedback) -> None:
+        if self._index < self._number_actions - 1:
+            self._index += 1
+            self._action_list[self._index].keywords["result_callback"] = self.result_callback
+            self._action_list[self._index]()
+        elif self._result_callback is not None:
+            self._result_callback(feedback)

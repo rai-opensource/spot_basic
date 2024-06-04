@@ -295,3 +295,15 @@ class SpotStateMixin(SpotBaseProtocol):
 
 # Alias
 FrameHint = SpotStateMixin.FrameHint
+
+
+class SpotStateProtocol(SpotBaseProtocol):
+
+    def lookup_a_tform_b(
+        self,
+        frame_a: Union[FrameHint, str],
+        frame_b: Union[FrameHint, str],
+        transform_time: Optional[Union[Time, float]] = None,
+        timeout: Optional[float] = None,
+        wait_for_frames: bool = False,
+    ) -> SE3: ...

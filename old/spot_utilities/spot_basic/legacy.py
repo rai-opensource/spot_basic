@@ -6,7 +6,6 @@ import argparse
 import os
 import tempfile
 from enum import IntEnum
-from functools import partial
 from typing import Callable, List, Optional, Sequence, Tuple, Union
 
 import bdai.interactive_choreo.choreo_builders.serialization_utils as serialization_utils
@@ -14,7 +13,6 @@ import bdai_ros2_wrappers.process as ros_process
 import geometry_msgs
 import numpy as np
 import rclpy
-from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai_ros.utilities.manual_conversions import (
     se3_to_se3pose_proto,
     to_ros_pose,
@@ -42,7 +40,6 @@ from bosdyn.client.robot_command import (
     _CLAW_GRIPPER_OPEN_ANGLE,
     RobotCommandBuilder,
 )
-from bosdyn.geometry import Quaternion, to_euler_zxy
 from bosdyn.util import seconds_to_duration
 from bosdyn_api_msgs.conversions import convert
 from bosdyn_api_msgs.msg import (
@@ -62,7 +59,7 @@ from rclpy.task import Future
 from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo
 from sklearn.preprocessing import normalize
-from spatialmath import SE2, SE3, SO3, SpatialForce, Twist2, Twist3, UnitQuaternion
+from spatialmath import SE2, SE3, SpatialForce, Twist2, Twist3, UnitQuaternion
 from spatialmath.base.types import R3
 from spatialmath.spatialvector import SpatialVector
 from spot_msgs.action import ExecuteDance, Manipulation
@@ -93,17 +90,17 @@ from spot_msgs.srv import (
     UploadAnimation,
 )
 from spot_utilities.robot_command_helpers import (
-    timestamped_se2_vecs_to_robot_command_proto,
     timestamped_se3_poses_to_se3_trajectory,
     timestamped_spatialforces_to_wrench_protos,
 )
 from spot_utilities.spot_basic.base import SpotBase
 from spot_utilities.spot_basic.command import SpotCommandMixin
+from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandMixin
 from spot_utilities.spot_basic.estop import SpotEStopMixin
 from spot_utilities.spot_basic.lease import SpotLeaseMixin
 from spot_utilities.spot_basic.power import SpotPowerMixin
 from spot_utilities.spot_basic.state import FrameHint, SpotStateMixin
-from spot_utilities.spot_basic.utilities import SpotActionHandle, SpotServiceHandle
+from spot_utilities.spot_basic.utilities import RobotComposeCommandHandle, SpotActionHandle, SpotServiceHandle
 from spot_utilities.spot_dataclasses import ArmJointMap, AxisModeMap
 from spot_utilities.spot_util import spot_namespaced
 from std_msgs.msg import ColorRGBA as Color
@@ -111,29 +108,9 @@ from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker
 
 
-class RobotComposeCommandHandle(object):
-    """Handle for sequentially composing multiple asynchronous RobotCommand sent via an action client"""
-
-    def __init__(
-        self, actions: List[partial], result_callback: Optional[Callable[[RobotCommandFeedback], None]]
-    ) -> None:
-        self._index = 0
-        self._number_actions = len(actions)
-        self._action_list = actions
-        self._result_callback = result_callback
-        self._action_list[self._index].keywords["result_callback"] = self.result_callback
-        self._action_list[self._index]()
-
-    def result_callback(self, feedback: RobotCommandFeedback) -> None:
-        if self._index < self._number_actions - 1:
-            self._index += 1
-            self._action_list[self._index].keywords["result_callback"] = self.result_callback
-            self._action_list[self._index]()
-        elif self._result_callback is not None:
-            self._result_callback(feedback)
-
-
-class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotStateMixin, SpotCommandMixin):
+class SpotBasic(
+    SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotStateMixin, SpotMobilityCommandMixin, SpotCommandMixin
+):
     """Base ROS2 Node that provides interfaces to calling various commands"""
 
     TRIGGER_SERVICES = [
@@ -434,76 +411,6 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
             True if the command succeeded, False otherwise
         """
         return self.trigger_service("self_right")
-
-    def sit(self, timeout_sec: float = 5.0) -> Optional[RobotCommandFeedback]:
-        """Triggers the 'sit' service on the SpotDriver
-
-        Returns:
-            True if the command succeeded, False otherwise
-        """
-        mobility_params = self.mobility_params
-        command = RobotCommandBuilder.synchro_sit_command(params=mobility_params)
-        action_goal = self._convert_proto_to_robot_cmd_action_goal(command)
-        return self.command(command_name="sit", goal=action_goal, timeout_sec=timeout_sec)
-
-    def sit_async(
-        self,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[SpotActionHandle]:
-        """Treats sitting as an action instead of a service and asynchronously executes it
-
-        Args:
-          result_callback: A callback to process/handle the resulting feedback from executing the command
-          feedback_callback: A callback to process/handle the feedback received during the execution of the command
-          on_failure_callback: A callback to process/handle when the action fails for various reasons
-        """
-        mobility_params = self.mobility_params
-        command = RobotCommandBuilder.synchro_sit_command(params=mobility_params)
-        action_goal = self._convert_proto_to_robot_cmd_action_goal(command)
-        return self.command_async(
-            "sit_async",
-            action_goal,
-            result_callback=result_callback,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
-
-    def stand(self, timeout_sec: float = 5.0) -> Optional[RobotCommandFeedback]:
-        """Triggers the 'stand' service on the SpotDriver
-
-        Returns:
-            True if the command succeeded, False otherwise
-        """
-        mobility_params = self.mobility_params
-        command = RobotCommandBuilder.synchro_stand_command(params=mobility_params)
-        action_goal = self._convert_proto_to_robot_cmd_action_goal(command)
-        return self.command("stand", action_goal, timeout_sec=timeout_sec)
-
-    def stand_async(
-        self,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[SpotActionHandle]:
-        """Treats standing as an action instead of a service and asynchronously executes it
-
-        Args:
-          result_callback: A callback to process/handle the resulting feedback from executing the command
-          feedback_callback: A callback to process/handle the feedback received during the execution of the command
-          on_failure_callback: A callback to process/handle when the action fails for various reasons
-        """
-        mobility_params = self.mobility_params
-        command = RobotCommandBuilder.synchro_stand_command(params=mobility_params)
-        action_goal = self._convert_proto_to_robot_cmd_action_goal(command)
-        return self.command_async(
-            "stand_async",
-            action_goal,
-            result_callback=result_callback,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
 
     def rollover(self, timeout_sec: float = 5.0) -> Optional[RobotCommandFeedback]:
         command = RobotCommandBuilder.selfright_command()
@@ -1161,182 +1068,6 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
             on_failure_callback=on_failure_callback,
         )
 
-    def get_walk_to_robot_cmd(self, frame_t_goal: SE2, height: float, base_frame: FrameHint) -> RobotCommandAction.Goal:
-        """
-        Args:
-            frame_t_goal: A SE2 transform from the base frame to where the user wants the spot to walk to
-            height: The height of the body
-            base_frame: The frame in which the goal is specified
-
-        Returns:
-            A protobuf representing the command for a spot to walk to a specific goal location
-        """
-        return RobotCommandBuilder.synchro_se2_trajectory_point_command(
-            goal_x=frame_t_goal.x,
-            goal_y=frame_t_goal.y,
-            goal_heading=frame_t_goal.theta(),
-            frame_name=base_frame.value,
-            body_height=height,
-            params=self.mobility_params,
-        )
-
-    def _get_walk_to_action_goal(
-        self, frame_t_goal: SE2, height: float, base_frame: FrameHint
-    ) -> RobotCommandAction.Goal:
-        """
-
-        Args:
-            frame_t_goal: A SE2 transform from the base frame to where the user wants the spot to walk to
-            height: The height of the body
-            base_frame: The frame in which the goal is specified
-
-        Returns:
-            An Action.Goal representing the command for a spot to walk to a specific goal location
-        """
-        self.node.get_logger().info("Walking to goal...")
-
-        if self._rviz:
-            self._draw_arrow(
-                f"{self._robot_name}/{base_frame.value}", self.body_frame_name, frame_t_goal, color=Color(g=1.0, a=1.0)
-            )
-
-        return self._convert_proto_to_robot_cmd_action_goal(
-            self.get_walk_to_robot_cmd(frame_t_goal, height, base_frame)
-        )
-
-    def walk_to(
-        self,
-        frame_t_goal: SE2,
-        height: float = 0,
-        timeout_sec: Optional[float] = None,
-        *,
-        base_frame: Optional[FrameHint] = None,
-    ) -> Optional[RobotCommandFeedback]:
-        """Send the command to walk to a specific SE2 goal
-
-        Args:
-            frame_t_goal: A SE2 transform from the base frame to where the user wants the spot to walk to
-            height: The height of the body
-            timeout_sec: A timeout for waiting on a response/result from the action server. Setting to None creates no
-                timeout
-            base_frame: The frame in which the goal is specified. Defaults to VISION frame in the get_set_base_frame
-
-        Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
-                successfully received, None otherwise
-        """
-        base_frame = self.get_set_base_frame(base_frame)
-        action_goal = self._get_walk_to_action_goal(frame_t_goal, height, base_frame)
-        return self.command("walk_to", action_goal, timeout_sec)
-
-    def walk_to_async(
-        self,
-        frame_t_goal: SE2,
-        height: float = 0,
-        *,
-        base_frame: Optional[FrameHint] = None,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[SpotActionHandle]:
-        """Send the command to walk to a specific SE2 pose
-
-        Args:
-            frame_t_goal: A SE2 transform from the base frame to where the user wants the spot to walk to
-            height: The height of the body
-            base_frame: The frame in which the goal is specified. Defaults to VISION frame in the get_set_base_frame
-            result_callback: A callback to process/handle the resulting feedback from executing the command
-            feedback_callback: A callback to process/handle the feedback received during the execution of the command
-            on_failure_callback: A callback to process/handle when the action fails for various reasons
-
-        Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
-                successfully received, None otherwise
-        """
-        base_frame = self.get_set_base_frame(base_frame)
-        action_goal = self._get_walk_to_action_goal(frame_t_goal, height, base_frame)
-        return self.command_async(
-            "walk_to",
-            action_goal,
-            result_callback=result_callback,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
-
-    def _get_stand_to_action_goal(self, gravbody_r_goal: SO3, height: float) -> RobotCommandAction.Goal:
-        """
-        Args:
-            gravbody_r_goal: A SO3 rotation of the body frame with respect to the footprint frame
-                (gravity aligned framed with yaw computed from the stance feet)
-            height: The height of the body
-
-        Returns:
-            An Action.Goal representing the command for a spot to walk to a specific goal location
-        """
-        self.node.get_logger().info("Moving to goal orientation...")
-
-        gravbody_r_goal = UnitQuaternion(gravbody_r_goal)
-        footprint_R_body = to_euler_zxy(
-            Quaternion(
-                w=gravbody_r_goal.A[0],
-                x=gravbody_r_goal.A[1],
-                y=gravbody_r_goal.A[2],
-                z=gravbody_r_goal.A[3],
-            )
-        )
-        proto_goal = RobotCommandBuilder.synchro_stand_command(body_height=height, footprint_R_body=footprint_R_body)
-        return self._convert_proto_to_robot_cmd_action_goal(proto_goal)
-
-    def stand_with_orientation(
-        self, gravbody_r_goal: SO3, height: float, timeout_sec: Optional[float] = None
-    ) -> Optional[RobotCommandFeedback]:
-        """Send the command to stand in a specific SO3 rotation
-
-        Args:
-            gravbody_r_goal: A SO3 rotation from the gravity-aligned body frame to goal orientation.
-            height: The height of the body
-            timeout_sec: A timeout for waiting on a response/result from the action server. Setting to None creates no
-                timeout
-
-        Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
-                successfully received, None otherwise
-        """
-        action_goal_stand = self._get_stand_to_action_goal(gravbody_r_goal, height=height)
-        return self.command("orient", action_goal_stand, timeout_sec)
-
-    def stand_with_orientation_async(
-        self,
-        gravbody_r_goal: SO3,
-        height: float,
-        *,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[SpotActionHandle]:
-        """Send the command to stand in a specific SO3 rotation
-
-        Args:
-            gravbody_r_goal: A SO3 rotation, expressed as EulerZXY object (yaw, pitch, roll, in radians) from
-                the gravity-aligned body frame to where the user wants the spot to rotate to
-            height: The height of the body
-            result_callback: A callback to process/handle the resulting feedback from executing the command
-            feedback_callback: A callback to process/handle the feedback received during the execution of the command
-            on_failure_callback: A callback to process/handle when the action fails for various reasons
-
-        Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
-                successfully received, None otherwise
-        """
-        action_goal_stand = self._get_stand_to_action_goal(gravbody_r_goal, height=height)
-        return self.command_async(
-            "orient",
-            action_goal_stand,
-            result_callback=result_callback,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
-
     @staticmethod
     def _activate_body_assist(hip_assist: bool, yaw_assist: bool) -> spot_command_pb2.RobotCommand:
         """Creates a command that allows the body to assist the movements.
@@ -1444,96 +1175,6 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
             on_failure_callback=on_failure_callback,
         )
 
-    def walk_and_orient(
-        self,
-        frame_t_goal: SE3,
-        body_height: Optional[float] = None,
-        timeout_sec: Optional[float] = None,
-        *,
-        base_frame: Optional[FrameHint] = None,
-    ) -> Optional[RobotCommandFeedback]:
-        """Send the command to walk and rotate to a specific SE3 pose
-
-        Args:
-            frame_t_goal: A SE3 transform from the base frame to where the user wants the spot to walk to
-            body_height: desired height of the body relative to spot's normal height. Passed directly into
-                synchro_stand_command. If None, then height will be inferred based on vision_t_goal
-            timeout_sec: A timeout for waiting on a response/result from the action server. The timeout arg is used
-                on each command, so max duration is 2x timeout. Setting to None creates no timeout.
-            base_frame: Frame the goal is specified in. Defaults to VISION frame in get_set_base_frame
-
-        Returns:
-            The feedback from the SpotDriver about the result of the commands if it was accepted, None otherwise
-        """
-        base_frame = self.get_set_base_frame(base_frame)
-
-        # First, walk to the base_frame goal.
-        if not self.walk_to(frame_t_goal.yaw_SE2(), timeout_sec=timeout_sec, base_frame=base_frame):
-            return None
-
-        # Then, rotate in place. Note that the yaw rotation in body frame should be 0, because yaw
-        # is handled by walk_to (doesn't mean yaw rotation in any other frame should be 0!)
-        frame_t_orien_se3 = SE3.RPY(frame_t_goal.rpy())
-        gravbody_t_frame = self.lookup_a_tform_b(
-            FrameHint.GRAV_ALIGNED_BODY.value, base_frame.value, wait_for_frames=True
-        )
-        gravbody_t_orien_se3 = gravbody_t_frame * frame_t_orien_se3
-        rpy = gravbody_t_orien_se3.rpy()
-        gravbody_t_orien = SE3.RPY(rpy[0], rpy[1], 0)
-        if body_height is None:
-            if self.tf_listener is None:
-                raise ValueError(
-                    "unable to infer body height from frame_t_goal. "
-                    "Either pass in 'body_height' explicitly, or call set_tf_listener(tflistener) "
-                    "where tflistener should be a TFListenerWrapper"
-                )
-            body_t_frame = self.lookup_a_tform_b(FrameHint.BODY.value, base_frame.value, wait_for_frames=True)
-            body_t_goal = body_t_frame * frame_t_goal
-            body_height = body_t_goal.z
-
-        return self.stand_with_orientation(gravbody_t_orien, height=body_height, timeout_sec=timeout_sec)
-
-    def walk_and_orient_async(
-        self,
-        frame_t_goal: SE3,
-        *,
-        base_frame: Optional[FrameHint] = None,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[RobotComposeCommandHandle]:
-        """Send the command to walk and rotate to a specific SE3 pose
-
-        Args:
-            frame_t_goal: A SE3 transform from the base frame to where the user wants the spot to walk to
-            base_frame: Frame the goal is specified in. Defaults to VISION frame in get_set_base_frame
-            result_callback: A callback to process/handle the resulting feedback from executing each of the commands
-            feedback_callback: A callback to process/handle the feedback received during the execution of any of the
-                commands
-            on_failure_callback: A callback to process/handle when any of actions fail for various reasons
-
-        Returns:
-            RobotComposeCommandHandle: A class to handle a list with multiple async RobotCommand (actions). The actions
-                are sent sequentially to SpotDriver via an action client
-        """
-        base_frame = self.get_set_base_frame(base_frame)
-        walk_partial = partial(
-            self.walk_to_async,
-            frame_t_goal.yaw_SE2(),
-            base_frame=base_frame,
-            height=frame_t_goal.z,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
-        stand_partial = partial(
-            self.stand_with_orientation_async,
-            SO3(frame_t_goal),
-            height=frame_t_goal.z,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
-        return RobotComposeCommandHandle([walk_partial, stand_partial], result_callback)
-
     def _get_arm_gaze_at_action_goal(self, point: R3, frame: FrameHint) -> RobotCommandAction.Goal:
         """Create the ROS msg to gaze at a point."""
         proto = RobotCommandBuilder.arm_gaze_command(x=point[0], y=point[1], z=point[2], frame_name=frame.value)
@@ -1615,111 +1256,6 @@ class SpotBasic(SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotSt
         velocity_cmd_msg.linear.y = body_velocity.v[1]
         velocity_cmd_msg.angular.z = body_velocity.w
         self._velocity_cmd_publisher.publish(velocity_cmd_msg)
-
-    def get_walk_trajectory_robot_cmd(
-        self,
-        frame_t_trajectory: SE2Trajectory,
-        base_frame: FrameHint,
-        timestep_sec: float = 0.1,
-        interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
-    ) -> robot_command_pb2.RobotCommand:
-        """Create a robot command protobuf for visiting a sequence of poses with a given time schedule and
-        interpolation settings
-
-        Args:
-            frame_t_trajectory: SE2Trajectory, i.e., time-parameterization of sequence of poses in the base frame
-            timestep_sec: time step used to sample poses from the trajectory
-            interpolation: method used to interpolate between sampled poses (0 = none, 1 = linear, 2 = cubic)
-            base_frame: frame that the trajectory poses are specified in
-        """
-        self.node.get_logger().info("Walking along commanded trajectory...")
-
-        proto_goal = timestamped_se2_vecs_to_robot_command_proto(
-            *frame_t_trajectory(timestep_sec=timestep_sec, with_timestamps=True),
-            interpolation=interpolation,
-            mobility_params=self.mobility_params,
-            base_frame=base_frame.value,
-        )
-        return proto_goal
-
-    def _get_walk_trajectory_action_goal(
-        self,
-        frame_t_trajectory: SE2Trajectory,
-        base_frame: FrameHint,
-        timestep_sec: float = 0.1,
-        interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
-    ) -> RobotCommandAction.Goal:
-        """Create an action goal for visiting a sequence of poses with a given time schedule and interpolation settings
-
-        Args:
-            frame_t_trajectory: SE2Trajectory, i.e., time-parameterization of sequence of poses in the base frame
-            timestep_sec: time step used to sample poses from the trajectory
-            interpolation: method used to interpolate between sampled poses (0 = none, 1 = linear, 2 = cubic)
-            base_frame: frame that the trajectory poses are specified in
-        """
-        return self._convert_proto_to_robot_cmd_action_goal(
-            self.get_walk_trajectory_robot_cmd(frame_t_trajectory, base_frame, timestep_sec, interpolation)
-        )
-
-    def walk_trajectory(
-        self,
-        frame_t_trajectory: SE2Trajectory,
-        timestep_sec: float = 0.1,
-        interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
-        timeout_sec: Optional[float] = None,
-        *,
-        base_frame: Optional[FrameHint] = None,
-    ) -> Optional[RobotCommandAction.Result]:
-        """Send a command to walk along a trajectory synchronously
-
-        Args:
-            frame_t_trajectory: SE2Trajectory, i.e., time-parameterization of sequence of poses in the base frame
-            timestep_sec: time step used to sample poses from the trajectory
-            interpolation: method used to interpolate between sampled poses (0 = none, 1 = linear, 2 = cubic)
-            timeout_sec: A timeout for waiting on a response/result from the action server. Setting to None creates no
-                timeout
-            base_frame: Frame the goal is specified in. Defaults to VISION frame in get_set_base_frame
-        """
-        base_frame = self.get_set_base_frame(base_frame)
-        action_goal = self._get_walk_trajectory_action_goal(frame_t_trajectory, base_frame, timestep_sec, interpolation)
-        return self.command("walk_trajectory", action_goal, timeout_sec)
-
-    def walk_trajectory_async(
-        self,
-        frame_t_trajectory: SE2Trajectory,
-        timestep_sec: float = 0.1,
-        interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
-        *,
-        base_frame: Optional[FrameHint] = None,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[SpotActionHandle]:
-        """Send the command to walk along a trajectory asynchronously
-
-        Args:
-            frame_t_trajectory: SE2Trajectory, i.e., time-parameterization of sequence of poses in the base frame
-            timestep_sec: time step used to sample poses from the trajectory
-            interpolation: method used to interpolate between sampled poses (0 = none, 1 = linear, 2 = cubic)
-            base_frame: Frame the goal is specified in. Defaults to VISION frame in get_set_base_frame
-            result_callback: A callback to process/handle the resulting feedback from executing the command
-            feedback_callback: A callback to process/handle the feedback received during the execution of the command
-            on_failure_callback: A callback to process/handle when the action fails for various reasons
-
-
-        Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
-                successfully received, None otherwise
-        """
-        base_frame = self.get_set_base_frame(base_frame)
-        action_goal = self._get_walk_trajectory_action_goal(frame_t_trajectory, base_frame, timestep_sec, interpolation)
-        return self.command_async(
-            "walk_trajectory",
-            action_goal,
-            result_callback=result_callback,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
 
     def _get_arm_stow_action_goal(self) -> RobotCommandAction.Goal:
         """Create the ROS msg to stow the arm"""

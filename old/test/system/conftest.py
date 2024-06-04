@@ -42,10 +42,14 @@ def hardware_bound_ros(hardware_bound_domain_id: int) -> Iterator[ROSAwareScope]
 
 
 @pytest.fixture(scope="session")
-def hardware_spot_interface(hardware_robot_name: str, hardware_bound_ros: ROSAwareScope) -> SpotBasic:
+def hardware_spot_interface(hardware_robot_name: str, hardware_bound_ros: ROSAwareScope) -> Iterator[SpotBasic]:
     robot_interface = SpotBasic(hardware_robot_name, node=hardware_bound_ros.node)
     assert robot_interface.initialize_robot()
-    return robot_interface
+    try:
+        yield robot_interface
+    finally:
+        response = robot_interface.sit.synchronously(timeout_sec=10.0)
+        assert response.success, response.message
 
 
 @launch_pytest.fixture(scope="session")
