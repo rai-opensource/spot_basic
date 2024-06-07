@@ -69,7 +69,6 @@ from spot_msgs.srv import (
     ChoreographyStartRecordingState,
     ChoreographyStopRecordingState,
     DeleteSound,
-    Dock,
     GetChoreographyStatus,
     GetGripperCameraParameters,
     GetInverseKinematicSolutions,
@@ -96,6 +95,7 @@ from spot_utilities.robot_command_helpers import (
 from spot_utilities.spot_basic.base import SpotBase
 from spot_utilities.spot_basic.command import SpotCommandMixin
 from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandMixin
+from spot_utilities.spot_basic.docking import SpotDockingMixin
 from spot_utilities.spot_basic.estop import SpotEStopMixin
 from spot_utilities.spot_basic.lease import SpotLeaseMixin
 from spot_utilities.spot_basic.power import SpotPowerMixin
@@ -109,14 +109,20 @@ from visualization_msgs.msg import Marker
 
 
 class SpotBasic(
-    SpotBase, SpotLeaseMixin, SpotEStopMixin, SpotPowerMixin, SpotStateMixin, SpotMobilityCommandMixin, SpotCommandMixin
+    SpotBase,
+    SpotLeaseMixin,
+    SpotEStopMixin,
+    SpotPowerMixin,
+    SpotDockingMixin,
+    SpotStateMixin,
+    SpotMobilityCommandMixin,
+    SpotCommandMixin,
 ):
     """Base ROS2 Node that provides interfaces to calling various commands"""
 
     TRIGGER_SERVICES = [
         "self_right",
         "stop_dance",
-        "undock",
     ]
 
     class BatteryChangeDirHint(IntEnum):
@@ -157,7 +163,6 @@ class SpotBasic(
             self._trigger_clients[command_name] = self.node.create_client(
                 Trigger, spot_namespaced(self.robot_name, command_name)
             )
-        self._dock_client = self.node.create_client(Dock, spot_namespaced(self.robot_name, "dock"))
         self._get_choreo_status_client = self.node.create_client(
             GetChoreographyStatus, spot_namespaced(self.robot_name, "get_choreography_status")
         )
@@ -303,106 +308,6 @@ class SpotBasic(
             result_callback=result_callback,
             on_failure_callback=on_failure_callback,
         )
-
-    def _dock(self, dock_id: int) -> bool:
-        """Triggers the 'dock' service on the SpotDriver
-
-        Args:
-            dock_id: number on the fiducial associated with the dock.
-
-        Returns:
-            True if command succeeded, False otherwise
-        """
-        self.node.get_logger().info(f"Dock command for {self.robot_name}")
-        request = Dock.Request()
-        request.dock_id = dock_id
-        future = self._dock_client.call_async(request)
-
-        if not wait_for_future(future, context=self.node.context):
-            return False
-
-        response = future.result()
-        if not response.success:
-            self.node.get_logger().error(f"Dock command for {self.robot_name} failed. Msg: {response.message}")
-            return False
-        return True
-
-    def _dock_async(
-        self,
-        dock_id: int,
-        *,
-        result_callback: Optional[Callable[[Future], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> SpotServiceHandle:
-        """Triggers the docking call asynchronously.
-
-        Args:
-            dock_id: number on fiducial used to identify the dock
-            result_callback: A callback to process/handle the resulting feedback from executing the command
-            on_failure_callback: A callback to process/handle when the action fails for various reasons
-
-        Returns:
-            Service handle containing the updated results
-        """
-        dock_request = Dock.Request()
-        dock_request.dock_id = dock_id
-        return self._call_service_async(
-            service_name="dock",
-            request=dock_request,
-            service_client=self._dock_client,
-            result_callback=result_callback,
-            on_failure_callback=on_failure_callback,
-        )
-
-    def dock(
-        self,
-        dock_id: int,
-        *,
-        asynchronous: bool = False,
-        result_callback: Optional[Callable[[Future], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Union[bool, SpotServiceHandle]:
-        """Triggers the 'dock' service on the SpotDriver
-
-        Args:
-            dock_id: number on fiducial used to identify the dock
-            asynchronous: whether or not to execute the function asynchronously
-            result_callback: callback executing on the future returned from a service call
-            on_failure_callback: callback executing if a service fails
-
-        Returns:
-            True if command succeeded, False otherwise if synchronous
-            Service handle containing the updated results if asynchronous
-        """
-        if asynchronous:
-            return self._dock_async(
-                dock_id=dock_id, result_callback=result_callback, on_failure_callback=on_failure_callback
-            )
-        return self._dock(dock_id=dock_id)
-
-    def undock(
-        self,
-        *,
-        asynchronous: bool = False,
-        result_callback: Optional[Callable[[Future], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Union[bool, SpotServiceHandle]:
-        """Triggers the 'undock' service on the SpotDriver
-
-        Args:
-            asynchronous: whether or not to execute the function asynchronously
-            result_callback: callback executing on the future returned from a service call
-            on_failure_callback: callback executing if a service fails
-
-        Returns:
-            True if command succeeded, False otherwise if synchronous
-            Service handle containing the updated results if asynchronous
-        """
-        if asynchronous:
-            return self.trigger_service_async(
-                service_name="undock", result_callback=result_callback, on_failure_callback=on_failure_callback
-            )
-        return self.trigger_service("undock")
 
     def self_right(self) -> bool:
         """Triggers the 'self_right' service on the SpotDriver
