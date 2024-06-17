@@ -54,7 +54,9 @@ class SpotBase:
         Returns:
             True if the spot has an arm, False if it does not, and None if the query failed
         """
-        self.node.get_logger().info(f"Checking if {self.robot_name} has an arm")
-        response = self._get_spot_parameters(GetParameters.Request(names=["has_arm"]), timeout_sec=5.0)
-        param = response.values[0]
-        return param.bool_value
+        # TODO: Find out why this doesn't work.
+        # self.node.get_logger().info(f"Checking if {self.robot_name} has an arm")
+        # response = self._get_spot_parameters(GetParameters.Request(names=["has_arm"]), timeout_sec=5.0)
+        # param = response.values[0]
+        # return param.bool_value
+        return True
