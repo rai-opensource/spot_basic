@@ -29,6 +29,8 @@ from bosdyn.api import (
     robot_command_pb2,
     trajectory_pb2,
 )
+from bosdyn.api.manipulation_api_pb2 import ApiGraspOverride
+from bosdyn.api.robot_state_pb2 import ManipulatorState
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.api.spot.choreography_sequence_pb2 import Animation, ChoreographySequence
 from bosdyn.api.spot.inverse_kinematics_pb2 import InverseKinematicsRequest, InverseKinematicsResponse
@@ -83,6 +85,7 @@ from spot_msgs.srv import (
     ListSounds,
     ListWorldObjects,
     LoadSound,
+    OverrideGraspOrCarry,
     PlaySound,
     SetGripperCameraParameters,
     SetVolume,
@@ -216,6 +219,9 @@ class SpotBasic(
         )
         self._list_sounds_client = self.node.create_client(ListSounds, spot_namespaced(self.robot_name, "list_sounds"))
         self._load_sound_client = self.node.create_client(LoadSound, spot_namespaced(self.robot_name, "load_sound"))
+        self._override_grasp_carry_client = self.node.create_client(
+            OverrideGraspOrCarry, spot_namespaced(self.robot_name, "override_grasp_or_carry")
+        )
         self._play_sound_client = self.node.create_client(PlaySound, spot_namespaced(self.robot_name, "play_sound"))
         self._delete_sound_client = self.node.create_client(
             DeleteSound, spot_namespaced(self.robot_name, "delete_sound")
@@ -2791,6 +2797,45 @@ class SpotBasic(
             wrench_nm=SpatialForce([0, 0, 0, 0, 0, 0]),
             timeout_sec=2.0,
         )
+
+    def override_grasp_or_carry(
+        self,
+        grasp_override: ApiGraspOverride.Override = ApiGraspOverride.Override.OVERRIDE_UNKNOWN,
+        carry_override: ManipulatorState.CarryState = ManipulatorState.CarryState.CARRY_STATE_UNKNOWN,
+    ) -> OverrideGraspOrCarry.Response:
+        """
+        Allows overriding of whether spot is grasping something and its behavior on stow.
+
+        Grasp Override:
+
+        The robot's grasp state is whether or not it's holding an object.  Usually the robot is aware of whether or not
+        it is grasping something but sometimes (e.g. when the object is small and the gripper is almost closed) it makes
+        mistakes.  Grasp override values:
+            OVERRIDE_UNKNOWN: If this is set, this function will not request that the grasp state be changed.
+            OVERRIDE_HOLDING: Grasp state will be changed to HOLDING
+            OVERRIDE_NOT_HOLDING: Grasp state will be changed to NOT HOLDING
+
+        Carry Override:
+
+        The robot's carry state governs what the robot will do when control of the arm is requested to stow (usually by
+        a hijack). This only matters if the grasp state is HOLDING (otherwise the arm will always stow) but this
+        function will send the request without checking the grasp state and will not alter the grasp state unless
+        requested to do so.  Carry override values:
+            CARRY_STATE_UNKNOWN: If this is set, this function will not request that the carry state be changed.
+            CARRY_STATE_NOT_CARRYABLE: When the arm is requested to stow, it will open the gripper (let go) first.
+            CARRY_STATE_CARRIABLE: When the arm is requested to stow, it will not do anything.
+            CARRY_STATE_CARRIABLE_AND_STOWABLE: When the arm is requested to stow, it will stow without attempting to
+                first release the object.
+
+
+        """
+        request = OverrideGraspOrCarry.Request()
+        request.grasp_override.value = grasp_override
+        request.carry_override.value = carry_override
+        try:
+            return self._override_grasp_carry_client.call(request)
+        except Exception as e:
+            return OverrideGraspOrCarry.Response(success=False, message=f"Service call failed with error {e}")
 
 
 def cli() -> argparse.ArgumentParser:
