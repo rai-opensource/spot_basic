@@ -368,46 +368,55 @@ class SpotBasic(
         convert(response.response, proto)
         return proto
 
-    def execute_dance(self, path: str) -> tuple[bool, str]:
+    def execute_dance(self, path: str, timeout_sec: float = 10) -> tuple[bool, str]:
         """Upload and execute dance file (found at path) through Spot Driver
         Returns:
             (True, "success") if the command succeeded, (False, <error_message>) otherwise
         """
         self.node.get_logger().info(f"Uploading dance at '{path}' to {self.robot_name}")
-        request = ExecuteDance.Goal()
+        execute_dance_goal = ExecuteDance.Goal()
         try:
             dance_file = open(path, "r")
-            request.choreo_file_content = dance_file.read()
+            execute_dance_goal.choreo_file_content = dance_file.read()
             dance_file.close()
         except FileNotFoundError:
             return False, "Specified filepath does not exist!"
 
-        future = self._execute_dance_ac.send_goal_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False, "Call to wait_for_future timed out"
-        response = future.result()
-        if not response.success:
+        handle = SpotActionHandle(robot_name=self.robot_name, action_name="execute_dance")
+        send_goal_future = self._execute_dance_ac.send_goal_async(execute_dance_goal)
+        handle.set_send_goal_future(send_goal_future)
+        handle.wait_for_result(timeout_sec=timeout_sec)
+
+        result = send_goal_future.result().get_result().result
+        if not result.success:
             self.node.get_logger().debug(
-                f"Uploading dance '{path}' to '{self.robot_name}' failed. Msg: {response.message}."
+                f"Uploading dance '{path}' to '{self.robot_name}' failed. Msg: {result.message}."
             )
-            return False, response.message
+            return False, result.message
         return True, "success"
 
-    def execute_dance_proto(self, choreography_sequence: ChoreographySequence) -> tuple[bool, str]:
+    def execute_dance_proto(
+        self, choreography_sequence: ChoreographySequence, timeout_sec: float = 10
+    ) -> tuple[bool, str]:
         """Execute a dance sequence through Spot Driver
         Returns:
             (True, "success") if the command succeeded, (False, <error_message>) otherwise
         """
 
-        request = ExecuteDance.Goal()
-        request.choreo_sequence_serialized = choreography_sequence.SerializeToString()
-        future = self._execute_dance_ac.send_goal_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False, "Call to wait_for_future timed out"
-        response = future.result()
-        if not response.success:
-            self.node.get_logger().debug(f"Executing dance on '{self.robot_name}' failed. Msg: {response.message}.")
-            return False, response.message
+        execute_dance_goal = ExecuteDance.Goal()
+        execute_dance_goal.choreo_sequence_serialized = choreography_sequence.SerializeToString()
+
+        handle = SpotActionHandle(robot_name=self.robot_name, action_name="execute_dance")
+        send_goal_future = self._execute_dance_ac.send_goal_async(execute_dance_goal)
+        handle.set_send_goal_future(send_goal_future)
+
+        handle.wait_for_result(timeout_sec=timeout_sec)
+
+        result = send_goal_future.result().get_result().result
+
+        if not result.success:
+            self.node.get_logger().debug(f"Executing dance on '{self.robot_name}' failed. Msg: {result.message}.")
+            return False, result.message
         return True, "success"
 
     def stop_dance(self) -> Union[bool, SpotServiceHandle]:
