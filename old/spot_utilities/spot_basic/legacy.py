@@ -100,6 +100,7 @@ from spot_utilities.spot_basic.command import SpotCommandMixin
 from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandMixin
 from spot_utilities.spot_basic.docking import SpotDockingMixin
 from spot_utilities.spot_basic.estop import SpotEStopMixin
+from spot_utilities.spot_basic.image import SpotImageMixin
 from spot_utilities.spot_basic.lease import SpotLeaseMixin
 from spot_utilities.spot_basic.power import SpotPowerMixin
 from spot_utilities.spot_basic.state import FrameHint, SpotStateMixin
@@ -115,6 +116,7 @@ class SpotBasic(
     SpotBase,
     SpotLeaseMixin,
     SpotEStopMixin,
+    SpotImageMixin,
     SpotPowerMixin,
     SpotDockingMixin,
     SpotStateMixin,

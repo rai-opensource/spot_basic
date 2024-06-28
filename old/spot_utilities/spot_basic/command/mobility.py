@@ -511,3 +511,9 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
             on_failure_callback=on_failure_callback,
         )
         return RobotComposeCommandHandle([walk_partial, stand_partial], result_callback)
+
+
+class SpotMobilityCommandProtocol(SpotCommandProtocol):
+
+    @generalized_method
+    def stand_with_orientation(self, *args: Any, **kwargs: Any) -> Any: ...
