@@ -10,7 +10,6 @@ from typing import Callable, List, Optional, Sequence, Tuple, Union
 
 import bdai.interactive_choreo.choreo_builders.serialization_utils as serialization_utils
 import bdai_ros2_wrappers.process as ros_process
-import geometry_msgs
 import numpy as np
 import rclpy
 from bdai_ros.utilities.manual_conversions import (
@@ -75,13 +74,8 @@ from spot_msgs.srv import (
     GetGripperCameraParameters,
     GetInverseKinematicSolutions,
     GetVolume,
-    GraphNavClearGraph,
-    GraphNavGetLocalizationPose,
-    GraphNavSetLocalization,
-    GraphNavUploadGraph,
     ListAllDances,
     ListAllMoves,
-    ListGraph,
     ListSounds,
     ListWorldObjects,
     LoadSound,
@@ -100,6 +94,7 @@ from spot_utilities.spot_basic.command import SpotCommandMixin
 from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandMixin
 from spot_utilities.spot_basic.docking import SpotDockingMixin
 from spot_utilities.spot_basic.estop import SpotEStopMixin
+from spot_utilities.spot_basic.graph_nav import SpotGraphNavMixin
 from spot_utilities.spot_basic.image import SpotImageMixin
 from spot_utilities.spot_basic.lease import SpotLeaseMixin
 from spot_utilities.spot_basic.power import SpotPowerMixin
@@ -122,6 +117,7 @@ class SpotBasic(
     SpotStateMixin,
     SpotMobilityCommandMixin,
     SpotCommandMixin,
+    SpotGraphNavMixin,
 ):
     """Base ROS2 Node that provides interfaces to calling various commands"""
 
@@ -193,25 +189,11 @@ class SpotBasic(
             ChoreographyRecordedStateToAnimation,
             spot_namespaced(self.robot_name, "recorded_state_to_animation"),
         )
-        self._list_graph_client = self.node.create_client(ListGraph, spot_namespaced(self.robot_name, "list_graph"))
         self._list_world_objects_client = self.node.create_client(
             ListWorldObjects, spot_namespaced(self.robot_name, "list_world_objects")
         )
         self._get_parameters_client = self.node.create_client(
             GetParameters, spot_namespaced(self.robot_name, "spot_ros2/get_parameters")
-        )
-        self._graph_nav_upload_graph_client = self.node.create_client(
-            GraphNavUploadGraph, spot_namespaced(self.robot_name, "graph_nav_upload_graph")
-        )
-
-        self._graph_nav_clear_graph_client = self.node.create_client(
-            GraphNavClearGraph, spot_namespaced(self.robot_name, "graph_nav_clear_graph")
-        )
-        self._graph_nav_set_localization_client = self.node.create_client(
-            GraphNavSetLocalization, spot_namespaced(self.robot_name, "graph_nav_set_localization")
-        )
-        self._graph_nav_get_localization_pose_client = self.node.create_client(
-            GraphNavGetLocalizationPose, spot_namespaced(self.robot_name, "graph_nav_get_localization_pose")
         )
         self.get_gripper_camera_parameters_client = self.node.create_client(
             GetGripperCameraParameters, spot_namespaced(self.robot_name, "get_gripper_camera_parameters")
@@ -657,67 +639,6 @@ class SpotBasic(
             return False, "Call to wait_for_future timed out"
         response = future.result()
         return response.success, response.message
-
-    def set_localization(self, method: str, waypoint_id: Optional[str] = None) -> bool:
-        """Calls the SetLocalization RPC through spot_ros2.
-        The 'waypoint_id' is only necessary if 'method'
-        is 'waypoint'"""
-        self.node.get_logger().info("Set localization")
-        method_choices = {"fiducial", "waypoint"}
-        if method not in method_choices:
-            raise ValueError(f"Invalid localization method {method}.Must be in {method_choices}")
-        request = GraphNavSetLocalization.Request()
-        request.method = method
-        if request.method == "waypoint":
-            request.waypoint_id = waypoint_id
-        future = self._graph_nav_set_localization_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False
-        response: GraphNavSetLocalization.Response = future.result()
-        return response.success
-
-    def get_localization_pose(self) -> Optional[geometry_msgs.msg.Pose]:
-        self.node.get_logger().info("Get localization pose")
-        request = GraphNavGetLocalizationPose.Request()
-        future = self._graph_nav_get_localization_pose_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return None
-        response = future.result()
-        if not response.success:
-            raise RuntimeError(f"Failed to get localization pose. Reason: {response.message}")
-        return response.pose
-
-    get_localization = get_localization_pose
-
-    def upload_graph(self, upload_filepath: str) -> bool:
-        self.node.get_logger().info("Upload graph")
-        request = GraphNavUploadGraph.Request()
-        request.upload_filepath = upload_filepath
-        future = self._graph_nav_upload_graph_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False
-        response = future.result()
-        return response.success
-
-    def clear_graph(self) -> bool:
-        self.node.get_logger().info("Clear graph")
-        request = GraphNavClearGraph.Request()
-        future = self._graph_nav_clear_graph_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False
-        response = future.result()
-        return response.success
-
-    def list_graph(self, upload_filepath: str) -> List[str]:
-        """Request a list of waypoint ids"""
-        self.node.get_logger().info(f"List graph {upload_filepath} for {self.robot_name}")
-        request = ListGraph.Request()
-        request.upload_filepath = upload_filepath
-        future = self._list_graph_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return []
-        response = future.result()
-        return response.waypoint_ids
 
     def list_world_objects(self, p_request: ListWorldObjectRequest) -> Optional[ListWorldObjectResponse]:
         """Requests a list of world objects
