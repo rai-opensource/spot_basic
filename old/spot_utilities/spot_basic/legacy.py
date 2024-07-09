@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 import argparse
-import os
-import tempfile
 from enum import IntEnum
 from typing import Callable, List, Optional, Sequence, Tuple, Union
 
-import bdai.interactive_choreo.choreo_builders.serialization_utils as serialization_utils
 import bdai_ros2_wrappers.process as ros_process
 import numpy as np
 import rclpy
@@ -31,7 +28,6 @@ from bosdyn.api import (
 from bosdyn.api.manipulation_api_pb2 import ApiGraspOverride
 from bosdyn.api.robot_state_pb2 import ManipulatorState
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
-from bosdyn.api.spot.choreography_sequence_pb2 import Animation, ChoreographySequence
 from bosdyn.api.spot.inverse_kinematics_pb2 import InverseKinematicsRequest, InverseKinematicsResponse
 from bosdyn.client.frame_helpers import (
     BODY_FRAME_NAME,
@@ -63,19 +59,13 @@ from sklearn.preprocessing import normalize
 from spatialmath import SE2, SE3, SpatialForce, Twist2, Twist3, UnitQuaternion
 from spatialmath.base.types import R3
 from spatialmath.spatialvector import SpatialVector
-from spot_msgs.action import ExecuteDance, Manipulation
+from spot_msgs.action import Manipulation
 from spot_msgs.action import RobotCommand as RobotCommandAction
 from spot_msgs.srv import (
-    ChoreographyRecordedStateToAnimation,
-    ChoreographyStartRecordingState,
-    ChoreographyStopRecordingState,
     DeleteSound,
-    GetChoreographyStatus,
     GetGripperCameraParameters,
     GetInverseKinematicSolutions,
     GetVolume,
-    ListAllDances,
-    ListAllMoves,
     ListSounds,
     ListWorldObjects,
     LoadSound,
@@ -83,13 +73,13 @@ from spot_msgs.srv import (
     PlaySound,
     SetGripperCameraParameters,
     SetVolume,
-    UploadAnimation,
 )
 from spot_utilities.robot_command_helpers import (
     timestamped_se3_poses_to_se3_trajectory,
     timestamped_spatialforces_to_wrench_protos,
 )
 from spot_utilities.spot_basic.base import SpotBase
+from spot_utilities.spot_basic.choreography import SpotChoreographyMixin
 from spot_utilities.spot_basic.command import SpotCommandMixin
 from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandMixin
 from spot_utilities.spot_basic.docking import SpotDockingMixin
@@ -118,12 +108,12 @@ class SpotBasic(
     SpotMobilityCommandMixin,
     SpotCommandMixin,
     SpotGraphNavMixin,
+    SpotChoreographyMixin,
 ):
     """Base ROS2 Node that provides interfaces to calling various commands"""
 
     TRIGGER_SERVICES = [
         "self_right",
-        "stop_dance",
     ]
 
     class BatteryChangeDirHint(IntEnum):
@@ -164,30 +154,8 @@ class SpotBasic(
             self._trigger_clients[command_name] = self.node.create_client(
                 Trigger, spot_namespaced(self.robot_name, command_name)
             )
-        self._get_choreo_status_client = self.node.create_client(
-            GetChoreographyStatus, spot_namespaced(self.robot_name, "get_choreography_status")
-        )
-        self._start_recording_state_client = self.node.create_client(
-            ChoreographyStartRecordingState, spot_namespaced(self.robot_name, "start_recording_state")
-        )
-        self._stop_recording_state_client = self.node.create_client(
-            ChoreographyStopRecordingState, spot_namespaced(self.robot_name, "stop_recording_state")
-        )
         self._ik_client = self.node.create_client(
             GetInverseKinematicSolutions, spot_namespaced(self.robot_name, "get_inverse_kinematic_solutions")
-        )
-        self._upload_animation_client = self.node.create_client(
-            UploadAnimation, spot_namespaced(self.robot_name, "upload_animation")
-        )
-        self._list_all_dances_client = self.node.create_client(
-            ListAllDances, spot_namespaced(self.robot_name, "list_all_dances")
-        )
-        self._list_all_moves_client = self.node.create_client(
-            ListAllMoves, spot_namespaced(self.robot_name, "list_all_moves")
-        )
-        self._recorded_state_to_animation_client = self.node.create_client(
-            ChoreographyRecordedStateToAnimation,
-            spot_namespaced(self.robot_name, "recorded_state_to_animation"),
         )
         self._list_world_objects_client = self.node.create_client(
             ListWorldObjects, spot_namespaced(self.robot_name, "list_world_objects")
@@ -212,10 +180,6 @@ class SpotBasic(
         )
         self._get_volume_client = self.node.create_client(GetVolume, spot_namespaced(self.robot_name, "get_volume"))
         self._set_volume_client = self.node.create_client(SetVolume, spot_namespaced(self.robot_name, "set_volume"))
-
-        self._execute_dance_ac = ActionClientWrapper(
-            ExecuteDance, spot_namespaced(robot_name, "execute_dance"), self.node
-        )
 
         self.node.get_logger().info(f"Waiting for the 'RobotCommand' action server for {self.robot_name} ...")
         self.execute.wait_for_server()
@@ -351,198 +315,6 @@ class SpotBasic(
         proto = InverseKinematicsResponse()
         convert(response.response, proto)
         return proto
-
-    def execute_dance(self, path: str, timeout_sec: float = 10) -> tuple[bool, str]:
-        """Upload and execute dance file (found at path) through Spot Driver
-        Returns:
-            (True, "success") if the command succeeded, (False, <error_message>) otherwise
-        """
-        self.node.get_logger().info(f"Uploading dance at '{path}' to {self.robot_name}")
-        execute_dance_goal = ExecuteDance.Goal()
-        try:
-            dance_file = open(path, "r")
-            execute_dance_goal.choreo_file_content = dance_file.read()
-            dance_file.close()
-        except FileNotFoundError:
-            return False, "Specified filepath does not exist!"
-
-        handle = SpotActionHandle(robot_name=self.robot_name, action_name="execute_dance")
-        send_goal_future = self._execute_dance_ac.send_goal_async(execute_dance_goal)
-        handle.set_send_goal_future(send_goal_future)
-        handle.wait_for_result(timeout_sec=timeout_sec)
-
-        result = send_goal_future.result().get_result().result
-        if not result.success:
-            self.node.get_logger().debug(
-                f"Uploading dance '{path}' to '{self.robot_name}' failed. Msg: {result.message}."
-            )
-            return False, result.message
-        return True, "success"
-
-    def execute_dance_proto(
-        self, choreography_sequence: ChoreographySequence, timeout_sec: float = 10
-    ) -> tuple[bool, str]:
-        """Execute a dance sequence through Spot Driver
-        Returns:
-            (True, "success") if the command succeeded, (False, <error_message>) otherwise
-        """
-
-        execute_dance_goal = ExecuteDance.Goal()
-        execute_dance_goal.choreo_sequence_serialized = choreography_sequence.SerializeToString()
-
-        handle = SpotActionHandle(robot_name=self.robot_name, action_name="execute_dance")
-        send_goal_future = self._execute_dance_ac.send_goal_async(execute_dance_goal)
-        handle.set_send_goal_future(send_goal_future)
-
-        handle.wait_for_result(timeout_sec=timeout_sec)
-
-        result = send_goal_future.result().get_result().result
-
-        if not result.success:
-            self.node.get_logger().debug(f"Executing dance on '{self.robot_name}' failed. Msg: {result.message}.")
-            return False, result.message
-        return True, "success"
-
-    def stop_dance(self) -> Union[bool, SpotServiceHandle]:
-        """Stops a dance sequence through Spot Driver
-        Returns:
-            (True, "success") if the command succeeded, (False, <error_message>) otherwise
-        """
-        return self.trigger_service_async("stop_dance")
-
-    def upload_animation(self, move_name: str, path: str) -> tuple[bool, str]:
-        """Upload an animation file through spot driver
-        Returns:
-            (True, "success") if the command succeeded, (False, <error_message>) otherwise
-        """
-        self.node.get_logger().info(f"Uploading animation at '{path}' to {self.robot_name}")
-        request = UploadAnimation.Request()
-        try:
-            dance_file = open(path, "r")
-            request.animation_file_content = dance_file.read()
-            request.animation_name = move_name
-            dance_file.close()
-        except FileNotFoundError:
-            return False, "Specified filepath does not exist!"
-
-        future = self._upload_animation_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False, "Call to wait_for_future timed out"
-        response = future.result()
-        if not response.success:
-            self.node.get_logger().debug(
-                f"Uploading animation '{path}' to '{self.robot_name}' failed. Msg: {response.message}."
-            )
-            return False, response.message
-        return True, "success"
-
-    def upload_animation_proto(self, animation: Animation) -> tuple[bool, str]:
-        """Upload an animation file through spot driver
-        Returns:tmp
-            (True, "success") if the command succeeded, (False, <error_message>) otherwise
-        """
-        self.node.get_logger().info(f"Uploading animation named '{animation.name}' to {self.robot_name}")
-        request = UploadAnimation.Request()
-        request.animation_proto_serialized = animation.SerializeToString()
-        request.animation_name = animation.name
-
-        future = self._upload_animation_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False, "Call to wait_for_future timed out"
-        response = future.result()
-        if not response.success:
-            self.node.get_logger().info(
-                f"Uploading proto animation '{animation.name}' to '{self.robot_name}' failed. Msg: {response.message}."
-            )
-            return False, response.message
-        return True, "success"
-
-    def list_all_dances(self) -> tuple[bool, str, list[str]]:
-        """Get list of all the dances uploaded on Spot"""
-        self.node.get_logger().info(f"Sending list dances request to {self.robot_name}")
-        request = ListAllDances.Request()
-        future = self._list_all_dances_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False, "Call to wait_for_future timed out", []
-        response = future.result()
-        if not response.success:
-            self.node.get_logger().debug(
-                f"Request to list dances at '{self.robot_name}' failed. Msg: {response.message}."
-            )
-            return False, response.message, []
-        return True, "success", response.dances
-
-    def list_all_moves(self) -> tuple[bool, str, list[str]]:
-        """Get list of all the moves uploaded on Spot"""
-        self.node.get_logger().info(f"Sending list moves request to {self.robot_name}")
-        request = ListAllMoves.Request()
-        future = self._list_all_moves_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False, "Call to wait_for_future timed out", []
-        response = future.result()
-        if not response.success:
-            self.node.get_logger().debug(
-                f"Request to list moves at '{self.robot_name}' failed. Msg: {response.message}."
-            )
-            return False, response.message, []
-        return True, "success", response.moves
-
-    def get_choreo_status(self) -> tuple[bool, str, int]:
-        request = GetChoreographyStatus.Request()
-        future = self._get_choreo_status_client.call_async(request)
-        if not wait_for_future(future):
-            return False, "Call to wait_for_future timed out", GetChoreographyStatus.Request.STATUS_UNKNOWN
-        response = future.result()
-        if not response.success:
-            self.node.get_logger().debug(f"Failed to get choreo status. Msg: {response.message}.")
-            return False, response.message, GetChoreographyStatus.Request.STATUS_UNKNOWN
-        return True, "success", response.status
-
-    def start_recording_state(self, duration: float) -> tuple[bool, str]:
-        request = ChoreographyStartRecordingState.Request()
-        request.duration_seconds = duration
-        future = self._start_recording_state_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False, "Call to wait_for_future timed out"
-        response = future.result()
-        if not response.success:
-            self.node.get_logger().error(f"Failed to start recording state. Msg: {response.message}.")
-            return False, response.message
-        return True, "success"
-
-    def stop_recording_state(self) -> tuple[bool, str]:
-        request = ChoreographyStopRecordingState.Request()
-
-        future = self._stop_recording_state_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False, "Call to wait_for_future timed out"
-        response = future.result()
-        if not response.success:
-            self.node.get_logger().error(f"Failed to stop recording state. Msg: {response.message}.")
-            return False, response.message
-        return True, "success"
-
-    def recorded_state_to_animation(self, has_arm: bool) -> tuple[bool, str, Animation]:
-        animation_proto = Animation()
-
-        request = ChoreographyRecordedStateToAnimation.Request()
-        request.has_arm = has_arm
-        future = self._recorded_state_to_animation_client.call_async(request)
-        if not wait_for_future(future):
-            return False, "Call to wait_for_future timed out", animation_proto
-        response = future.result()
-        if not response.success:
-            self.node.get_logger().error(f"Failed to start recording state. Msg: {response.message}.")
-            return False, response.message, animation_proto
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            filename = "temporary_animation.cha"
-            full_path = os.path.join(temp_dir, filename)
-            with open(full_path, "w") as animation_file:
-                animation_file.write(response.animation_file_contents)
-
-            animation_proto = serialization_utils.load_animation(full_path)
-        return True, "success", animation_proto
 
     def list_sounds(self) -> tuple[bool, str, list[str]]:
         """

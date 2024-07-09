@@ -54,7 +54,7 @@ def hardware_spot_interface(hardware_robot_name: str, hardware_bound_ros: ROSAwa
 
 @launch_pytest.fixture(scope="session")
 def hardware_spot_graph_description(hardware_robot_name: str, hardware_bound_domain_id: int) -> LaunchDescription:
-    config_file = [PathJoinSubstitution([FindPackageShare("spot_utilities"), "config/spot_ros.testing.yaml"])]
+    config_file = [PathJoinSubstitution([FindPackageShare("spot_utilities"), "config/spot_ros.system_testing.yaml"])]
     return LaunchDescription(
         [
             SetEnvironmentVariable(name="ROS_DOMAIN_ID", value=str(hardware_bound_domain_id)),

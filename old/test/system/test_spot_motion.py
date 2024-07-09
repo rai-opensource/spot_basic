@@ -3,6 +3,8 @@
 import math
 
 import pytest
+from bdai.interactive_choreo.choreo_builders.animation_builder import AnimationBuilder
+from bdai.interactive_choreo.choreo_builders.sequence_builder import SequenceBuilder
 from bdai.test_utilities.testing_prompt_session import TestingPromptSession
 from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bosdyn.client.robot_command import RobotCommandBuilder
@@ -136,3 +138,32 @@ def test_docking_cycle(hardware_spot_interface: SpotBasic, prompt_session: Testi
     assert response.success, response.message
 
     assert prompt_session.boolean_ask("did the robot re-dock?")
+
+
+@pytest.mark.manual
+@pytest.mark.launch(fixture=pytest.hardware_spot_graph_description)
+def test_minimal_choreography(hardware_spot_interface: SpotBasic, prompt_session: TestingPromptSession) -> None:
+    if not prompt_session.boolean_ask("does the robot have a choreography license)?"):
+        pytest.skip("Cannot test choreography without a license")
+    if not hardware_spot_interface.has_arm():
+        pytest.skip("Cannot test choreography without an arm")
+
+    animation_builder = AnimationBuilder()
+    animation_builder.start_from_empty(name="gripper_open_close")
+    animation_builder.make_name_unique()
+    animation_builder.animate_gripper(start_time=0, gripper_angle=0.0)
+    animation_builder.animate_gripper(start_time=1, gripper_angle=-1.0)
+    animation_builder.animate_gripper(start_time=2, gripper_angle=0.0)
+    animation = animation_builder.build_animation()
+
+    response = hardware_spot_interface.upload_animation.synchronously(animation, timeout_sec=10.0)
+    assert response.success, response.message
+
+    sequence_builder = SequenceBuilder()
+    sequence_builder.start_from_empty(name="minimal_sequence")
+    sequence_builder.add_animation(animation, start_time=0.0)
+    sequence = sequence_builder.build_sequence()
+
+    response = hardware_spot_interface.execute_dance.synchronously(sequence, timeout_sec=10.0)
+    assert response.success, response.message
+    assert prompt_session.boolean_ask("did the robot open and close its gripper?")
