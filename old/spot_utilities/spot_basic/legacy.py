@@ -62,23 +62,18 @@ from spatialmath.spatialvector import SpatialVector
 from spot_msgs.action import Manipulation
 from spot_msgs.action import RobotCommand as RobotCommandAction
 from spot_msgs.srv import (
-    DeleteSound,
     GetGripperCameraParameters,
     GetInverseKinematicSolutions,
-    GetVolume,
-    ListSounds,
     ListWorldObjects,
-    LoadSound,
     OverrideGraspOrCarry,
-    PlaySound,
     SetGripperCameraParameters,
-    SetVolume,
 )
 from spot_utilities.robot_command_helpers import (
     timestamped_se3_poses_to_se3_trajectory,
     timestamped_spatialforces_to_wrench_protos,
 )
 from spot_utilities.spot_basic.base import SpotBase
+from spot_utilities.spot_basic.cam.audio import SpotCAMAudioMixin
 from spot_utilities.spot_basic.choreography import SpotChoreographyMixin
 from spot_utilities.spot_basic.command import SpotCommandMixin
 from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandMixin
@@ -109,6 +104,7 @@ class SpotBasic(
     SpotCommandMixin,
     SpotGraphNavMixin,
     SpotChoreographyMixin,
+    SpotCAMAudioMixin,
 ):
     """Base ROS2 Node that provides interfaces to calling various commands"""
 
@@ -169,17 +165,9 @@ class SpotBasic(
         self.set_gripper_camera_parameters_client = self.node.create_client(
             SetGripperCameraParameters, spot_namespaced(self.robot_name, "set_gripper_camera_parameters")
         )
-        self._list_sounds_client = self.node.create_client(ListSounds, spot_namespaced(self.robot_name, "list_sounds"))
-        self._load_sound_client = self.node.create_client(LoadSound, spot_namespaced(self.robot_name, "load_sound"))
         self._override_grasp_carry_client = self.node.create_client(
             OverrideGraspOrCarry, spot_namespaced(self.robot_name, "override_grasp_or_carry")
         )
-        self._play_sound_client = self.node.create_client(PlaySound, spot_namespaced(self.robot_name, "play_sound"))
-        self._delete_sound_client = self.node.create_client(
-            DeleteSound, spot_namespaced(self.robot_name, "delete_sound")
-        )
-        self._get_volume_client = self.node.create_client(GetVolume, spot_namespaced(self.robot_name, "get_volume"))
-        self._set_volume_client = self.node.create_client(SetVolume, spot_namespaced(self.robot_name, "set_volume"))
 
         self.node.get_logger().info(f"Waiting for the 'RobotCommand' action server for {self.robot_name} ...")
         self.execute.wait_for_server()
@@ -315,102 +303,6 @@ class SpotBasic(
         proto = InverseKinematicsResponse()
         convert(response.response, proto)
         return proto
-
-    def list_sounds(self) -> tuple[bool, str, list[str]]:
-        """
-        List sounds loaded on Spot CAM.
-
-        Returns:
-            (True, 'Success', [<sound names>]) on success
-            (False, <error message>, <ignore>) on failure
-        """
-        request = ListSounds.Request()
-        future = self._list_sounds_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False, "Call to wait_for_future timed out", []
-        response = future.result()
-        return response.success, response.message, response.names
-
-    def load_sound(self, name: str, wav_path: str) -> tuple[bool, str]:
-        """
-        Upload wav file sound from this machine to Spot CAM.
-
-        Returns:
-            (True, 'Success') on success
-            (False, <error message>) on failure
-        """
-        request = LoadSound.Request()
-        request.name = name
-        request.wav_path = wav_path
-        future = self._load_sound_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False, "Call to wait_for_future timed out"
-        response = future.result()
-        return response.success, response.message
-
-    def play_sound(self, name: str, volume_multiplier: float) -> tuple[bool, str]:
-        """
-        Play sound loaded on Spot CAM. Volume should be between 0 and 1. # TODO(tchemel): Is this true?
-
-        Returns:
-            (True, 'Success') on success
-            (False, <error message>) on failure
-        """
-        request = PlaySound.Request()
-        request.name = name
-        request.volume_multiplier = volume_multiplier
-        future = self._play_sound_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False, "Call to wait_for_future timed out"
-        response = future.result()
-        return response.success, response.message
-
-    def delete_sound(self, name: str) -> tuple[bool, str]:
-        """
-        Delete sound loaded on Spot CAM.
-
-        Returns:
-            (True, 'Success') on success
-            (False, <error message>) on failure
-        """
-        request = DeleteSound.Request()
-        request.name = name
-        future = self._delete_sound_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False, "Call to wait_for_future timed out"
-        response = future.result()
-        return response.success, response.message
-
-    def get_volume(self) -> tuple[bool, str, float]:
-        """
-        Get volume of sound playback on Spot CAM.
-
-        Returns:
-            (True, 'Success', <volume between 0 and 1>) on success
-            (False, <error message>, <ignore>) on failure
-        """
-        request = GetVolume.Request()
-        future = self._get_volume_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False, "Call to wait_for_future timed out", 0
-        response = future.result()
-        return response.success, response.message, response.volume
-
-    def set_volume(self, volume: float) -> tuple[bool, str]:
-        """
-        Set volume of sound playback on Spot CAM. Volume should be between 0 and 1.
-
-        Returns:
-            (True, 'Success') on success
-            (False, <error message>) on failure
-        """
-        request = SetVolume.Request()
-        request.volume = volume
-        future = self._set_volume_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False, "Call to wait_for_future timed out"
-        response = future.result()
-        return response.success, response.message
 
     def list_world_objects(self, p_request: ListWorldObjectRequest) -> Optional[ListWorldObjectResponse]:
         """Requests a list of world objects

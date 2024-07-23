@@ -1,11 +1,14 @@
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
+import pathlib
 from typing import Iterator
 
 import bdai_ros2_wrappers.scope as ros_scope
 import domain_coordinator
 import launch_pytest
 import pytest
+import yaml
+from ament_index_python import get_package_share_directory
 from bdai.test_utilities.testing_prompt_session import TestingPromptSession
 from bdai_core.robots.load_robot_configs import (
     get_default_spot_password,
@@ -52,9 +55,31 @@ def hardware_spot_interface(hardware_robot_name: str, hardware_bound_ros: ROSAwa
         assert response.success, response.message
 
 
+@pytest.fixture(scope="session")
+def hardware_spot_parameters(hardware_robot_name: str, prompt_session: TestingPromptSession) -> dict:
+    share_directory = pathlib.Path(get_package_share_directory("spot_utilities"))
+    config_file = share_directory / "config" / "spot_ros.testing.yaml"
+    config = yaml.safe_load(config_file.read_text())
+    parameters = config["/**"]["ros__parameters"]
+    parameters["initialize_spot_cam"] = prompt_session.boolean_ask(
+        f"does {hardware_robot_name} have a Spot CAM payload?", who="pytest"
+    )
+    parameters["publish_graph_nav_pose"] = prompt_session.boolean_ask(
+        f"was the Graph Nav service initialized on {hardware_robot_name}?", who="pytest"
+    )
+    return parameters
+
+
 @launch_pytest.fixture(scope="session")
-def hardware_spot_graph_description(hardware_robot_name: str, hardware_bound_domain_id: int) -> LaunchDescription:
-    config_file = [PathJoinSubstitution([FindPackageShare("spot_utilities"), "config/spot_ros.system_testing.yaml"])]
+def hardware_spot_graph_description(
+    tmp_path_factory: pytest.TempPathFactory,
+    hardware_robot_name: str,
+    hardware_bound_domain_id: int,
+    hardware_spot_parameters: dict,
+) -> LaunchDescription:
+    config_file = tmp_path_factory.mktemp("hardware_spot_graph_description") / "spot_ros.yaml"
+    config_file.write_text(yaml.dump({"/**": {"ros__parameters": hardware_spot_parameters}}))
+
     return LaunchDescription(
         [
             SetEnvironmentVariable(name="ROS_DOMAIN_ID", value=str(hardware_bound_domain_id)),
@@ -66,7 +91,7 @@ def hardware_spot_graph_description(hardware_robot_name: str, hardware_bound_dom
                 PythonLaunchDescriptionSource(
                     [PathJoinSubstitution([FindPackageShare("spot_utilities"), "launch/spot_driver.launch.py"])]
                 ),
-                launch_arguments={"spot_name": hardware_robot_name, "config_file": config_file}.items(),
+                launch_arguments={"spot_name": hardware_robot_name, "config_file": str(config_file)}.items(),
             ),
             ReadyToTest(),
         ],
