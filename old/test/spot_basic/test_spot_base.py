@@ -6,10 +6,17 @@ from spot_utilities.spot_basic import SpotBasic
 from spot_wrapper.testing.fixtures import SpotFixture
 
 
-@pytest.mark.launch(fixture=pytest.reconfigurable_spot_graph_description)
-def test_spot_base_interface(reconfigurable_spot: SpotFixture, ros: ROSAwareScope) -> None:
-    spot_interface = SpotBasic(reconfigurable_spot.api.name, node=ros.node)
-    assert spot_interface.robot_name == reconfigurable_spot.api.name
+@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
+def test_spot_has_arm(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
+    spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.robot_name == simple_spot.api.name
     assert spot_interface.node is ros.node
-    manipulator_state = reconfigurable_spot.api.robot_state.manipulator_state
-    assert spot_interface.has_arm() == manipulator_state.is_gripper_holding_item
+    assert spot_interface.has_arm()
+
+
+@pytest.mark.launch(fixture=pytest.simple_spot_without_arm_graph_description)
+def test_spot_base_has_no_arm(simple_spot_without_arm: SpotFixture, ros: ROSAwareScope) -> None:
+    spot_interface = SpotBasic(simple_spot_without_arm.api.name, node=ros.node)
+    assert spot_interface.robot_name == simple_spot_without_arm.api.name
+    assert spot_interface.node is ros.node
+    assert not spot_interface.has_arm()

@@ -34,7 +34,6 @@ class SpotBase:
         if node is None:
             raise ValueError("no process-wide ROS 2 node available (did you use bdai_ros2_wrapper.process.main?)")
         self._node = node
-
         # make sure robot name and node properties are initialized before constructing mixins
         super().__init__(*args, **kwargs)
         self._get_spot_parameters = Serviced(

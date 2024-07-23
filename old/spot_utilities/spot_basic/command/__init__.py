@@ -28,6 +28,10 @@ class SpotCommandProtocol(SpotStateProtocol):
     @property
     def mobility_params(self) -> spot_command_pb2.MobilityParams: ...
 
+    def command(
+        self, command_name: str, goal: RobotCommandAction.Goal, timeout_sec: Optional[float] = None
+    ) -> Optional[RobotCommandFeedback]: ...
+
     def command_async(
         self,
         command_name: str,
