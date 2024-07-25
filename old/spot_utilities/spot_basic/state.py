@@ -1,7 +1,8 @@
 # Copyright (c) 2023-2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Optional, Union
+from typing import Any, Optional, Sequence, Union
 
 import bdai_ros2_wrappers.scope as ros_scope
 from bdai_ros.utilities.manual_conversions import (
@@ -24,8 +25,104 @@ from rclpy.time import Time
 from sensor_msgs.msg import JointState
 from spatialmath import SE3
 from spot_utilities.spot_basic.base import SpotBaseProtocol
-from spot_utilities.spot_dataclasses import ArmJointMap, LegJointMap
 from spot_utilities.spot_util import spot_namespaced
+
+
+@dataclass(kw_only=True)
+class ArmJointMap:
+    """Stores kinematic state (position or velocity) for each joint in Spot arm."""
+
+    sh0: float
+    sh1: float
+    el0: float
+    el1: float
+    wr0: float
+    wr1: float
+
+    def to_list(self) -> Sequence[float]:
+        """Converts an ArmJointMap to the format expected by the Spot-SDK.
+
+        Returns:
+            List representing the correct ordering for the arm joints when commanding a move.
+        """
+        return [self.sh0, self.sh1, self.el0, self.el1, self.wr0, self.wr1]
+
+    @classmethod
+    def from_list(cls, joint_list: Sequence[float]) -> "ArmJointMap":
+        """Converts an list of arm joint states to the ArmJointMap used in SpotBasic.
+
+        Returns:
+            ArmJointMap representing the correct ordering for the arm joints when commanding a move.
+        """
+        return ArmJointMap(
+            sh0=joint_list[0],
+            sh1=joint_list[1],
+            el0=joint_list[2],
+            el1=joint_list[3],
+            wr0=joint_list[4],
+            wr1=joint_list[5],
+        )
+
+
+@dataclass(kw_only=True)
+class LegJointMap:
+    """Stores joint angles or joint velocities for each joint in spot's legs."""
+
+    front_left_hip_x: float
+    front_left_hip_y: float
+    front_left_knee: float
+    front_right_hip_x: float
+    front_right_hip_y: float
+    front_right_knee: float
+    rear_left_hip_x: float
+    rear_left_hip_y: float
+    rear_left_knee: float
+    rear_right_hip_x: float
+    rear_right_hip_y: float
+    rear_right_knee: float
+
+    def to_list(self) -> Sequence[float]:
+        """Converts a LegJointMap to the format expected by the Spot-SDK.
+
+        Returns:
+            List representing the leg joints.
+        """
+        return [
+            self.front_left_hip_x,
+            self.front_left_hip_y,
+            self.front_left_knee,
+            self.front_right_hip_x,
+            self.front_right_hip_y,
+            self.front_right_knee,
+            self.rear_left_hip_x,
+            self.rear_left_hip_y,
+            self.rear_left_knee,
+            self.rear_right_hip_x,
+            self.rear_right_hip_y,
+            self.rear_right_knee,
+        ]
+
+    @classmethod
+    def from_list(cls, joint_list: Sequence[float]) -> "LegJointMap":
+        """Converts an list of arm joint angles to the LegJointMap used in SpotBasic.
+
+        Returns:
+            LegJointMap representing the leg joints.
+        """
+        return LegJointMap(
+            front_left_hip_x=joint_list[0],
+            front_left_hip_y=joint_list[1],
+            front_left_knee=joint_list[2],
+            front_right_hip_x=joint_list[3],
+            front_right_hip_y=joint_list[4],
+            front_right_knee=joint_list[5],
+            rear_left_hip_x=joint_list[6],
+            rear_left_hip_y=joint_list[7],
+            rear_left_knee=joint_list[8],
+            rear_right_hip_x=joint_list[9],
+            rear_right_hip_y=joint_list[10],
+            rear_right_knee=joint_list[11],
+        )
 
 
 class SpotStateMixin(SpotBaseProtocol):

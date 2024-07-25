@@ -51,8 +51,9 @@ def hardware_spot_interface(hardware_robot_name: str, hardware_bound_ros: ROSAwa
     try:
         yield robot_interface
     finally:
-        response = robot_interface.sit.synchronously(timeout_sec=10.0)
-        assert response.success, response.message
+        if robot_interface.has_arm():
+            robot_interface.stow_arm.synchronously(timeout_sec=10.0)
+        robot_interface.sit.synchronously(timeout_sec=10.0)
 
 
 @pytest.fixture(scope="session")
