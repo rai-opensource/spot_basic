@@ -1,10 +1,8 @@
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
-import cv_bridge
 import numpy as np
 import pytest
 from bdai.test_utilities.testing_prompt_session import TestingPromptSession
-from bdai_ros2_wrappers.futures import unwrap_future
 from bdai_ros2_wrappers.utilities import ensure
 from hil_utilities import prompt_for_click, visual_aid
 from spatialmath import SE3, SO3
@@ -206,14 +204,14 @@ def test_hand_gazing(hardware_spot_interface: SpotBasic, prompt_session: Testing
     assert response.success, response.message
 
     camera = ensure(hardware_spot_interface.cameras.hand)
-    image_message, camera_info = unwrap_future(camera.rgb.image_with_info.update, timeout_sec=5.0)
+
+    image_pixel_xy, image, camera_info = prompt_for_click("Click to gaze!", camera.rgb)
 
     vision_t_camera = hardware_spot_interface.lookup_a_tform_b(
         FrameHint.VISION, camera_info.header.frame_id, timeout=5.0
     )
 
-    image = cv_bridge.CvBridge().imgmsg_to_cv2(image_message, "passthrough")
-    x, y = prompt_for_click("Click to gaze!", image)
+    x, y = image_pixel_xy
     fx, _, cx, _, fy, cy, *_ = camera_info.k
     point_wrt_camera = np.array([(x - cx) / fx, (y - cy) / fy, 1.0])
     point_wrt_vision = vision_t_camera * point_wrt_camera
@@ -223,10 +221,7 @@ def test_hand_gazing(hardware_spot_interface: SpotBasic, prompt_session: Testing
     )
     assert response.success, response.message
 
-    image_message = unwrap_future(camera.rgb.image.update, timeout_sec=5.0)
-    image = cv_bridge.CvBridge().imgmsg_to_cv2(image_message, "passthrough")
-
-    with visual_aid("Centered image", image):
+    with visual_aid("Centered image", camera.rgb):
         assert prompt_session.boolean_ask("is robot hand gazing at the clicked point?")
 
     response = hardware_spot_interface.claw_gripper_close.synchronously(timeout_sec=5.0)

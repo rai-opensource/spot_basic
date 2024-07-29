@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from enum import Enum
 from functools import cached_property
-from typing import Any, Callable, NamedTuple, Optional, TypeAlias
+from typing import Any, Callable, Iterator, NamedTuple, Optional, TypeAlias
 
 import geometry_msgs.msg
 import numpy
@@ -359,6 +359,10 @@ class SpotImageMixin(SpotMobilityCommandProtocol, SpotStateProtocol):
         front_left: SpotCameraSubscription
         front_right: SpotCameraSubscription
         hand: Optional[SpotCameraSubscription]
+
+        def __iter__(self) -> Iterator[SpotCameraSubscription]:
+            """Iterate available cameras only."""
+            yield from filter(None, tuple.__iter__(self))
 
     @cached_property
     def cameras(self) -> CameraConfiguration:
