@@ -219,15 +219,14 @@ class SpotStateMixin(SpotBaseProtocol):
             rear_right_knee=joint_positions[namespace_with(self.robot_name, "rear_right_knee")],
         )
 
-    def lookup_a_tform_b(
+    def wait_for_a_tform_b(
         self,
         frame_a: Union[FrameHint, str],
         frame_b: Union[FrameHint, str],
-        transform_time: Optional[Union[Time, float]] = None,
-        timeout: Optional[float] = None,
-        wait_for_frames: bool = False,
-    ) -> SE3:
-        """Lookup a robot specific transform from `frame_a` to `frame_b`.
+        transform_time: Optional[Time] = None,
+        timeout_sec: Optional[float] = None,
+    ) -> bool:
+        """Waits for a robot specific transform from `frame_a` to `frame_b`.
 
         The transform returned will be frame_a_t_frame_b, which is robot robot specific.
         So instead if frame_a is VISION, we internally append it to the robot name
@@ -236,14 +235,61 @@ class SpotStateMixin(SpotBaseProtocol):
         Args:
             frame_a: Base frame for transform.
             frame_b: Tip frame for transform.
-            transform_time: Time the transform is to be published.
-            timeout: The time to wait for the transform to become available if the transform_time is beyond the most
-                recent transform in the buffer.
-            wait_for_frames: If true, waits timeout amount of time for a path to exist from frame_a to frame_b in the
-                buffer. If false, this will return immediately if a path does not exist even if timeout is not
-                None.
+            transform_time: optional time for transform lookup. It defaults to the
+            latest available transform if none is provided.
+            timeout_sec: optional timeout, in seconds, to wait for the transform to become available if
+            the requested is beyond the most recent transform in the buffer.
         Returns:
-            The timestamp from the latest recorded transform frame_a_t_frame_b
+            Whether a transform between frame_a and frame_b is available at the specified time.
+        Raises:
+            All the possible TransformExceptions. ValueError if no TFListenerWrapper instance is connected.
+        """
+        if self.tf_listener is None:
+            raise ValueError(
+                "TFListenerWrapper is not connected. Use set_tf_listener() or ros_process.main(uses_tf=True)."
+            )
+
+        if isinstance(frame_a, FrameHint):
+            frame_a = frame_a.value
+
+        if isinstance(frame_b, FrameHint):
+            frame_b = frame_b.value
+
+        # Check if namespaced and add robot_name if not
+        if not frame_a.startswith(self.robot_name):
+            frame_a = namespace_with(self.robot_name, frame_a)
+
+        if not frame_b.startswith(self.robot_name):
+            frame_b = namespace_with(self.robot_name, frame_b)
+
+        return self.tf_listener.wait_for_a_tform_b(frame_a, frame_b, transform_time, timeout_sec)
+
+    def lookup_a_tform_b(
+        self,
+        frame_a: Union[FrameHint, str],
+        frame_b: Union[FrameHint, str],
+        transform_time: Optional[Time] = None,
+        timeout: Optional[float] = None,
+        wait_for_frames: bool = False,
+    ) -> SE3:
+        """Looks up a robot specific transform from `frame_a` to `frame_b`.
+
+        The transform returned will be frame_a_t_frame_b, which is robot robot specific.
+        So instead if frame_a is VISION, we internally append it to the robot name
+        s.t. "<Robot Name>/VISION", will be called.
+
+        Args:
+            frame_a: Base frame for transform.
+            frame_b: Tip frame for transform.
+            transform_time: optional time for transform lookup. It defaults to the latest available
+            transform if none is provided.
+            timeout: optional timeout, in seconds, to wait for the transform to become available if
+            the requested is beyond the most recent transform in the buffer.
+            wait_for_frames: if true, this method will wait until timeout for a path from frame_a to
+            frame_b to become available in the buffer. If false, this method will return immediately
+            if no such path exists, regardless of the given timeout.
+        Returns:
+            Transform from frame_a to frame_b at the requested time.
         Raises:
             All the possible TransformExceptions. ValueError if no TFListenerWrapper instance is connected.
         """
@@ -268,6 +314,69 @@ class SpotStateMixin(SpotBaseProtocol):
         # Return transform as SE3
         return to_se3(self.tf_listener.lookup_a_tform_b(frame_a, frame_b, transform_time, timeout, wait_for_frames))
 
+    def get_transforms_tree_snapshot(
+        self,
+        transform_time: Optional[Time] = None,
+        root_frame: Optional[Union[FrameHint, str]] = None,
+        timeout_sec: Optional[float] = None,
+    ) -> FrameTreeSnapshot:
+        """Takes a full snapshot of all robot-specific transforms in the system.
+
+        Only transforms between frames prefixed by the robot name and available at the requested
+        time will be retrieved -- missing transforms are not an error.
+
+        Note this method will return a tree of height 2: implicit world frame to root frame, then
+        root frame to every other frame. This is because once broadcasted over tf2, it is no longer
+        possible to reconstruct the tree structure as it was at a given point in time.
+
+        Args:
+            transform_time: optional time for transform lookup. It defaults to the latest transforms
+            (on a pair basis) if none is provided.
+            root_frame: optional root frame for the transforms tree. It defaults to the body frame
+            if none is provided.
+            timeout_sec: optional timeout to wait for transforms to become available. It defaults to
+            no waiting if none is provided. Note that this method will only wait for frames it already
+            knows about -- it will not wait for new frames to show up.
+
+        Args:
+            A tree-based collection of all available transforms.
+        """
+        if root_frame is None:
+            root_frame = FrameHint.BODY
+
+        if isinstance(root_frame, FrameHint):
+            root_frame_name = root_frame.value
+        else:
+            root_frame_name = root_frame
+
+        if not root_frame_name.startswith(self.robot_name):
+            root_frame_name = namespace_with(self.robot_name, root_frame_name)
+
+        if timeout_sec is None:
+            timeout_sec = 0.0
+
+        child_to_parent_edge_map = {}
+        root_frame_basename = root_frame_name[len(self.robot_name) + 1 :]
+        for frame_name in self.tf_listener.buffer._getFrameStrings():  # noqa: SLF001
+            if not frame_name.startswith(self.robot_name):
+                continue
+            frame_transform_available = self.tf_listener.wait_for_a_tform_b(
+                root_frame_name, frame_name, transform_time, timeout_sec
+            )
+            if not frame_transform_available:
+                continue
+            if root_frame_name != frame_name:
+                frame_transform = to_se3(
+                    self.tf_listener.lookup_a_tform_b(root_frame_name, frame_name, transform_time, timeout_sec)
+                )
+            else:
+                frame_transform = SE3()
+            frame_basename = frame_name[len(self.robot_name) + 1 :]
+            child_to_parent_edge_map[frame_basename] = FrameTreeSnapshot.ParentEdge(
+                parent_frame_name=root_frame_basename, parent_tform_child=se3_to_se3pose_proto(frame_transform)
+            )
+        return FrameTreeSnapshot(child_to_parent_edge_map=child_to_parent_edge_map)
+
     def get_basic_tform_tree_snapshot(self, transform_time: Optional[Union[Time, float]] = None) -> FrameTreeSnapshot:
         """Take a snapshot of all transforms involving common frames.
 
@@ -278,6 +387,9 @@ class SpotStateMixin(SpotBaseProtocol):
         Returns:
             A tree-based collection of transformation to common frames.
         """
+        if isinstance(transform_time, float):
+            transform_time = Time(seconds=transform_time)
+
         child_to_parent_edge_map = {}
 
         # Add root frame.
@@ -400,7 +512,14 @@ class SpotStateProtocol(SpotBaseProtocol):
         self,
         frame_a: Union[FrameHint, str],
         frame_b: Union[FrameHint, str],
-        transform_time: Optional[Union[Time, float]] = None,
+        transform_time: Optional[Time] = None,
         timeout: Optional[float] = None,
         wait_for_frames: bool = False,
     ) -> SE3: ...
+
+    def get_transforms_tree_snapshot(
+        self,
+        transform_time: Optional[Time] = None,
+        root_frame: Optional[Union[FrameHint, str]] = None,
+        timeout_sec: Optional[float] = None,
+    ) -> FrameTreeSnapshot: ...
