@@ -1196,7 +1196,13 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         goal = RobotCommandAction.Goal()
         command_builder = SpotArmCommandBuilder(self)
         command = command_builder.arm_end_effector_impedance_command(
-            trajectory, root_t_task, wrist_t_tool, root_frame_name, stiffness, damping, wrench_nm
+            trajectory=trajectory,
+            root_frame=root_frame_name,
+            root_t_task=root_t_task,
+            wrist_t_tool=wrist_t_tool,
+            stiffness=stiffness,
+            damping=damping,
+            wrench_nm=wrench_nm,
         )
         convert(command, goal.command)
         return self.command("move_end_effector_impedance", goal, timeout_sec)
@@ -1241,7 +1247,13 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         goal = RobotCommandAction.Goal()
         command_builder = SpotArmCommandBuilder(self)
         command = command_builder.arm_end_effector_impedance_command(
-            trajectory, root_t_task, wrist_t_tool, root_frame_name, stiffness, damping, wrench_nm
+            trajectory=trajectory,
+            root_frame=root_frame_name,
+            root_t_task=root_t_task,
+            wrist_t_tool=wrist_t_tool,
+            stiffness=stiffness,
+            damping=damping,
+            wrench_nm=wrench_nm,
         )
         convert(command, goal.command)
         return self.command_async(
@@ -1250,4 +1262,32 @@ class SpotArmCommandMixin(SpotCommandProtocol):
             result_callback=result_callback,
             feedback_callback=feedback_callback,
             on_failure_callback=on_failure_callback,
+        )
+
+    def get_arm_impedance_robot_cmd(
+        self,
+        root_frame_name: FrameHint,
+        root_t_task: SE3,
+        wrist_t_tool: SE3,
+        trajectory: list[tuple[SE3, float]],
+        stiffness: Optional[SpatialVector] = None,
+        damping: Optional[SpatialVector] = None,
+        wrench_nm: Optional[SpatialForce] = None,
+    ) -> robot_command_pb2.RobotCommand:
+        """Create the robot command proto for moving the end effector to specific
+        pose using hybrid position/impedance control.
+        The stiffness and damping gains are defaulted to their maximum values.
+        Note that this is in the task frame, so these were probably empirically obtained.
+        (See code comment in here
+        https://github.com/boston-dynamics/spot-sdk/blob/master/python/examples/arm_impedance_control/arm_impedance_control.py.)
+        """
+        command_builder = SpotArmCommandBuilder(self)
+        return command_builder.arm_end_effector_impedance_command(
+            trajectory=trajectory,
+            root_frame=root_frame_name,
+            root_t_task=root_t_task,
+            wrist_t_tool=wrist_t_tool,
+            damping=damping,
+            stiffness=stiffness,
+            wrench_nm=wrench_nm,
         )
