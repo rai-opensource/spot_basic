@@ -7,8 +7,10 @@ from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai_ros2_wrappers.futures import wait_for_future
 from bdai_ros2_wrappers.scope import ROSAwareScope
 from bosdyn.api.basic_command_pb2 import (
+    BatteryChangePoseCommand,
     RobotCommandFeedbackStatus,
     SE2TrajectoryCommand,
+    SelfRightCommand,
     SitCommand,
     StandCommand,
 )
@@ -20,6 +22,7 @@ from geometry_msgs.msg import Twist, Vector3
 from spatialmath import SE2, SE3, SO3, Twist2
 from spot_utilities.spot_basic import SpotBasic
 from spot_utilities.spot_basic.command import LocomotionHint
+from spot_utilities.spot_basic.command.full_body import BatteryChangeDirHint
 from spot_wrapper.testing.fixtures import SpotFixture
 
 
@@ -610,3 +613,68 @@ def test_spot_legacy_walk_and_orient_maneuver(simple_spot: SpotFixture, ros: ROS
     synchro_feedback = result.command.synchronized_feedback
     stand_feedback = synchro_feedback.mobility_command_feedback.feedback.stand_feedback
     assert stand_feedback.status.value == StandCommandFeedbackStatus.STATUS_IS_STANDING
+
+
+@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
+def test_spot_self_right_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
+    spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.initialize_robot()
+
+    action = spot_interface.self_right.asynchronously()
+
+    call = simple_spot.api.RobotCommand.serve(timeout=2.0)
+    assert call is not None
+    assert call.request.command.WhichOneof("command") == "full_body_command"
+    full_body_command = call.request.command.full_body_command
+    assert full_body_command.WhichOneof("command") == "selfright_request"
+    command_response = RobotCommandResponse()
+    command_response.robot_command_id = 1234
+    command_response.status = RobotCommandResponse.Status.STATUS_OK
+    call.returns(command_response)
+
+    call = simple_spot.api.RobotCommandFeedback.serve(timeout=2.0)
+    assert call is not None
+    assert call.request.robot_command_id == command_response.robot_command_id
+    feedback_response = RobotCommandFeedbackResponse()
+    full_body_feedback = feedback_response.feedback.full_body_feedback
+    full_body_feedback.selfright_feedback.status = SelfRightCommand.Feedback.Status.STATUS_COMPLETED
+    full_body_feedback.status = RobotCommandFeedbackStatus.Status.STATUS_PROCESSING
+    call.returns(feedback_response)
+
+    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert action.succeeded
+    assert action.result.success, action.result.message
+
+
+@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
+def test_spot_roll_to_battery_change_pose_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
+    spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.initialize_robot()
+
+    action = spot_interface.roll_to_battery_change_pose.asynchronously(BatteryChangeDirHint.LEFT)
+
+    call = simple_spot.api.RobotCommand.serve(timeout=2.0)
+    assert call is not None
+    assert call.request.command.WhichOneof("command") == "full_body_command"
+    full_body_command = call.request.command.full_body_command
+    assert full_body_command.WhichOneof("command") == "battery_change_pose_request"
+    assert full_body_command.battery_change_pose_request.direction_hint == (
+        BatteryChangePoseCommand.Request.DirectionHint.HINT_LEFT
+    )
+    command_response = RobotCommandResponse()
+    command_response.robot_command_id = 4321
+    command_response.status = RobotCommandResponse.Status.STATUS_OK
+    call.returns(command_response)
+
+    call = simple_spot.api.RobotCommandFeedback.serve(timeout=2.0)
+    assert call is not None
+    assert call.request.robot_command_id == command_response.robot_command_id
+    feedback_response = RobotCommandFeedbackResponse()
+    full_body_feedback = feedback_response.feedback.full_body_feedback
+    full_body_feedback.battery_change_pose_feedback.status = BatteryChangePoseCommand.Feedback.Status.STATUS_COMPLETED
+    full_body_feedback.status = RobotCommandFeedbackStatus.Status.STATUS_PROCESSING
+    call.returns(feedback_response)
+
+    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert action.succeeded
+    assert action.result.success, action.result.message

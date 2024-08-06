@@ -167,3 +167,17 @@ def test_minimal_choreography(hardware_spot_interface: SpotBasic, prompt_session
     response = hardware_spot_interface.execute_dance.synchronously(sequence, timeout_sec=10.0)
     assert response.success, response.message
     assert prompt_session.boolean_ask("did the robot open and close its gripper?")
+
+
+@pytest.mark.manual
+@pytest.mark.launch(fixture=pytest.hardware_spot_graph_description)
+def test_rollover(hardware_spot_interface: SpotBasic, prompt_session: TestingPromptSession) -> None:
+    response = hardware_spot_interface.roll_to_battery_change_pose.synchronously(timeout_sec=30.0)
+    assert response.success, response.message
+
+    assert prompt_session.boolean_ask("did the robot roll down to the floor?")
+
+    response = hardware_spot_interface.self_right.synchronously(timeout_sec=30.0)
+    assert response.success, response.message
+
+    assert prompt_session.boolean_ask("did the robot roll back up?")

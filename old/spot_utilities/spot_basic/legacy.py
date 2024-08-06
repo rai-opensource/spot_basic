@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-from enum import IntEnum
 from typing import Callable, List, Optional, Union
 
 import bdai_ros2_wrappers.process as ros_process
@@ -66,6 +65,7 @@ from spot_utilities.spot_basic.cam.audio import SpotCAMAudioMixin
 from spot_utilities.spot_basic.choreography import SpotChoreographyMixin
 from spot_utilities.spot_basic.command import SpotCommandMixin
 from spot_utilities.spot_basic.command.arm import SpotArmCommandMixin
+from spot_utilities.spot_basic.command.full_body import SpotFullBodyCommandMixin
 from spot_utilities.spot_basic.command.gripper import SpotGripperCommandMixin
 from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandMixin
 from spot_utilities.spot_basic.docking import SpotDockingMixin
@@ -78,7 +78,6 @@ from spot_utilities.spot_basic.state import FrameHint, SpotStateMixin
 from spot_utilities.spot_basic.utilities import RobotComposeCommandHandle, SpotActionHandle, SpotServiceHandle
 from spot_utilities.spot_util import spot_namespaced
 from std_msgs.msg import ColorRGBA as Color
-from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker
 
 
@@ -93,20 +92,13 @@ class SpotBasic(
     SpotArmCommandMixin,
     SpotGripperCommandMixin,
     SpotMobilityCommandMixin,
+    SpotFullBodyCommandMixin,
     SpotCommandMixin,
     SpotGraphNavMixin,
     SpotChoreographyMixin,
     SpotCAMAudioMixin,
 ):
     """Base ROS2 Node that provides interfaces to calling various commands"""
-
-    TRIGGER_SERVICES = [
-        "self_right",
-    ]
-
-    class BatteryChangeDirHint(IntEnum):
-        RIGHT = 1
-        LEFT = 2
 
     def __init__(
         self,
@@ -137,11 +129,6 @@ class SpotBasic(
             Twist, spot_namespaced(self.robot_name, "cmd_vel"), 10
         )
 
-        self._trigger_clients = {}
-        for command_name in self.TRIGGER_SERVICES:
-            self._trigger_clients[command_name] = self.node.create_client(
-                Trigger, spot_namespaced(self.robot_name, command_name)
-            )
         self._ik_client = self.node.create_client(
             GetInverseKinematicSolutions, spot_namespaced(self.robot_name, "get_inverse_kinematic_solutions")
         )
@@ -193,91 +180,6 @@ class SpotBasic(
         if not self.power_motors_on():
             return False
         return True
-
-    def trigger_service(self, command_name: str) -> bool:
-        """Triggers a command service on the SpotDriver
-
-        Returns:
-            True if the command succeeded, False otherwise
-        """
-        self.node.get_logger().info(f"Trigger command '{command_name}' for {self.robot_name}")
-        request = Trigger.Request()
-        try:
-            future = self._trigger_clients[command_name].call_async(request)
-        except KeyError:
-            self.node.get_logger().error(f"No trigger command {command_name}")
-            return False
-
-        if not wait_for_future(future, context=self.node.context):
-            return False
-
-        response = future.result()
-        if not response.success:
-            self.node.get_logger().error(
-                f"Trigger command '{command_name}' for {self.robot_name} failed. Msg: {response.message}"
-            )
-            return False
-        return True
-
-    def trigger_service_async(
-        self,
-        service_name: str,
-        result_callback: Optional[Callable[[Future], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> SpotServiceHandle:
-        """Triggers a service asynchronously on the SpotDriver
-
-        Args:
-            service_name: name of the service we are calling
-            result_callback: callback executing on the future returned from a service call
-            on_failure_callback: callback executing if a service fails
-
-        Returns:
-            A SpotServiceHandle which contains information about the state of the service
-        """
-        return self._call_service_async(
-            service_name=f"{service_name}_async",
-            request=Trigger.Request(),
-            service_client=self._trigger_clients[service_name],
-            result_callback=result_callback,
-            on_failure_callback=on_failure_callback,
-        )
-
-    def self_right(self) -> bool:
-        """Triggers the 'self_right' service on the SpotDriver
-
-        Returns:
-            True if the command succeeded, False otherwise
-        """
-        return self.trigger_service("self_right")
-
-    def rollover(self, timeout_sec: float = 5.0) -> Optional[RobotCommandFeedback]:
-        command = RobotCommandBuilder.selfright_command()
-        action_goal = self._convert_proto_to_robot_cmd_action_goal(command)
-        return self.command("rollover", action_goal, timeout_sec=timeout_sec)
-
-    def rollover_async(
-        self,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[SpotActionHandle]:
-        """Treats self righting as an action instead of a service and asynchronously executes it
-
-        Args:
-          result_callback: A callback to process/handle the resulting feedback from executing the command
-          feedback_callback: A callback to process/handle the feedback received during the execution of the command
-          on_failure_callback: A callback to process/handle when the action fails for various reasons
-        """
-        command = RobotCommandBuilder.selfright_command()
-        action_goal = self._convert_proto_to_robot_cmd_action_goal(command)
-        return self.command_async(
-            "rollover_async",
-            action_goal,
-            result_callback=result_callback,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
 
     def get_inverse_kinematic_solutions(self, ik_request: InverseKinematicsRequest) -> InverseKinematicsResponse:
         """Query an IK solution for a given pose.
@@ -516,56 +418,6 @@ class SpotBasic(
         action_goal = Manipulation.Goal()
         convert(proto, action_goal.command)
         return action_goal
-
-    def _get_battery_change_pose(self, dir_hint: BatteryChangeDirHint) -> RobotCommandAction.Goal:
-        proto = RobotCommandBuilder.battery_change_pose_command(int(dir_hint))
-        return self._convert_proto_to_robot_cmd_action_goal(proto)
-
-    def go_to_battery_change_pose(
-        self, dir_hint: BatteryChangeDirHint = BatteryChangeDirHint.RIGHT, timeout_sec: Optional[float] = None
-    ) -> Optional[RobotCommandFeedback]:
-        """Send command to go to the battery change pose asynchronously
-
-        Args:
-            dir_hint: A hint for the direction to roll
-            timeout_sec: A timeout for waiting on a response/result from the action server. Setting to None creates no
-                timeout
-
-        Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
-                successfully received, None otherwise
-        """
-        action_goal = self._get_battery_change_pose(dir_hint)
-        return self.command("go_to_battery_change_pose", action_goal, timeout_sec)
-
-    def go_to_battery_change_pose_async(
-        self,
-        dir_hint: BatteryChangeDirHint = BatteryChangeDirHint.RIGHT,
-        *,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[SpotActionHandle]:
-        """Send command to go to the battery change pose asynchronously
-
-        Args:
-            dir_hint: A hint for the direction to roll
-            result_callback: A callback to process/handle the resulting feedback from executing the command
-            feedback_callback: A callback to process/handle the feedback received during the execution of the command
-            on_failure_callback: A callback to process/handle when the action fails for various reasons
-
-        Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
-                successfully received, None otherwise
-        """
-        action_goal = self._get_battery_change_pose(dir_hint)
-        return self.command_async(
-            "go_to_battery_change_pose",
-            action_goal,
-            result_callback=result_callback,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
 
     @staticmethod
     def _activate_body_assist(hip_assist: bool, yaw_assist: bool) -> spot_command_pb2.RobotCommand:
