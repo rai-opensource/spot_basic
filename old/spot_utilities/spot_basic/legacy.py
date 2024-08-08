@@ -19,7 +19,6 @@ from bosdyn.api import (
     robot_command_pb2,
 )
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
-from bosdyn.api.spot.inverse_kinematics_pb2 import InverseKinematicsRequest, InverseKinematicsResponse
 from bosdyn.client.frame_helpers import (
     BODY_FRAME_NAME,
 )
@@ -45,7 +44,6 @@ from spatialmath.spatialvector import SpatialVector
 from spot_msgs.action import RobotCommand as RobotCommandAction
 from spot_msgs.srv import (
     GetGripperCameraParameters,
-    GetInverseKinematicSolutions,
     ListWorldObjects,
     OverrideGraspOrCarry,
     SetGripperCameraParameters,
@@ -61,6 +59,7 @@ from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandMixin
 from spot_utilities.spot_basic.docking import SpotDockingMixin
 from spot_utilities.spot_basic.estop import SpotEStopMixin
 from spot_utilities.spot_basic.graph_nav import SpotGraphNavMixin
+from spot_utilities.spot_basic.ik import SpotIKMixin
 from spot_utilities.spot_basic.image import SpotImageMixin
 from spot_utilities.spot_basic.lease import SpotLeaseMixin
 from spot_utilities.spot_basic.manipulation import SpotManipulationMixin
@@ -89,6 +88,7 @@ class SpotBasic(
     SpotChoreographyMixin,
     SpotCAMAudioMixin,
     SpotManipulationMixin,
+    SpotIKMixin,
 ):
     """Base ROS2 Node that provides interfaces to calling various commands"""
 
@@ -121,9 +121,6 @@ class SpotBasic(
             Twist, spot_namespaced(self.robot_name, "cmd_vel"), 10
         )
 
-        self._ik_client = self.node.create_client(
-            GetInverseKinematicSolutions, spot_namespaced(self.robot_name, "get_inverse_kinematic_solutions")
-        )
         self._list_world_objects_client = self.node.create_client(
             ListWorldObjects, spot_namespaced(self.robot_name, "list_world_objects")
         )
@@ -169,23 +166,6 @@ class SpotBasic(
         if not self.power_motors_on():
             return False
         return True
-
-    def get_inverse_kinematic_solutions(self, ik_request: InverseKinematicsRequest) -> InverseKinematicsResponse:
-        """Query an IK solution for a given pose.
-        Returns:
-            A solution to the IK query, if any.
-        """
-        self.node.get_logger().info(f"Query IK solutions on {self.robot_name}")
-        request = GetInverseKinematicSolutions.Request()
-        convert(ik_request, request.request)
-        future = self._ik_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return None
-        response = future.result()
-
-        proto = InverseKinematicsResponse()
-        convert(response.response, proto)
-        return proto
 
     def list_world_objects(self, p_request: ListWorldObjectRequest) -> Optional[ListWorldObjectResponse]:
         """Requests a list of world objects
