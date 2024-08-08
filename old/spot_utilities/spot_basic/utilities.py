@@ -53,12 +53,15 @@ def make_message(cls: Msg, *args: Any, **kwargs: Any) -> Any:
         if not hasattr(message, name):
             raise TypeError("make_message() got unexpected " f"keyword argument '{name}'")
         default_value = getattr(message, name)
-        if not isinstance(value, type(default_value)):
+        default_value_type = type(default_value)
+        if not isinstance(value, default_value_type):
             if hasattr(value, "to_msg"):
                 value = value.to_msg()
             if hasattr(value, "DESCRIPTOR"):
                 convert(value, default_value)
                 value = default_value
+            if hasattr(default_value_type, "value"):
+                value = default_value_type(value=value)
         setattr(message, name, value)
     return message
 

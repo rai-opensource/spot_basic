@@ -53,6 +53,17 @@ class AxisModeMap:
             rz=arm_command_pb2.ArmCartesianCommand.Request.AxisMode.AXIS_MODE_POSITION,
         )
 
+    @classmethod
+    def force_mode(cls) -> "AxisModeMap":
+        return cls(
+            x=arm_command_pb2.ArmCartesianCommand.Request.AxisMode.AXIS_MODE_FORCE,
+            y=arm_command_pb2.ArmCartesianCommand.Request.AxisMode.AXIS_MODE_FORCE,
+            z=arm_command_pb2.ArmCartesianCommand.Request.AxisMode.AXIS_MODE_FORCE,
+            rx=arm_command_pb2.ArmCartesianCommand.Request.AxisMode.AXIS_MODE_FORCE,
+            ry=arm_command_pb2.ArmCartesianCommand.Request.AxisMode.AXIS_MODE_FORCE,
+            rz=arm_command_pb2.ArmCartesianCommand.Request.AxisMode.AXIS_MODE_FORCE,
+        )
+
 
 class SpotArmCommandBuilder(SpotCommandBuilder):
     """A builder for Spot arm commands."""

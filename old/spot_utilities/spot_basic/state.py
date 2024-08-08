@@ -357,20 +357,22 @@ class SpotStateMixin(SpotBaseProtocol):
 
         child_to_parent_edge_map = {}
         root_frame_basename = root_frame_name[len(self.robot_name) + 1 :]
+        child_to_parent_edge_map[root_frame_basename] = FrameTreeSnapshot.ParentEdge(
+            parent_tform_child=se3_to_se3pose_proto(SE3())
+        )
         for frame_name in self.tf_listener.buffer._getFrameStrings():  # noqa: SLF001
             if not frame_name.startswith(self.robot_name):
+                continue
+            if root_frame_name == frame_name:
                 continue
             frame_transform_available = self.tf_listener.wait_for_a_tform_b(
                 root_frame_name, frame_name, transform_time, timeout_sec
             )
             if not frame_transform_available:
                 continue
-            if root_frame_name != frame_name:
-                frame_transform = to_se3(
-                    self.tf_listener.lookup_a_tform_b(root_frame_name, frame_name, transform_time, timeout_sec)
-                )
-            else:
-                frame_transform = SE3()
+            frame_transform = to_se3(
+                self.tf_listener.lookup_a_tform_b(root_frame_name, frame_name, transform_time, timeout_sec)
+            )
             frame_basename = frame_name[len(self.robot_name) + 1 :]
             child_to_parent_edge_map[frame_basename] = FrameTreeSnapshot.ParentEdge(
                 parent_frame_name=root_frame_basename, parent_tform_child=se3_to_se3pose_proto(frame_transform)

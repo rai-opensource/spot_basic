@@ -5,7 +5,8 @@ import pytest
 from bdai.test_utilities.testing_prompt_session import TestingPromptSession
 from bdai_ros2_wrappers.utilities import ensure
 from hil_utilities import prompt_for_click, visual_aid
-from spatialmath import SE3, SO3
+from rclpy.time import Time
+from spatialmath import SE3, SO3, SpatialForce
 from spot_utilities.spot_basic import FrameHint, SpotBasic
 from spot_utilities.spot_basic.command.arm import ArmJointMap, AxisModeMap
 
@@ -53,6 +54,33 @@ def test_basic_hand_motion(hardware_spot_interface: SpotBasic, prompt_session: T
     assert not prompt_session.boolean_ask("did the robot body follow the motion?")
 
     response = hardware_spot_interface.stow_arm.synchronously(timeout_sec=5.0)
+    assert response.success, response.message
+
+
+@pytest.mark.manual
+@pytest.mark.launch(fixture=pytest.hardware_spot_graph_description)
+def test_hand_below_body(hardware_spot_interface: SpotBasic, prompt_session: TestingPromptSession) -> None:
+    if not hardware_spot_interface.has_arm():
+        pytest.skip(f"{hardware_spot_interface.robot_name} has no arm")
+
+    response = hardware_spot_interface.stand.synchronously(timeout_sec=10.0)
+    assert response.success, response.message
+
+    response = hardware_spot_interface.move_end_effector.synchronously(
+        SE3.Rt(SO3.Ry(np.pi / 2), [1.0, 0.0, -0.2]),
+        duration_sec=3.0,
+        base_frame=FrameHint.BODY,
+        timeout_sec=20.0,
+        body_hip_assist=True,
+    )
+    assert response.success, response.message
+
+    assert prompt_session.boolean_ask("did the robot hand move below body?")
+
+    response = hardware_spot_interface.stow_arm.synchronously(timeout_sec=5.0)
+    assert response.success, response.message
+
+    response = hardware_spot_interface.sit.synchronously(timeout_sec=10.0)
     assert response.success, response.message
 
 
@@ -223,6 +251,62 @@ def test_hand_gazing(hardware_spot_interface: SpotBasic, prompt_session: Testing
 
     with visual_aid("Centered image", camera.rgb):
         assert prompt_session.boolean_ask("is robot hand gazing at the clicked point?")
+
+    response = hardware_spot_interface.claw_gripper_close.synchronously(timeout_sec=5.0)
+    assert response.success, response.message
+
+    response = hardware_spot_interface.stow_arm.synchronously(timeout_sec=5.0)
+    assert response.success, response.message
+
+
+@pytest.mark.manual
+@pytest.mark.launch(fixture=pytest.hardware_spot_graph_description)
+def test_arm_strength(hardware_spot_interface: SpotBasic, prompt_session: TestingPromptSession) -> None:
+    if not hardware_spot_interface.has_arm():
+        pytest.skip(f"{hardware_spot_interface.robot_name} has no arm")
+
+    response = hardware_spot_interface.stand.synchronously(timeout_sec=5.0)
+    assert response.success, response.message
+
+    camera = prompt_session.choose(
+        "which camera shall we use?", {camera.location.value: camera for camera in hardware_spot_interface.cameras}
+    )
+    image_pixel_xy, image, camera_info = prompt_for_click("Click object to grasp!", camera.rgb)
+    image_timestamp = Time.from_msg(image.header.stamp)
+
+    response = hardware_spot_interface.pick_object_in_image.synchronously(
+        image_pixel_xy=image_pixel_xy,
+        image_timestamp=image_timestamp,
+        camera_info=camera_info,
+        timeout_sec=30.0,
+    )
+    assert response.success, response.message
+
+    response = hardware_spot_interface.carry_arm.synchronously(timeout_sec=5.0)
+    assert response.success, response.message
+
+    assert prompt_session.boolean_ask("did the robot grab the object?")
+
+    wrench_trajectory = [
+        SpatialForce([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+        SpatialForce([0.0, 0.0, 2.0, 0.0, 0.0, 0.0]),
+        SpatialForce([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+    ]
+    timestamps = [0.0, 2.5, 5.0]
+
+    response = hardware_spot_interface.move_end_effector_along_trajectory.synchronously(
+        wrench_vecs=wrench_trajectory,
+        timestamps_between_poses=timestamps,
+        axis_mode_map=AxisModeMap.force_mode(),
+        root_frame=FrameHint.GRAV_ALIGNED_BODY,
+        timeout_sec=20.0,
+    )
+    assert response.success, response.message
+
+    assert prompt_session.boolean_ask("did the robot hand move up and down?")
+
+    response = hardware_spot_interface.claw_gripper_open.synchronously(timeout_sec=5.0)
+    assert response.success, response.message
 
     response = hardware_spot_interface.claw_gripper_close.synchronously(timeout_sec=5.0)
     assert response.success, response.message

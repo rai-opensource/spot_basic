@@ -52,6 +52,8 @@ def hardware_spot_interface(hardware_robot_name: str, hardware_bound_ros: ROSAwa
         yield robot_interface
     finally:
         if robot_interface.has_arm():
+            robot_interface.claw_gripper_open.synchronously(timeout_sec=10.0)
+            robot_interface.claw_gripper_close.synchronously(timeout_sec=10.0)
             robot_interface.stow_arm.synchronously(timeout_sec=10.0)
         robot_interface.sit.synchronously(timeout_sec=10.0)
 
