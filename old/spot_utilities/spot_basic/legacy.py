@@ -28,8 +28,6 @@ from bosdyn.client.robot_command import (
 from bosdyn_api_msgs.conversions import convert
 from bosdyn_api_msgs.msg import (
     GripperCameraParams,
-    ListWorldObjectRequest,
-    ListWorldObjectResponse,
     RobotCommandFeedback,
 )
 from geometry_msgs.msg import Twist
@@ -44,7 +42,6 @@ from spatialmath.spatialvector import SpatialVector
 from spot_msgs.action import RobotCommand as RobotCommandAction
 from spot_msgs.srv import (
     GetGripperCameraParameters,
-    ListWorldObjects,
     OverrideGraspOrCarry,
     SetGripperCameraParameters,
 )
@@ -66,6 +63,7 @@ from spot_utilities.spot_basic.manipulation import SpotManipulationMixin
 from spot_utilities.spot_basic.power import SpotPowerMixin
 from spot_utilities.spot_basic.state import FrameHint, SpotStateMixin
 from spot_utilities.spot_basic.utilities import RobotComposeCommandHandle, SpotActionHandle, SpotServiceHandle
+from spot_utilities.spot_basic.world import SpotWorldMixin
 from spot_utilities.spot_util import spot_namespaced
 from std_msgs.msg import ColorRGBA as Color
 from visualization_msgs.msg import Marker
@@ -89,6 +87,7 @@ class SpotBasic(
     SpotCAMAudioMixin,
     SpotManipulationMixin,
     SpotIKMixin,
+    SpotWorldMixin,
 ):
     """Base ROS2 Node that provides interfaces to calling various commands"""
 
@@ -121,9 +120,6 @@ class SpotBasic(
             Twist, spot_namespaced(self.robot_name, "cmd_vel"), 10
         )
 
-        self._list_world_objects_client = self.node.create_client(
-            ListWorldObjects, spot_namespaced(self.robot_name, "list_world_objects")
-        )
         self._get_parameters_client = self.node.create_client(
             GetParameters, spot_namespaced(self.robot_name, "spot_ros2/get_parameters")
         )
@@ -166,34 +162,6 @@ class SpotBasic(
         if not self.power_motors_on():
             return False
         return True
-
-    def list_world_objects(self, p_request: ListWorldObjectRequest) -> Optional[ListWorldObjectResponse]:
-        """Requests a list of world objects
-
-        When constructing the calling ListWorldObjectRequest, you must follow the correct typing for
-        requested objects, which is somewhat non-intuitive.
-
-        # imports required for below
-        from bosdyn_msgs.msg import ListWorldObjectRequest, WorldObjectType
-        from bosdyn.api import world_object_pb2
-
-        # must be constructed explicitly, WorldObjectType.WORLD_OBJECT_DOCK is also not the same
-        world_object_dock_type = WorldObjectType(value=world_object_pb2.WORLD_OBJECT_DOCK)
-
-        # add any requested objects to the list of object types (or leave it blank for all)
-        request_fiducials = ListWorldObjectRequest()
-        request_fiducials.object_type.append(world_object_dock_type)
-
-        TODO: make this more robust and user intuitive
-        """
-        self.node.get_logger().info(f"List world objects for {self.robot_name}")
-        request = ListWorldObjects.Request()
-        request.request = p_request
-        future = self._list_world_objects_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return None
-        response = future.result()
-        return response.response
 
     def _send_action_goal_async(
         self,
