@@ -11,7 +11,6 @@ import rclpy
 from bdai_ros.utilities.manual_conversions import (
     to_ros_pose,
 )
-from bdai_ros2_wrappers.futures import wait_for_future
 from bdai_ros2_wrappers.type_hints import Action, SrvTypeRequest
 from bosdyn.api import (
     geometry_pb2,
@@ -27,7 +26,6 @@ from bosdyn.client.robot_command import (
 )
 from bosdyn_api_msgs.conversions import convert
 from bosdyn_api_msgs.msg import (
-    GripperCameraParams,
     RobotCommandFeedback,
 )
 from geometry_msgs.msg import Twist
@@ -41,9 +39,7 @@ from spatialmath import SE2, SE3, SpatialForce, Twist2
 from spatialmath.spatialvector import SpatialVector
 from spot_msgs.action import RobotCommand as RobotCommandAction
 from spot_msgs.srv import (
-    GetGripperCameraParameters,
     OverrideGraspOrCarry,
-    SetGripperCameraParameters,
 )
 from spot_utilities.spot_basic.base import SpotBase
 from spot_utilities.spot_basic.cam.audio import SpotCAMAudioMixin
@@ -56,6 +52,7 @@ from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandMixin
 from spot_utilities.spot_basic.docking import SpotDockingMixin
 from spot_utilities.spot_basic.estop import SpotEStopMixin
 from spot_utilities.spot_basic.graph_nav import SpotGraphNavMixin
+from spot_utilities.spot_basic.gripper_camera import SpotGripperCameraMixin
 from spot_utilities.spot_basic.ik import SpotIKMixin
 from spot_utilities.spot_basic.image import SpotImageMixin
 from spot_utilities.spot_basic.lease import SpotLeaseMixin
@@ -79,6 +76,7 @@ class SpotBasic(
     SpotStateMixin,
     SpotArmCommandMixin,
     SpotGripperCommandMixin,
+    SpotGripperCameraMixin,
     SpotMobilityCommandMixin,
     SpotFullBodyCommandMixin,
     SpotCommandMixin,
@@ -122,12 +120,6 @@ class SpotBasic(
 
         self._get_parameters_client = self.node.create_client(
             GetParameters, spot_namespaced(self.robot_name, "spot_ros2/get_parameters")
-        )
-        self.get_gripper_camera_parameters_client = self.node.create_client(
-            GetGripperCameraParameters, spot_namespaced(self.robot_name, "get_gripper_camera_parameters")
-        )
-        self.set_gripper_camera_parameters_client = self.node.create_client(
-            SetGripperCameraParameters, spot_namespaced(self.robot_name, "set_gripper_camera_parameters")
         )
         self._override_grasp_carry_client = self.node.create_client(
             OverrideGraspOrCarry, spot_namespaced(self.robot_name, "override_grasp_or_carry")
@@ -457,46 +449,6 @@ class SpotBasic(
                 successfully received, None otherwise
         """
         raise NotImplementedError()
-
-    def get_gripper_camera_parameters(self) -> tuple[bool, str, GripperCameraParams]:
-        """Get the gripper camera parameters on the SpotDriver
-
-        Returns: A tuple containing [success, message, response]
-        """
-        self.node.get_logger().info(f"Getting gripper camera parameters for {self.robot_name}")
-        request = GetGripperCameraParameters.Request()
-        future = self.get_gripper_camera_parameters_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False, "Call to wait_for_future timed out", None
-        response = future.result()
-        if not response.success:
-            self.node.get_logger().warning(
-                f"Getting gripper camera parameters for {self.robot_name} failed. Msg: {response.message}."
-            )
-        return response.success, response.message, response.response.params
-
-    def set_gripper_camera_parameters(self, gripper_camera_params: GripperCameraParams) -> bool:
-        """Set the gripper camera parameters on the SpotDriver
-
-        Args:
-            gripper_camera_params: the gripper camera parameters and their desired values.
-                                    Of type bosdyn_msgs/GripperCameraParams
-
-        Returns: a boolean indicating if the service was successful or not
-        """
-        self.node.get_logger().info(f"Setting gripper camera parameters for {self.robot_name}")
-        request = SetGripperCameraParameters.Request()
-        request.request.params = gripper_camera_params
-        future = self.set_gripper_camera_parameters_client.call_async(request)
-        if not wait_for_future(future, context=self.node.context):
-            return False
-        response = future.result()
-        if not response.success:
-            self.node.get_logger().warning(
-                f"Setting gripper camera parameters for {self.robot_name} failed. Msg: {response.message}."
-            )
-            return False
-        return True
 
     @staticmethod
     def set_tight_top_down_grasp(grasp: manipulation_api_pb2.PickObjectInImage) -> None:

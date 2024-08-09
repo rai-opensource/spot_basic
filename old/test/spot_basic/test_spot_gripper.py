@@ -3,9 +3,14 @@
 import math
 
 import pytest
-from bdai_ros2_wrappers.futures import wait_for_future
+from bdai_ros2_wrappers.futures import unwrap_future, wait_for_future
 from bdai_ros2_wrappers.scope import ROSAwareScope
 from bosdyn.api.basic_command_pb2 import RobotCommandFeedbackStatus
+from bosdyn.api.gripper_camera_param_pb2 import (
+    GripperCameraGetParamResponse,
+    GripperCameraParamRequest,
+    GripperCameraParamResponse,
+)
 from bosdyn.api.gripper_command_pb2 import ClawGripperCommand
 from bosdyn.api.robot_command_pb2 import RobotCommandFeedbackResponse, RobotCommandResponse
 from bosdyn_api_msgs.msg import ClawGripperCommandFeedbackStatus
@@ -146,3 +151,38 @@ def test_gripper_closing(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     synchro_feedback = action.result.result.command.synchronized_feedback
     claw_gripper_feedback = synchro_feedback.gripper_command_feedback.command.claw_gripper_feedback
     assert claw_gripper_feedback.status.value == ClawGripperCommandFeedbackStatus.STATUS_AT_GOAL
+
+
+@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
+def test_gripper_camera_changes(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
+    spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.initialize_robot()
+
+    request = GripperCameraParamRequest()
+    request.params.brightness.value = 0.8
+    request.params.contrast.value = 0.2
+    request.params.exposure_auto.value = True
+    future = spot_interface.set_gripper_camera_parameters.asynchronously(request)
+
+    call = simple_spot.api.SetParams.serve(timeout=2.0)
+    assert call is not None
+    assert call.request.params.brightness.value == request.params.brightness.value
+    assert call.request.params.contrast.value == request.params.contrast.value
+    assert call.request.params.exposure_auto.value == request.params.exposure_auto.value
+    call.returns(GripperCameraParamResponse())
+
+    future = spot_interface.get_gripper_camera_parameters.asynchronously()
+
+    call = simple_spot.api.GetParams.serve(timeout=2.0)
+    assert call is not None
+    params_response = GripperCameraGetParamResponse()
+    params_response.params.brightness.value = 0.2
+    params_response.params.contrast.value = 0.8
+    params_response.params.exposure_auto.value = False
+    call.returns(params_response)
+
+    response = unwrap_future(future, timeout_sec=5.0)
+    assert response.success, response.message
+    assert response.response.params.brightness.data == params_response.params.brightness.value
+    assert response.response.params.contrast.data == params_response.params.contrast.value
+    assert response.response.params.exposure_auto.data == params_response.params.exposure_auto.value
