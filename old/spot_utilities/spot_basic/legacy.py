@@ -29,8 +29,7 @@ from rclpy.action import ActionClient
 from rclpy.client import Client
 from rclpy.node import Node
 from rclpy.task import Future
-from spatialmath import SE2, SE3, SpatialForce
-from spatialmath.spatialvector import SpatialVector
+from spatialmath import SE2, SE3
 from spot_msgs.action import RobotCommand as RobotCommandAction
 from spot_msgs.srv import (
     OverrideGraspOrCarry,
@@ -329,28 +328,6 @@ class SpotBasic(
 
         grasp.grasp_params.position_constraint.CopyFrom(
             manipulation_api_pb2.GRASP_POSITION_CONSTRAINT_FIXED_AT_USER_POSITION
-        )
-
-    def zero_g(self) -> Optional[RobotCommandFeedback]:
-        """Sets spot arm into gravity compensated mode such that the arm 'renders'
-        no apparent gravitational acceleration and low damping.
-
-        Useful for allowing a person to move the arm around freely. Does not compensate
-        for additional unmodeled mass (like putting something in the gripper.)
-
-        """
-        root_t_task = SE3.Tz(0.3)
-        stationary_traj = [(SE3(), 1.0)]
-
-        return self.move_end_effector_impedance(
-            root_frame_name=FrameHint.BODY,
-            root_t_task=root_t_task,
-            wrist_t_tool=SE3(),
-            trajectory=stationary_traj,
-            stiffness=SpatialVector([0, 0, 0, 0, 0, 0]),
-            damping=SpatialVector([0.25, 0.25, 0.25, 0.10, 0.10, 0.10]),
-            wrench_nm=SpatialForce([0, 0, 0, 0, 0, 0]),
-            timeout_sec=2.0,
         )
 
 

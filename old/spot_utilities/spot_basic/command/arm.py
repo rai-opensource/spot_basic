@@ -433,6 +433,24 @@ class SpotArmCommandBuilder(SpotCommandBuilder):
 
         return robot_command
 
+    def arm_zero_g_command(self) -> robot_command_pb2.RobotCommand:
+        """Build an arm command that puts it in a gravity compensated mode such that
+        the arm 'renders' no apparent weight and low damping.
+
+        Useful for allowing a person to move the arm around freely. Note it does not
+        compensate for additional unmodeled mass (e.g. an object held by the gripper).
+        """
+        stationary_trajectory = [(SE3(), 1.0)]
+        return self.arm_end_effector_impedance_command(
+            trajectory=stationary_trajectory,
+            root_frame=FrameHint.BODY,
+            root_t_task=SE3.Tz(0.3),
+            wrist_t_tool=SE3(),
+            stiffness=SpatialVector([0, 0, 0, 0, 0, 0]),
+            damping=SpatialVector([0.25, 0.25, 0.25, 0.10, 0.10, 0.10]),
+            wrench_nm=SpatialForce([0, 0, 0, 0, 0, 0]),
+        )
+
 
 class SpotArmCommandMixin(SpotCommandProtocol):
     """Mixin that eases Spot arm command execution."""
@@ -512,6 +530,13 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         SpotArmCommandMixin.move_end_effector_with_controlled_impedance.rebind(
             self, do_move_end_effector_with_controlled_impedance
         )
+
+        do_arm_zero_g = GeneralizedGuard(
+            self.has_arm,
+            self.execute.compose(command_builder.arm_zero_g_command),
+            f"{self.robot_name} has no arm, cannot emulate zero g motion",
+        )
+        SpotArmCommandMixin.arm_zero_g.rebind(self, do_arm_zero_g)
 
     @generalized_method(transitional=True)
     def stow_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
@@ -1302,3 +1327,18 @@ class SpotArmCommandMixin(SpotCommandProtocol):
             stiffness=stiffness,
             wrench_nm=wrench_nm,
         )
+
+    @generalized_method(transitional=True)
+    def arm_zero_g(self) -> Optional[RobotCommandFeedback]:
+        """Sets spot arm into gravity compensated mode such that the arm 'renders'
+        no apparent gravitational acceleration and low damping.
+
+        Useful for allowing a person to move the arm around freely. Does not compensate
+        for additional unmodeled mass (like putting something in the gripper.)
+        """
+        response = self.arm_zero_g.synchronously(timeout_sec=2.0, nothrow=True)
+        if response is None or not response.success:
+            return None
+        return response.result
+
+    zero_g = arm_zero_g

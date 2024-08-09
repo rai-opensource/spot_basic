@@ -313,3 +313,21 @@ def test_arm_strength(hardware_spot_interface: SpotBasic, prompt_session: Testin
 
     response = hardware_spot_interface.stow_arm.synchronously(timeout_sec=5.0)
     assert response.success, response.message
+
+
+@pytest.mark.manual
+@pytest.mark.launch(fixture=pytest.hardware_spot_graph_description)
+def test_arm_zero_g(hardware_spot_interface: SpotBasic, prompt_session: TestingPromptSession) -> None:
+    if not hardware_spot_interface.has_arm():
+        pytest.skip(f"{hardware_spot_interface.robot_name} has no arm")
+
+    response = hardware_spot_interface.stand.synchronously(timeout_sec=5.0)
+    assert response.success, response.message
+
+    response = hardware_spot_interface.ready_arm.synchronously(timeout_sec=5.0)
+    assert response.success, response.message
+
+    response = hardware_spot_interface.arm_zero_g.synchronously(timeout_sec=5.0)
+    assert response.success, response.message
+
+    assert prompt_session.boolean_ask("does the robot arm feel weightless to touch?")
