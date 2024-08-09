@@ -17,25 +17,19 @@ from bosdyn.api import (
     manipulation_api_pb2,
     robot_command_pb2,
 )
-from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.client.frame_helpers import (
     BODY_FRAME_NAME,
-)
-from bosdyn.client.robot_command import (
-    RobotCommandBuilder,
 )
 from bosdyn_api_msgs.conversions import convert
 from bosdyn_api_msgs.msg import (
     RobotCommandFeedback,
 )
-from geometry_msgs.msg import Twist
 from rcl_interfaces.srv import GetParameters
 from rclpy.action import ActionClient
 from rclpy.client import Client
 from rclpy.node import Node
 from rclpy.task import Future
-from sklearn.preprocessing import normalize
-from spatialmath import SE2, SE3, SpatialForce, Twist2
+from spatialmath import SE2, SE3, SpatialForce
 from spatialmath.spatialvector import SpatialVector
 from spot_msgs.action import RobotCommand as RobotCommandAction
 from spot_msgs.srv import (
@@ -59,7 +53,7 @@ from spot_utilities.spot_basic.lease import SpotLeaseMixin
 from spot_utilities.spot_basic.manipulation import SpotManipulationMixin
 from spot_utilities.spot_basic.power import SpotPowerMixin
 from spot_utilities.spot_basic.state import FrameHint, SpotStateMixin
-from spot_utilities.spot_basic.utilities import RobotComposeCommandHandle, SpotActionHandle, SpotServiceHandle
+from spot_utilities.spot_basic.utilities import SpotActionHandle, SpotServiceHandle
 from spot_utilities.spot_basic.world import SpotWorldMixin
 from spot_utilities.spot_util import spot_namespaced
 from std_msgs.msg import ColorRGBA as Color
@@ -113,10 +107,6 @@ class SpotBasic(
 
         if self._rviz:
             self._vis_pub = self.node.create_publisher(Marker, "/visualization_marker", 10)
-
-        self._velocity_cmd_publisher = self.node.create_publisher(
-            Twist, spot_namespaced(self.robot_name, "cmd_vel"), 10
-        )
 
         self._get_parameters_client = self.node.create_client(
             GetParameters, spot_namespaced(self.robot_name, "spot_ros2/get_parameters")
@@ -277,145 +267,6 @@ class SpotBasic(
         action_goal = RobotCommandAction.Goal()
         convert(proto, action_goal.command)
         return action_goal
-
-    @staticmethod
-    def _activate_body_assist(hip_assist: bool, yaw_assist: bool) -> spot_command_pb2.RobotCommand:
-        """Creates a command that allows the body to assist the movements.
-
-        Args:
-            hip_assist: whether or not the hips can raise and lower to assist whole-body motions
-            yaw_assist: whether or not the body can twist in the yaw to assist whole-body motions
-
-        Returns:
-            A robot stand command that can be composed with another command to activate the body assist.
-        """
-        body_control_params = spot_command_pb2.MobilityParams(
-            body_control=spot_command_pb2.BodyControlParams(
-                body_assist_for_manipulation=spot_command_pb2.BodyControlParams.BodyAssistForManipulation(
-                    enable_hip_height_assist=hip_assist, enable_body_yaw_assist=yaw_assist
-                )
-            )
-        )
-        return RobotCommandBuilder.synchro_stand_command(params=body_control_params)
-
-    def _body_gaze_at_frame_t_body_desired(
-        self,
-        base_frame: FrameHint,
-        body_t_target: SE3,
-        frame_t_body: Optional[SE3] = None,
-    ) -> Optional[RobotCommandFeedback]:
-        """
-        Args:
-            base_frame: Frame the goal is specified in
-            body_t_target: SE3 transform from the current body position to the target you want to gaze at
-            frame_t_body: SE3 transform from the frame from to the current body position
-
-        Return:
-            frame_t_body_desired: body_t_target: SE3 transform to the target you want to gaze at
-        """
-        x_axis = np.array([1, 0, 0])
-        new_vec_norm = normalize([body_t_target.t])[0]
-
-        # actual interesting math to compute angle and axis
-        normal_axis = np.cross(x_axis, new_vec_norm)
-        angle = np.arccos(np.dot(x_axis, new_vec_norm))
-        body_current_t_body_pointed_at_target = SE3.AngleAxis(angle, normal_axis)
-
-        if frame_t_body is None:
-            frame_t_body = self.lookup_a_tform_b(base_frame.value, FrameHint.BODY.value, wait_for_frames=True)
-
-        frame_t_body_desired = frame_t_body * body_current_t_body_pointed_at_target
-        return frame_t_body_desired
-
-    def body_gaze_at(
-        self,
-        body_t_target: SE3,
-        frame_t_body: Optional[SE3] = None,
-        timeout_sec: Optional[float] = None,
-        *,
-        base_frame: Optional[FrameHint] = None,
-    ) -> Optional[RobotCommandFeedback]:
-        """Aligns the x-axis of the body frame along the vector from the current body position
-        to the target. If you don't provide vision_t_body, you must set the tf listener for spot.
-
-        Args:
-            body_t_target: SE3 transform from the current body position to the target you want to gaze at
-            frame_t_body: SE3 transform from the base frame from to the current body position
-            timeout_sec: A timeout for waiting on a response/result from the action server. The timeout arg is used
-                on each command, so max duration is 2x timeout. Setting to None creates no timeout.
-            base_frame: The frame in which the goal is specified. Defaults to VISION frame in the get_set_base_frame
-
-        Returns:
-            The feedback from the SpotDriver about the result of the commands if it was accepted, None otherwise
-        """
-        base_frame = self.get_set_base_frame(base_frame)
-        frame_t_body_desired = self._body_gaze_at_frame_t_body_desired(base_frame, body_t_target, frame_t_body)
-        return self.walk_and_orient(frame_t_body_desired, base_frame=base_frame, timeout_sec=timeout_sec)
-
-    def body_gaze_at_async(
-        self,
-        body_t_target: SE3,
-        frame_t_body: Optional[SE3] = None,
-        *,
-        base_frame: Optional[FrameHint] = None,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[RobotComposeCommandHandle]:
-        """Aligns the x-axis of the body frame along the vector from the current body position
-        to the target. If you don't provide vision_t_body, you must set the tf listener for spot.
-
-        Args:
-            body_t_target: SE3 transform from the current body position to the target you want to gaze at
-            frame_t_body: SE3 transform from the base_frame from to the current body position
-            base_frame: Frame the goal is specified in. Defaults to VISION frame in get_set_base_frame
-            result_callback: A callback to process/handle the resulting feedback from executing each of the commands
-            feedback_callback: A callback to process/handle the feedback received during the execution of any of the
-                commands
-            on_failure_callback: A callback to process/handle when any of actions fail for various reasons
-
-        """
-        base_frame = self.get_set_base_frame(base_frame)
-        frame_t_body_desired = self._body_gaze_at_frame_t_body_desired(base_frame, body_t_target, frame_t_body)
-        return self.walk_and_orient_async(
-            frame_t_body_desired,
-            base_frame=base_frame,
-            result_callback=result_callback,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
-
-    def walk_velocity(
-        self, body_velocity: Twist2, duration: Optional[float] = None, rate: Optional[float] = 50.0
-    ) -> None:
-        """Send the command to walk/turn in a specific body-frame direction at a specific speed
-
-        Args:
-            body_velocity: the desired body velocity
-            (twist2 is a member of se2, which can be viewed as SE2 velocities, see Twist2.skewa)
-            duration: the time (in seconds) to maintain the desired velocity
-                setting to None (default) means the robot would walk for
-                a minimum duration set by the "cmd_duration" parameter for in spot_ros2.
-            rate: Rate (hz) at which velocity command is sent for the given duration.
-                No effect if duration is None.
-        """
-        if duration is None:
-            self._publish_velocity_cmd(body_velocity)
-        else:
-            rate_timer = self.node.create_rate(rate)
-            start_time = self.node.get_clock().now()
-            dt = self.node.get_clock().now() - start_time
-            while dt.nanoseconds * 1e-9 < duration:
-                self._publish_velocity_cmd(body_velocity)
-                rate_timer.sleep()
-                dt = self.node.get_clock().now() - start_time
-
-    def _publish_velocity_cmd(self, body_velocity: Twist2) -> None:
-        velocity_cmd_msg = Twist()
-        velocity_cmd_msg.linear.x = body_velocity.v[0]
-        velocity_cmd_msg.linear.y = body_velocity.v[1]
-        velocity_cmd_msg.angular.z = body_velocity.w
-        self._velocity_cmd_publisher.publish(velocity_cmd_msg)
 
     def move_end_effector_force(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
         """

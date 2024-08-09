@@ -2,6 +2,7 @@
 
 import math
 
+import numpy as np
 import pytest
 from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai_ros2_wrappers.futures import wait_for_future
@@ -14,15 +15,24 @@ from bosdyn.api.basic_command_pb2 import (
     SitCommand,
     StandCommand,
 )
-from bosdyn.api.robot_command_pb2 import ClearBehaviorFaultResponse, RobotCommandFeedbackResponse, RobotCommandResponse
+from bosdyn.api.robot_command_pb2 import (
+    ClearBehaviorFaultResponse,
+    RobotCommandFeedbackResponse,
+    RobotCommandResponse,
+)
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.client.robot_command import RobotCommandBuilder
-from bosdyn_api_msgs.msg import SE2TrajectoryCommandFeedbackStatus, SitCommandFeedbackStatus, StandCommandFeedbackStatus
+from bosdyn_api_msgs.msg import (
+    SE2TrajectoryCommandFeedbackStatus,
+    SitCommandFeedbackStatus,
+    StandCommandFeedbackStatus,
+)
 from geometry_msgs.msg import Twist, Vector3
-from spatialmath import SE2, SE3, SO3, Twist2
+from spatialmath import SE2, SE3, SO3, Twist2, UnitQuaternion
 from spot_utilities.spot_basic import SpotBasic
 from spot_utilities.spot_basic.command import LocomotionHint
 from spot_utilities.spot_basic.command.full_body import BatteryChangeDirHint
+from spot_utilities.spot_basic.state import FrameHint
 from spot_wrapper.testing.fixtures import SpotFixture
 
 
@@ -678,3 +688,104 @@ def test_spot_roll_to_battery_change_pose_command(simple_spot: SpotFixture, ros:
     assert wait_for_future(action.finalization, timeout_sec=2.0)
     assert action.succeeded
     assert action.result.success, action.result.message
+
+
+@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
+def test_spot_body_gaze_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
+    spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.initialize_robot()
+
+    x_axis = np.array([1.0, 0.0, 0.0])
+    expected_orientation = SO3.Ry(-30.0, unit="deg")
+
+    action = spot_interface.body_gaze.asynchronously(
+        np.squeeze(expected_orientation * x_axis), FrameHint.GRAV_ALIGNED_BODY
+    )
+
+    call = simple_spot.api.RobotCommand.serve(timeout=2.0)
+    assert call is not None
+    assert call.request.command.WhichOneof("command") == "synchronized_command"
+    synchro_command = call.request.command.synchronized_command
+    assert synchro_command.mobility_command.WhichOneof("command") == "stand_request"
+    assert synchro_command.mobility_command.HasField("stand_request")
+    mobility_params = spot_command_pb2.MobilityParams()
+    synchro_command.mobility_command.params.Unpack(mobility_params)
+    assert mobility_params.body_control.WhichOneof("param") == "base_offset_rt_footprint"
+    base_offset_rt_footprint = mobility_params.body_control.base_offset_rt_footprint
+    assert len(base_offset_rt_footprint.points) == 1
+    point = base_offset_rt_footprint.points[0]
+    q = UnitQuaternion(expected_orientation)
+    qx, qy, qz, qw = q.vec_xyzs
+    orientation = point.pose.rotation
+    assert math.isclose(orientation.x, qx)
+    assert math.isclose(orientation.y, qy)
+    assert math.isclose(orientation.z, qz)
+    assert math.isclose(orientation.w, qw)
+    command_response = RobotCommandResponse()
+    command_response.robot_command_id = 4321
+    command_response.status = RobotCommandResponse.Status.STATUS_OK
+    call.returns(command_response)
+
+    call = simple_spot.api.RobotCommandFeedback.serve(timeout=2.0)
+    assert call is not None
+    assert call.request.robot_command_id == command_response.robot_command_id
+    feedback_response = RobotCommandFeedbackResponse()
+    synchro_feedback = feedback_response.feedback.synchronized_feedback
+    mobility_command_feedback = synchro_feedback.mobility_command_feedback
+    mobility_command_feedback.status = RobotCommandFeedbackStatus.Status.STATUS_PROCESSING
+    stand_feedback = mobility_command_feedback.stand_feedback
+    stand_feedback.status = StandCommand.Feedback.Status.STATUS_IS_STANDING
+    call.returns(feedback_response)
+
+    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert action.succeeded
+    assert action.result.success, action.result.message
+
+    synchro_feedback = action.result.result.command.synchronized_feedback
+    stand_feedback = synchro_feedback.mobility_command_feedback.feedback.stand_feedback
+    assert stand_feedback.status.value == StandCommandFeedbackStatus.STATUS_IS_STANDING
+
+
+@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
+def test_spot_legacy_body_gaze_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
+    spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.initialize_robot()
+
+    command_response = RobotCommandResponse()
+    command_response.robot_command_id = 1234
+    command_response.status = RobotCommandResponse.Status.STATUS_OK
+    simple_spot.api.RobotCommand.future.returns(command_response)
+
+    feedback_response = RobotCommandFeedbackResponse()
+    synchro_feedback = feedback_response.feedback.synchronized_feedback
+    mobility_command_feedback = synchro_feedback.mobility_command_feedback
+    mobility_command_feedback.status = RobotCommandFeedbackStatus.Status.STATUS_PROCESSING
+    stand_feedback = mobility_command_feedback.stand_feedback
+    stand_feedback.status = StandCommand.Feedback.Status.STATUS_IS_STANDING
+    simple_spot.api.RobotCommandFeedback.future.returns(feedback_response)
+
+    result = spot_interface.body_gaze_at(SE3.Trans([1.0, 1.0, 1.0]), timeout_sec=5.0)
+    assert result is not None
+
+    synchro_feedback = result.command.synchronized_feedback
+    stand_feedback = synchro_feedback.mobility_command_feedback.feedback.stand_feedback
+    assert stand_feedback.status.value == StandCommandFeedbackStatus.STATUS_IS_STANDING
+
+
+@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
+def test_spot_walk_with_velocity_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
+    spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.initialize_robot()
+
+    expected_body_velocity = Twist2([1.0, 0.0, 1.0])
+    spot_interface.walk_with_velocity(expected_body_velocity)
+    call = simple_spot.api.RobotCommand.serve(timeout=2.0)
+    assert call is not None
+    assert call.request.command.WhichOneof("command") == "synchronized_command"
+    synchro_command = call.request.command.synchronized_command
+    assert synchro_command.mobility_command.WhichOneof("command") == "se2_velocity_request"
+    velocity = synchro_command.mobility_command.se2_velocity_request.velocity
+    assert velocity.linear.x == expected_body_velocity.v[0]
+    assert velocity.linear.y == expected_body_velocity.v[1]
+    assert velocity.angular == expected_body_velocity.w
+    call.returns(RobotCommandResponse(status=RobotCommandResponse.Status.STATUS_OK))

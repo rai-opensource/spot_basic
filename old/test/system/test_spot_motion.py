@@ -181,3 +181,43 @@ def test_rollover(hardware_spot_interface: SpotBasic, prompt_session: TestingPro
     assert response.success, response.message
 
     assert prompt_session.boolean_ask("did the robot roll back up?")
+
+
+@pytest.mark.manual
+@pytest.mark.launch(fixture=pytest.hardware_spot_graph_description)
+def test_spot_party(hardware_spot_interface: SpotBasic, prompt_session: TestingPromptSession) -> None:
+    gravity_aligned_orientation = SO3()
+    response = hardware_spot_interface.stand_with_orientation.synchronously(
+        gravity_aligned_orientation, body_height=0.5, timeout_sec=10.0
+    )
+    assert response.success, response.message
+
+    response = hardware_spot_interface.stand_with_orientation.synchronously(
+        gravity_aligned_orientation, body_height=-0.5, timeout_sec=10.0
+    )
+    assert response.success, response.message
+
+    response = hardware_spot_interface.stand_with_orientation.synchronously(
+        gravity_aligned_orientation, body_height=0.5, timeout_sec=10.0
+    )
+    assert response.success, response.message
+
+    response = hardware_spot_interface.stand.synchronously(timeout_sec=10.0)
+    assert response.success, response.message
+
+    assert prompt_session.boolean_ask("did the robot squat up and down?")
+
+    response = hardware_spot_interface.body_gaze.synchronously(
+        target=[1.0, 0.0, 0.75], frame=FrameHint.BODY, timeout_sec=10.0
+    )
+    assert response.success, response.message
+
+    response = hardware_spot_interface.body_gaze.synchronously(
+        target=[1.0, 0.0, -0.75], frame=FrameHint.BODY, timeout_sec=10.0
+    )
+    assert response.success, response.message
+
+    response = hardware_spot_interface.stand.synchronously(timeout_sec=10.0)
+    assert response.success, response.message
+
+    assert prompt_session.boolean_ask("did the robot bend up and down?")
