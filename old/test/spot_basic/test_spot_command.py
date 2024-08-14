@@ -1,6 +1,7 @@
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import math
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -30,8 +31,10 @@ from bosdyn_api_msgs.msg import (
 from geometry_msgs.msg import Twist, Vector3
 from spatialmath import SE2, SE3, SO3, Twist2, UnitQuaternion
 from spot_utilities.spot_basic import SpotBasic
-from spot_utilities.spot_basic.command import LocomotionHint
-from spot_utilities.spot_basic.command.full_body import BatteryChangeDirHint
+from spot_utilities.spot_basic.command import LocomotionHint, SpotCommandProtocol
+from spot_utilities.spot_basic.command.arm import SpotArmCommandBuilder
+from spot_utilities.spot_basic.command.full_body import BatteryChangeDirHint, SpotFullBodyCommandBuilder
+from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandBuilder
 from spot_utilities.spot_basic.state import FrameHint
 from spot_wrapper.testing.fixtures import SpotFixture
 
@@ -789,3 +792,103 @@ def test_spot_walk_with_velocity_command(simple_spot: SpotFixture, ros: ROSAware
     assert velocity.linear.y == expected_body_velocity.v[1]
     assert velocity.angular == expected_body_velocity.w
     call.returns(RobotCommandResponse(status=RobotCommandResponse.Status.STATUS_OK))
+
+
+def test_torso_and_arm_command_builder() -> None:
+    mock_target = Mock(spec=SpotCommandProtocol)
+    fb_command_builder = SpotFullBodyCommandBuilder(mock_target)
+    # create a torso pose and arm joint angles filled with some dummy values
+    quaternion = UnitQuaternion(s=0, v=[0, 0, 1])
+    pose = SE3.Rt(R=quaternion.SO3(), t=[1.0, 2.0, 3.0])
+    arm_joint_angles = [4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+    command = fb_command_builder.torso_and_arm_command(pose, arm_joint_angles)
+    arm_trajectory = command.synchronized_command.arm_command.arm_joint_move_command.trajectory
+    assert len(arm_trajectory.points) == 1
+    arm_trajectory_point = arm_trajectory.points[0]
+    # ensure arm joint angles match the desired input
+    assert arm_trajectory_point.position.sh0.value == arm_joint_angles[0]
+    assert arm_trajectory_point.position.sh1.value == arm_joint_angles[1]
+    assert arm_trajectory_point.position.el0.value == arm_joint_angles[2]
+    assert arm_trajectory_point.position.el1.value == arm_joint_angles[3]
+    assert arm_trajectory_point.position.wr0.value == arm_joint_angles[4]
+    assert arm_trajectory_point.position.wr1.value == arm_joint_angles[5]
+    mobility_params = spot_command_pb2.MobilityParams()
+    command.synchronized_command.mobility_command.params.Unpack(mobility_params)
+    assert len(mobility_params.body_control.base_offset_rt_footprint.points) == 1
+    base_offset_point = mobility_params.body_control.base_offset_rt_footprint.points[0]
+    # ensure body pose matches the desired input
+    assert base_offset_point.pose.position.x == pose.x
+    assert base_offset_point.pose.position.y == pose.y
+    assert base_offset_point.pose.position.z == pose.z
+    assert base_offset_point.pose.rotation.w == quaternion.s
+    assert base_offset_point.pose.rotation.x == quaternion.v[0]
+    assert base_offset_point.pose.rotation.y == quaternion.v[1]
+    assert base_offset_point.pose.rotation.z == quaternion.v[2]
+
+
+def test_torso_pose_command_builder() -> None:
+    mock_target = Mock(spec=SpotCommandProtocol)
+    mobility_command_builder = SpotMobilityCommandBuilder(mock_target)
+    # create a dummy torso pose command with the optional duration parameter set
+    quaternion = UnitQuaternion(s=0, v=[0, 0, 1])
+    pose = SE3.Rt(R=quaternion.SO3(), t=[1.0, 2.0, 3.0])
+    duration = 1.0
+    command = mobility_command_builder.torso_pose_command(pose, duration=duration)
+    mobility_params = spot_command_pb2.MobilityParams()
+    command.synchronized_command.mobility_command.params.Unpack(mobility_params)
+    assert len(mobility_params.body_control.base_offset_rt_footprint.points) == 1
+    base_offset_point = mobility_params.body_control.base_offset_rt_footprint.points[0]
+    # ensure torso pose and duration are forwarded correctly to the command
+    assert base_offset_point.pose.position.x == pose.x
+    assert base_offset_point.pose.position.y == pose.y
+    assert base_offset_point.pose.position.z == pose.z
+    assert base_offset_point.pose.rotation.w == quaternion.s
+    assert base_offset_point.pose.rotation.x == quaternion.v[0]
+    assert base_offset_point.pose.rotation.y == quaternion.v[1]
+    assert base_offset_point.pose.rotation.z == quaternion.v[2]
+    assert base_offset_point.time_since_reference.seconds == duration
+
+
+def test_arm_joint_command_builder() -> None:
+    mock_target = Mock(spec=SpotCommandProtocol)
+    arm_command_builder = SpotArmCommandBuilder(mock_target)
+    # create a dummy arm joint command with duration, max velocity, and max acceleration
+    duration_sec = 1.0
+    max_velocity = 2.0
+    max_acceleration = 3.0
+    arm_joint_angles = [4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+    command = arm_command_builder.arm_joint_command(arm_joint_angles, duration_sec, max_velocity, max_acceleration)
+    arm_trajectory = command.synchronized_command.arm_command.arm_joint_move_command.trajectory
+    # ensure duration, velocity, acceleration, and joint angles are forwarded correctly to the command.
+    assert arm_trajectory.maximum_velocity.value == max_velocity
+    assert arm_trajectory.maximum_acceleration.value == max_acceleration
+    assert len(arm_trajectory.points) == 1
+    arm_trajectory_point = arm_trajectory.points[0]
+    assert arm_trajectory_point.position.sh0.value == arm_joint_angles[0]
+    assert arm_trajectory_point.position.sh1.value == arm_joint_angles[1]
+    assert arm_trajectory_point.position.el0.value == arm_joint_angles[2]
+    assert arm_trajectory_point.position.el1.value == arm_joint_angles[3]
+    assert arm_trajectory_point.position.wr0.value == arm_joint_angles[4]
+    assert arm_trajectory_point.position.wr1.value == arm_joint_angles[5]
+    assert arm_trajectory_point.time_since_reference.seconds == duration_sec
+
+
+def test_walk_velocity_command_builder() -> None:
+    mock_target = Mock(spec=SpotCommandProtocol)
+    # put a locomotion hint into the target's mobility params to test that this is forwarded to the command correctly
+    mock_target.mobility_params = spot_command_pb2.MobilityParams(locomotion_hint=LocomotionHint.CRAWL)
+    mobility_command_builder = SpotMobilityCommandBuilder(mock_target)
+    v_x = 1.0
+    v_y = 2.0
+    v_rot = 3.0
+    # by not specifying mobility params here, we are using the ones from target
+    command = mobility_command_builder.walk_velocity_command(v_x, v_y, v_rot)
+    velocity_request = command.synchronized_command.mobility_command.se2_velocity_request
+    # check that the velocity matches the desired input
+    assert velocity_request.velocity.linear.x == v_x
+    assert velocity_request.velocity.linear.y == v_y
+    assert velocity_request.velocity.angular == v_rot
+    mobility_params = spot_command_pb2.MobilityParams()
+    command.synchronized_command.mobility_command.params.Unpack(mobility_params)
+    # check that the mobility params match that of the target
+    assert mobility_params == mock_target.mobility_params

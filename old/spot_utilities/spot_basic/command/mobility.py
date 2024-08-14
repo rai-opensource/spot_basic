@@ -1,18 +1,21 @@
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import functools
-from typing import Any, Callable, Iterable, Optional
+from typing import Any, Callable, Iterable, Optional, Union
 
 import numpy as np
 from bdai.trajectory.se2_trajectory import SE2Trajectory
+from bdai_ros.utilities.manual_conversions import se3_to_se3pose
 from bdai_ros2_wrappers.callables import generalized_method
 from bosdyn.api import (
     robot_command_pb2,
     trajectory_pb2,
 )
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
+from bosdyn.client.math_helpers import SE3Pose
 from bosdyn.client.robot_command import RobotCommandBuilder
 from bosdyn.geometry import Quaternion, to_euler_zxy
+from bosdyn.util import seconds_to_duration
 from bosdyn_api_msgs.conversions import convert
 from bosdyn_api_msgs.msg import RobotCommandFeedback
 from geometry_msgs.msg import Twist
@@ -126,6 +129,63 @@ class SpotMobilityCommandBuilder(SpotCommandBuilder):
             base_frame=base_frame.value,
             mobility_params=mobility_params,
         )
+
+    def torso_pose_command(
+        self,
+        pose: Union[SE3Pose, SE3],
+        duration: Optional[float] = None,
+    ) -> robot_command_pb2.RobotCommand:
+        """Creates a stand command that takes the robot torso to desired pose while keeping the feet
+        in contact with the ground.
+
+        The reference frame is the footprint pseudo-frame, which is a gravity-aligned frame with
+        its origin located at the geometric center of the feet in the X-Y axis, and at the nominal
+        height of the hips in the Z axis. The yaw of the frame (wrt the world) is calculated by the
+        average foot locations, and is aligned with the feet.
+
+        Args:
+            pose: A SE3Pose object representing the desired torso pose in the footprint pseudo-frame.
+            duration: The duration over which the motion to the new pose should be executed, in seconds.
+
+        Returns:
+            A stand command towards the desired torso pose.
+        """
+        if isinstance(pose, SE3):
+            pose = se3_to_se3pose(pose)
+        # Create the trajectory point with the desired pose and duration
+        if duration is not None:
+            duration = seconds_to_duration(duration)
+        trajectory_point = trajectory_pb2.SE3TrajectoryPoint(
+            pose=pose.to_proto(),
+            time_since_reference=duration,
+        )
+
+        # Build the trajectory proto by combining the point
+        trajectory = trajectory_pb2.SE3Trajectory(points=[trajectory_point])
+
+        # Build a custom mobility params to specify absolute body control
+        body_control = spot_command_pb2.BodyControlParams(base_offset_rt_footprint=trajectory)
+        mobility_params = spot_command_pb2.MobilityParams(body_control=body_control)
+
+        # Issue the command via the RobotCommandClient
+        return RobotCommandBuilder.synchro_stand_command(params=mobility_params)
+
+    def walk_velocity_command(
+        self, v_x: float, v_y: float, v_rot: float, params: Optional[spot_command_pb2.MobilityParams] = None
+    ) -> robot_command_pb2.RobotCommand:
+        """Creates a velocity command.
+
+        Args:
+            v_x: Linear velocity along the x-axis.
+            v_y: Linear velocity along the y-axis.
+            v_rot: Angular velocity about the z-axis.
+            params: Mobility params for the robot. Defaults to the mobility params of the target.
+
+        Returns:
+            A velocity command with the desired velocity.
+        """
+        params = params or self.target.mobility_params
+        return RobotCommandBuilder.synchro_velocity_command(v_x=v_x, v_y=v_y, v_rot=v_rot, params=params)
 
     def walk_and_orient_maneuver(
         self,

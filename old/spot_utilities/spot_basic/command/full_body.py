@@ -1,7 +1,7 @@
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
 from enum import IntEnum
-from typing import Any, Callable, Optional, TypeAlias
+from typing import Any, Callable, Optional, TypeAlias, Union
 
 from bdai_ros2_wrappers.callables import generalized_method
 from bosdyn.api import (
@@ -9,10 +9,16 @@ from bosdyn.api import (
     robot_command_pb2,
 )
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
+from bosdyn.client.math_helpers import SE3Pose
+from bosdyn.client.robot_command import RobotCommandBuilder
 from bosdyn_api_msgs.conversions import convert
 from bosdyn_api_msgs.msg import RobotCommandFeedback
+from spatialmath import SE3
 from spot_msgs.action import RobotCommand as RobotCommandAction
 from spot_utilities.spot_basic.command import SpotCommandBuilder, SpotCommandProtocol
+from spot_utilities.spot_basic.command.arm import SpotArmCommandBuilder
+from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandBuilder
+from spot_utilities.spot_basic.state import ArmJointMap
 from spot_utilities.spot_basic.utilities import SpotActionHandle
 
 
@@ -58,6 +64,26 @@ class SpotFullBodyCommandBuilder(SpotCommandBuilder):
         full_body_command.selfright_request.SetInParent()
         full_body_command.params.Pack(mobility_params)
         return robot_command_pb2.RobotCommand(full_body_command=full_body_command)
+
+    def torso_and_arm_command(
+        self,
+        torso_pose: Union[SE3Pose, SE3],
+        joint_angles: Union[ArmJointMap, list[float]],
+        duration: Optional[float] = None,
+        max_velocity: Optional[float] = None,
+        max_acceleration: Optional[float] = None,
+    ) -> robot_command_pb2.RobotCommand:
+        """Creates a robot command that takes both robot torso and arm to the desired pose without moving the robot's
+        feet. (If the SE3 pose is out of range, this will get as close as possible without taking a step).
+
+        See arm_joint_command() and torso_pose_command() documentation for further reference.
+        """
+        arm_builder = SpotArmCommandBuilder(self)
+        mobility_builder = SpotMobilityCommandBuilder(self)
+        return RobotCommandBuilder.build_synchro_command(
+            mobility_builder.torso_pose_command(torso_pose, duration),
+            arm_builder.arm_joint_command(joint_angles, duration, max_velocity, max_acceleration),
+        )
 
 
 class SpotFullBodyCommandMixin(SpotCommandProtocol):

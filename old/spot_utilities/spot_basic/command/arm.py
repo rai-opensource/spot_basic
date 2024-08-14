@@ -1,7 +1,7 @@
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import dataclasses
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Callable, Optional, Sequence, Union
 
 from bdai_ros.utilities.manual_conversions import se3_to_se3pose_proto
 from bdai_ros2_wrappers.callables import GeneralizedGuard, generalized_method
@@ -111,7 +111,11 @@ class SpotArmCommandBuilder(SpotCommandBuilder):
         return RobotCommandBuilder.arm_gaze_command(*point, frame_name=frame.value)
 
     def arm_joint_command(
-        self, joint_positions: ArmJointMap, duration_sec: Optional[float] = None
+        self,
+        joint_positions: Union[ArmJointMap, list[float]],
+        duration_sec: Optional[float] = None,
+        max_velocity: Optional[float] = None,
+        max_acceleration: Optional[float] = None,
     ) -> robot_command_pb2.RobotCommand:
         """Build an arm command, taking each arm joint to a given position.
 
@@ -119,6 +123,8 @@ class SpotArmCommandBuilder(SpotCommandBuilder):
             joint_positions: the arm joint positions, from shoulder to wrist.
             duration_sec: optional duration of the commanded motion.
         """
+        if isinstance(joint_positions, list):
+            joint_positions = ArmJointMap.from_list(joint_positions)
         trajectory_point = RobotCommandBuilder.create_arm_joint_trajectory_point(
             sh0=joint_positions.sh0,
             sh1=joint_positions.sh1,
@@ -131,6 +137,10 @@ class SpotArmCommandBuilder(SpotCommandBuilder):
         robot_command = robot_command_pb2.RobotCommand()
         arm_command = robot_command.synchronized_command.arm_command
         arm_command.arm_joint_move_command.trajectory.points.append(trajectory_point)
+        if max_velocity is not None:
+            arm_command.arm_joint_move_command.trajectory.maximum_velocity.value = max_velocity
+        if max_acceleration is not None:
+            arm_command.arm_joint_move_command.trajectory.maximum_acceleration.value = max_acceleration
         return robot_command
 
     def arm_joint_trajectory_command(

@@ -30,9 +30,13 @@ class SpotGripperCommandBuilder(SpotCommandBuilder):
             raise ValueError("Invalid gripper command: theta must be within range [0, pi/2]")
         return RobotCommandBuilder.claw_gripper_open_angle_command(theta_rad)
 
-    def claw_gripper_close_command(self) -> robot_command_pb2.RobotCommand:
-        """Build a claw gripper closing command."""
-        return RobotCommandBuilder.claw_gripper_close_command()
+    def claw_gripper_close_command(self, max_torque: Optional[float] = None) -> robot_command_pb2.RobotCommand:
+        """Build a claw gripper closing command.
+
+        Args:
+            max_torque: The maximum allowed torque applied in Nm.
+        """
+        return RobotCommandBuilder.claw_gripper_close_command(max_torque=max_torque)
 
 
 class SpotGripperCommandMixin(SpotCommandProtocol):
@@ -107,7 +111,9 @@ class SpotGripperCommandMixin(SpotCommandProtocol):
         )
 
     @generalized_method(transitional=True)
-    def claw_gripper_close(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
+    def claw_gripper_close(
+        self, timeout_sec: Optional[float] = None, max_torque: Optional[float] = None
+    ) -> Optional[RobotCommandFeedback]:
         """Close the robot claw gripper.
 
         Returns:
@@ -115,7 +121,7 @@ class SpotGripperCommandMixin(SpotCommandProtocol):
         """
         goal = RobotCommandAction.Goal()
         command_builder = SpotGripperCommandBuilder(self)
-        convert(command_builder.claw_gripper_close_command(), goal.command)
+        convert(command_builder.claw_gripper_close_command(max_torque), goal.command)
         return self.command("claw_gripper_close", goal, timeout_sec)
 
     def claw_gripper_close_async(
