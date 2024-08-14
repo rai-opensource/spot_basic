@@ -2,16 +2,9 @@
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 from __future__ import annotations
 
-import argparse
 from typing import Callable, Optional
 
-import bdai_ros2_wrappers.process as ros_process
 import numpy as np
-import rclpy
-from bdai_ros.utilities.manual_conversions import (
-    to_ros_pose,
-)
-from bdai_ros2_wrappers.type_hints import Action, SrvTypeRequest
 from bosdyn.api import (
     geometry_pb2,
     manipulation_api_pb2,
@@ -25,15 +18,8 @@ from bosdyn_api_msgs.msg import (
     RobotCommandFeedback,
 )
 from rcl_interfaces.srv import GetParameters
-from rclpy.action import ActionClient
-from rclpy.client import Client
 from rclpy.node import Node
-from rclpy.task import Future
-from spatialmath import SE2, SE3
 from spot_msgs.action import RobotCommand as RobotCommandAction
-from spot_msgs.srv import (
-    OverrideGraspOrCarry,
-)
 from spot_utilities.spot_basic.base import SpotBase
 from spot_utilities.spot_basic.cam.audio import SpotCAMAudioMixin
 from spot_utilities.spot_basic.choreography import SpotChoreographyMixin
@@ -52,11 +38,9 @@ from spot_utilities.spot_basic.lease import SpotLeaseMixin
 from spot_utilities.spot_basic.manipulation import SpotManipulationMixin
 from spot_utilities.spot_basic.power import SpotPowerMixin
 from spot_utilities.spot_basic.state import FrameHint, SpotStateMixin
-from spot_utilities.spot_basic.utilities import SpotActionHandle, SpotServiceHandle
+from spot_utilities.spot_basic.utilities import SpotActionHandle
 from spot_utilities.spot_basic.world import SpotWorldMixin
 from spot_utilities.spot_util import spot_namespaced
-from std_msgs.msg import ColorRGBA as Color
-from visualization_msgs.msg import Marker
 
 
 class SpotBasic(
@@ -104,14 +88,8 @@ class SpotBasic(
         self._dry = dry
         self._rviz = rviz
 
-        if self._rviz:
-            self._vis_pub = self.node.create_publisher(Marker, "/visualization_marker", 10)
-
         self._get_parameters_client = self.node.create_client(
             GetParameters, spot_namespaced(self.robot_name, "spot_ros2/get_parameters")
-        )
-        self._override_grasp_carry_client = self.node.create_client(
-            OverrideGraspOrCarry, spot_namespaced(self.robot_name, "override_grasp_or_carry")
         )
 
         self.node.get_logger().info(f"Waiting for the 'RobotCommand' action server for {self.robot_name} ...")
@@ -143,119 +121,6 @@ class SpotBasic(
         if not self.power_motors_on():
             return False
         return True
-
-    def _send_action_goal_async(
-        self,
-        command_name: str,
-        goal: Action.Goal,
-        action_client: ActionClient,
-        *,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[SpotActionHandle]:
-        if goal is None:
-            # Is there something better that we can return with information about the failure?
-            return None
-        if self._dry:
-            # TODO: What to return on a dry run? Just success?
-            return None
-
-        handle = SpotActionHandle(self._robot_name, command_name, context=self.node.context)
-        if result_callback is not None:
-            handle.set_result_callback(result_callback)
-        if on_failure_callback is not None:
-            handle.set_on_failure_callback(on_failure_callback)
-
-        if feedback_callback is None:
-            send_goal_future = action_client.send_goal_async(goal)
-        else:
-            handle.set_feedback_callback(feedback_callback)
-            send_goal_future = action_client.send_goal_async(goal, feedback_callback=handle.get_feedback_callback)
-        handle.set_send_goal_future(send_goal_future)
-
-        return handle
-
-    def _send_service_request_async(
-        self,
-        service_name: str,
-        request: SrvTypeRequest,
-        service_client: Client,
-        *,
-        result_callback: Optional[Callable[[Future], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> SpotServiceHandle:
-        """Sends an asynchronous service request to the service client and handles the response.
-
-        Args:
-            service_name: name of the service we are requesting from
-            request: the request we are sending to the service
-            service_client: the client used to request the service
-            result_callback: callback executing on the future returned from a service call
-            on_failure_callback: callback executing if a service fails
-
-        Raises:
-            ValueError if a request is None
-        """
-        if request is None:
-            raise ValueError("Request must not be None!")
-
-        handle = SpotServiceHandle(robot_name=self._robot_name, service_name=service_name, context=self.node.context)
-
-        if result_callback is not None:
-            handle.set_result_callback(result_callback)
-
-        if on_failure_callback is not None:
-            handle.set_on_failure_callback(on_failure_callback=on_failure_callback)
-
-        service_future = service_client.call_async(request)
-        handle.set_send_service_future(service_future)
-        return handle
-
-    def _call_service_async(
-        self,
-        service_name: str,
-        request: SrvTypeRequest,
-        service_client: Client,
-        *,
-        result_callback: Optional[Callable[[Future], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> SpotServiceHandle:
-        """Triggers a service asynchronous
-
-        Args:
-            service_name: A representative name of the service for logging
-            request: The request we are sending to the service server
-            service_client: the client we want to trigger the request for
-            on_failure_callback: A callback to process/handle when the request fails for various reasons
-
-        Returns:
-            A handle for the asynchronous lifecycle of the service
-        """
-        self.node.get_logger().info(f"Trigger command '{service_name}' for {self.robot_name}")
-        return self._send_service_request_async(
-            service_name=service_name,
-            request=request,
-            service_client=service_client,
-            result_callback=result_callback,
-            on_failure_callback=on_failure_callback,
-        )
-
-    def _draw_arrow(self, frame_id: str, ns: str, frame_t_arrow: SE2 | SE3, color: Color) -> None:
-        """Draw an arrow in RVIZ"""
-        marker = Marker()
-        marker.header.stamp = self.node.get_clock().now().to_msg()
-        marker.header.frame_id = frame_id
-        marker.id = 0
-        marker.ns = ns
-        marker.type = Marker.ARROW
-        marker.action = Marker.ADD
-        marker.pose = to_ros_pose(frame_t_arrow)
-        marker.color = color
-        marker.scale.x = 0.3
-        marker.scale.y = 0.1
-        marker.scale.z = 0.1
-        self._vis_pub.publish(marker)
 
     @staticmethod
     def convert_proto_to_robot_cmd_action_goal(proto: robot_command_pb2.RobotCommand) -> RobotCommandAction.Goal:
@@ -329,28 +194,3 @@ class SpotBasic(
         grasp.grasp_params.position_constraint.CopyFrom(
             manipulation_api_pb2.GRASP_POSITION_CONSTRAINT_FIXED_AT_USER_POSITION
         )
-
-
-def cli() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("robot_name", help="Name of the robot if the ROS driver is inside that namespace")
-    return parser
-
-
-@ros_process.main(cli())
-def main(args: argparse.Namespace) -> None:
-    spot_basic = SpotBasic(args.robot_name)
-
-    while rclpy.ok():
-        cmd = input("Please enter a command:\n" + " ".join(SpotBasic.TRIGGER_SERVICES) + " exit\n> ")
-        if cmd == "exit":
-            break
-        success = spot_basic.trigger_service(cmd)
-        if not success:
-            print(f"Error with command: {cmd}")
-        else:
-            print(f"Successfully executed command: {cmd}")
-
-
-if __name__ == "__main__":
-    main()
