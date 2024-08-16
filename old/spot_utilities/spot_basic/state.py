@@ -341,6 +341,11 @@ class SpotStateMixin(SpotBaseProtocol):
         Args:
             A tree-based collection of all available transforms.
         """
+        if self.tf_listener is None:
+            raise ValueError(
+                "TFListenerWrapper is not connected. Use set_tf_listener() or ros_process.main(uses_tf=True)."
+            )
+
         if root_frame is None:
             root_frame = FrameHint.BODY
 

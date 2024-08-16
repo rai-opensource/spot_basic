@@ -102,7 +102,7 @@ def main(args: argparse.Namespace) -> None:
         synchro_command = RobotCommandBuilder.build_synchro_command(follow_arm_command, arm_command)
         action_goal = RobotCommand.Goal()
         convert(synchro_command, action_goal.command)
-        robot_command_client.send_goal_and_wait(action_goal)
+        robot_command_client.send_goal_and_wait("Manual command", action_goal)
         main.node.get_logger().info("movement done.")
 
     spot_basic.stow_arm()

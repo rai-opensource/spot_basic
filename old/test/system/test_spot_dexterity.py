@@ -9,6 +9,7 @@ from rclpy.time import Time
 from spatialmath import SE3, SO3, SpatialForce
 from spot_utilities.spot_basic import FrameHint, SpotBasic
 from spot_utilities.spot_basic.command.arm import ArmJointMap, AxisModeMap
+from spot_utilities.spot_basic.image import SpotCameraSubscription
 
 
 @pytest.mark.manual
@@ -231,7 +232,7 @@ def test_hand_gazing(hardware_spot_interface: SpotBasic, prompt_session: Testing
     response = hardware_spot_interface.claw_gripper_open.synchronously(timeout_sec=5.0)
     assert response.success, response.message
 
-    camera = ensure(hardware_spot_interface.cameras.hand)
+    camera: SpotCameraSubscription = ensure(hardware_spot_interface.cameras.hand)
 
     image_pixel_xy, image, camera_info = prompt_for_click("Click to gaze!", camera.rgb)
 

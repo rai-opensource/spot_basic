@@ -2,13 +2,12 @@
 
 import functools
 from collections.abc import Sequence
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Dict, Optional, Protocol, Type, Union
 
 from bdai_ros2_wrappers.action import Actionable
 from bdai_ros2_wrappers.action_handle import ActionHandle
 from bdai_ros2_wrappers.service import Serviced
 from bdai_ros2_wrappers.service_handle import ServiceHandle
-from bdai_ros2_wrappers.type_hints import Action, Msg, SrvTypeRequest
 from bosdyn_api_msgs.conversions import convert
 from bosdyn_api_msgs.msg import RobotCommandFeedback
 from rclpy.action.client import ActionClient
@@ -16,7 +15,13 @@ from rclpy.client import Client
 from rclpy.context import Context
 
 
-def make_message(cls: Msg, *args: Any, **kwargs: Any) -> Any:
+class MessageT(Protocol):
+
+    @classmethod
+    def get_fields_and_field_types(self) -> Dict[str, str]: ...
+
+
+def make_message(cls: Type[MessageT], *args: Any, **kwargs: Any) -> Any:
     """Makes a ROS 2 message.
 
     Note no copies are performed by this function.
@@ -115,7 +120,7 @@ class SpotServiceHandle(ServiceHandle):
         robot_name: str,
         service_name: str,
         client: Client,
-        request: Optional[SrvTypeRequest] = None,
+        request: Optional[Any] = None,
         result_callback: Optional[Callable] = None,
         on_failure_callback: Optional[Callable] = None,
         context: Optional[Context] = None,
@@ -160,9 +165,9 @@ class SpotActionHandle(ActionHandle):
         robot_name: str,
         action_name: str,
         action_client: ActionClient,
-        goal: Action.Goal,
-        result_callback: Optional[Callable[[Action.Result], None]] = None,
-        feedback_callback: Optional[Callable[[Action.Feedback], None]] = None,
+        goal: Any,
+        result_callback: Optional[Callable[[Any], None]] = None,
+        feedback_callback: Optional[Callable[[Any], None]] = None,
         on_failure_callback: Optional[Callable[[], None]] = None,
         context: Optional[Context] = None,
     ) -> "SpotActionHandle":
@@ -205,20 +210,20 @@ class SpotActionHandle(ActionHandle):
         """
         super().__init__(f"{robot_name}.{action_name}", *args, **kwargs)
         self._result_callback = self._result_callback_intermediate
-        self._result_callback_internal: Optional[Callable[[Action.Result], None]] = None
-        self._result_internal: Optional[Action.Result] = None
+        self._result_callback_internal: Optional[Callable[[Any], None]] = None
+        self._result_internal: Optional[Any] = None
         self._feedback_callback = self._feedback_callback_intermediate
-        self._feedback_callback_internal: Optional[Callable[[Action.Result], None]] = None
+        self._feedback_callback_internal: Optional[Callable[[Any], None]] = None
 
     @property
-    def result(self) -> Optional[Action.Result]:
+    def result(self) -> Optional[Any]:
         return self._result_internal
 
-    def set_result_callback(self, result_callback: Callable[[Action.Result], None]) -> None:
+    def set_result_callback(self, result_callback: Callable[[Any], None]) -> None:
         """Sets the callback for processing the result from executing an Action"""
         self._result_callback_internal = result_callback
 
-    def _result_callback_intermediate(self, result: Action.Result) -> None:
+    def _result_callback_intermediate(self, result: Any) -> None:
         """Callback for pulling the result out of the result and passing it to a user provided callback"""
         if not result.success:
             self._logger.error(f"Action resulted in failure. Msg: {result.message}")
@@ -229,11 +234,11 @@ class SpotActionHandle(ActionHandle):
         if self._result_callback_internal is not None:
             self._result_callback_internal(self._result_internal)
 
-    def set_feedback_callback(self, feedback_callback: Callable[[Action.Feedback], None]) -> None:
+    def set_feedback_callback(self, feedback_callback: Callable[[Any], None]) -> None:
         """Sets the callback for processing the feedback during execution of an Action"""
         self._feedback_callback_internal = feedback_callback
 
-    def _feedback_callback_intermediate(self, feedback: Action.Feedback) -> None:
+    def _feedback_callback_intermediate(self, feedback: Any) -> None:
         """Intermediate step to pull the feedback out of the feedback"""
         if self._feedback_callback_internal is not None:
             self._feedback_callback_internal(feedback.feedback)

@@ -2,6 +2,7 @@
 
 import pathlib
 
+import geometry_msgs.msg
 import pytest
 from bdai_ros2_wrappers.futures import wait_for_future
 from bdai_ros2_wrappers.scope import ROSAwareScope
@@ -94,7 +95,7 @@ def test_get_localization(tmp_path: pathlib.Path, simple_spot: SpotFixture, ros:
         assert response.pose.pose.orientation.w == 1.0
 
         assert wait_for_future(spot_interface.localization.update, timeout_sec=2.0)
-        pose = ensure(spot_interface.localization.latest)
+        pose: geometry_msgs.msg.PoseStamped = ensure(spot_interface.localization.latest)
         assert pose.pose.position.x == 1.0
 
 
