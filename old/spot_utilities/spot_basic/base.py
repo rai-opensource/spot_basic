@@ -36,7 +36,7 @@ class SpotBase:
         self._node = node
         # make sure robot name and node properties are initialized before constructing mixins
         super().__init__(*args, **kwargs)
-        self._get_spot_parameters = Serviced(
+        self._get_spot_parameters: Serviced[GetParameters.Request, GetParameters.Response] = Serviced(
             GetParameters, spot_namespaced(self.robot_name, "spot_ros2/get_parameters"), node=self.node
         )
 
