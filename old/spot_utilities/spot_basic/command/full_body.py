@@ -17,6 +17,7 @@ from spatialmath import SE3
 from spot_msgs.action import RobotCommand as RobotCommandAction
 from spot_utilities.spot_basic.command import SpotCommandBuilder, SpotCommandProtocol
 from spot_utilities.spot_basic.command.arm import SpotArmCommandBuilder
+from spot_utilities.spot_basic.command.gripper import SpotGripperCommandBuilder
 from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandBuilder
 from spot_utilities.spot_basic.state import ArmJointMap
 from spot_utilities.spot_basic.utilities import SpotActionHandle
@@ -65,25 +66,34 @@ class SpotFullBodyCommandBuilder(SpotCommandBuilder):
         full_body_command.params.Pack(mobility_params)
         return robot_command_pb2.RobotCommand(full_body_command=full_body_command)
 
-    def torso_and_arm_command(
+    def whole_body_command(
         self,
         torso_pose: Union[SE3Pose, SE3],
         joint_angles: Union[ArmJointMap, list[float]],
         duration: Optional[float] = None,
         max_velocity: Optional[float] = None,
         max_acceleration: Optional[float] = None,
+        gripper_open: Optional[bool] = None,
+        gripper_max_torque: Optional[float] = None,
     ) -> robot_command_pb2.RobotCommand:
-        """Creates a robot command that takes both robot torso and arm to the desired pose without moving the robot's
+        """Creates a robot command that takes the torso, arm, and gripper to the desired state without moving the
         feet. (If the SE3 pose is out of range, this will get as close as possible without taking a step).
 
-        See arm_joint_command() and torso_pose_command() documentation for further reference.
+        See arm_joint_command(), torso_pose_command(), and claw_gripper_open/close_command() documentation for
+        further reference.
         """
         arm_builder = SpotArmCommandBuilder(self)
         mobility_builder = SpotMobilityCommandBuilder(self)
-        return RobotCommandBuilder.build_synchro_command(
-            mobility_builder.torso_pose_command(torso_pose, duration),
-            arm_builder.arm_joint_command(joint_angles, duration, max_velocity, max_acceleration),
-        )
+        torso_command = mobility_builder.torso_pose_command(torso_pose, duration)
+        arm_command = arm_builder.arm_joint_command(joint_angles, duration, max_velocity, max_acceleration)
+        if gripper_open is None:
+            return RobotCommandBuilder.build_synchro_command(torso_command, arm_command)
+        gripper_builder = SpotGripperCommandBuilder(self)
+        if gripper_open:
+            gripper_command = gripper_builder.claw_gripper_open_command()
+        else:
+            gripper_command = gripper_builder.claw_gripper_close_command(gripper_max_torque)
+        return RobotCommandBuilder.build_synchro_command(torso_command, arm_command, gripper_command)
 
 
 class SpotFullBodyCommandMixin(SpotCommandProtocol):

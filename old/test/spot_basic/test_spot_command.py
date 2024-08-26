@@ -22,7 +22,7 @@ from bosdyn.api.robot_command_pb2 import (
     RobotCommandResponse,
 )
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
-from bosdyn.client.robot_command import RobotCommandBuilder
+from bosdyn.client.robot_command import _CLAW_GRIPPER_CLOSED_ANGLE, _CLAW_GRIPPER_OPEN_ANGLE, RobotCommandBuilder
 from bosdyn_api_msgs.msg import (
     SE2TrajectoryCommandFeedbackStatus,
     SitCommandFeedbackStatus,
@@ -794,14 +794,14 @@ def test_spot_walk_with_velocity_command(simple_spot: SpotFixture, ros: ROSAware
     call.returns(RobotCommandResponse(status=RobotCommandResponse.Status.STATUS_OK))
 
 
-def test_torso_and_arm_command_builder() -> None:
+def test_whole_body_command_builder() -> None:
     mock_target = Mock(spec=SpotCommandProtocol)
     fb_command_builder = SpotFullBodyCommandBuilder(mock_target)
     # create a torso pose and arm joint angles filled with some dummy values
     quaternion = UnitQuaternion(s=0, v=[0, 0, 1])
     pose = SE3.Rt(R=quaternion.SO3(), t=[1.0, 2.0, 3.0])
     arm_joint_angles = [4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
-    command = fb_command_builder.torso_and_arm_command(pose, arm_joint_angles)
+    command = fb_command_builder.whole_body_command(pose, arm_joint_angles)
     arm_trajectory = command.synchronized_command.arm_command.arm_joint_move_command.trajectory
     assert len(arm_trajectory.points) == 1
     arm_trajectory_point = arm_trajectory.points[0]
@@ -892,3 +892,48 @@ def test_walk_velocity_command_builder() -> None:
     command.synchronized_command.mobility_command.params.Unpack(mobility_params)
     # check that the mobility params match that of the target
     assert mobility_params == mock_target.mobility_params
+
+
+def test_whole_body_including_gripper_command_builder() -> None:
+    mock_target = Mock(spec=SpotCommandProtocol)
+    fb_command_builder = SpotFullBodyCommandBuilder(mock_target)
+    # Uses the same arm joint angles and pose as previous tests. Here we are testing the gripper command portion.
+    quaternion = UnitQuaternion(s=0, v=[0, 0, 1])
+    pose = SE3.Rt(R=quaternion.SO3(), t=[1.0, 2.0, 3.0])
+    arm_joint_angles = [4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+    command = fb_command_builder.whole_body_command(pose, arm_joint_angles, gripper_open=True)
+    arm_trajectory = command.synchronized_command.arm_command.arm_joint_move_command.trajectory
+    assert len(arm_trajectory.points) == 1
+    arm_trajectory_point = arm_trajectory.points[0]
+    # ensure arm joint angles match the desired input
+    assert arm_trajectory_point.position.sh0.value == arm_joint_angles[0]
+    assert arm_trajectory_point.position.sh1.value == arm_joint_angles[1]
+    assert arm_trajectory_point.position.el0.value == arm_joint_angles[2]
+    assert arm_trajectory_point.position.el1.value == arm_joint_angles[3]
+    assert arm_trajectory_point.position.wr0.value == arm_joint_angles[4]
+    assert arm_trajectory_point.position.wr1.value == arm_joint_angles[5]
+    mobility_params = spot_command_pb2.MobilityParams()
+    command.synchronized_command.mobility_command.params.Unpack(mobility_params)
+    assert len(mobility_params.body_control.base_offset_rt_footprint.points) == 1
+    base_offset_point = mobility_params.body_control.base_offset_rt_footprint.points[0]
+    # ensure body pose matches the desired input
+    assert base_offset_point.pose.position.x == pose.x
+    assert base_offset_point.pose.position.y == pose.y
+    assert base_offset_point.pose.position.z == pose.z
+    assert base_offset_point.pose.rotation.w == quaternion.s
+    assert base_offset_point.pose.rotation.x == quaternion.v[0]
+    assert base_offset_point.pose.rotation.y == quaternion.v[1]
+    assert base_offset_point.pose.rotation.z == quaternion.v[2]
+    # Ensure gripper trajectory matches desired input
+    gripper_trajectory = command.synchronized_command.gripper_command.claw_gripper_command.trajectory
+    assert len(gripper_trajectory.points) == 1
+    assert gripper_trajectory.points[0].point == _CLAW_GRIPPER_OPEN_ANGLE
+    # Create a new command where the gripper is closed, and check that the gripper trajectory matches.
+    gripper_max_torque = 10.0
+    command = fb_command_builder.whole_body_command(
+        pose, arm_joint_angles, gripper_open=False, gripper_max_torque=gripper_max_torque
+    )
+    gripper_command = command.synchronized_command.gripper_command.claw_gripper_command
+    assert len(gripper_command.trajectory.points) == 1
+    assert gripper_command.trajectory.points[0].point == _CLAW_GRIPPER_CLOSED_ANGLE
+    assert gripper_command.maximum_torque.value == gripper_max_torque
