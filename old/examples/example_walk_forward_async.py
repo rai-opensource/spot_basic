@@ -3,75 +3,61 @@ import argparse
 import logging
 import sys
 from threading import Event
-from typing import Any
 
 import bdai_ros2_wrappers.process as ros_process
-from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 from bdai_ros2_wrappers.utilities import fqn
+from bosdyn_api_msgs.msg import RobotCommandFeedback
 from spatialmath import SE2
 from spot_utilities.spot_basic import SpotBasic
 
-# Where we want the robot to walk to relative to itself
-ROBOT_T_GOAL = SE2(1.0, 0.0, 0.0)
 
+class Example:
+    """Spot walks forward asynchronously"""
 
-class WalkForward:
     def __init__(self, robot_name: str) -> None:
+        self._robot = SpotBasic(robot_name=robot_name)
         self._logger = logging.getLogger(fqn(self.__class__))
-        self._robot = SpotBasic(robot_name)
-        self._tf_listener = TFListenerWrapper()
-        self._tf_listener.wait_for_a_tform_b(self._robot.body_frame_name, self._robot.vision_frame_name)
 
-    def initialize_robot(self) -> bool:
-        self._logger.info("Claiming robot")
-        success = self._robot.claim()
-        if not success:
-            return False
-        self._logger.info("Claimed robot")
+    def start(self) -> int:
+        self._logger.info("Attempting to initialize robot")
+        self._robot.initialize_robot()
+        self._logger.info("Robot is initialized")
 
-        # Stand the robot up.
-        self._logger.info("Powering robot on")
-        success = self._robot.power_on()
-        if not success:
-            return False
-        self._logger.info("Standing robot up")
-        success = self._robot.stand()
-        if not success:
-            return False
-        self._logger.info("Successfully stood up.")
-        return True
+        self._logger.info("Attempting to stand robot up")
+        self._robot.stand.synchronously()
+        self._logger.info("Robot is standing up")
 
-    def walk_forward_with_world_frame_goal(self) -> None:
-        self._logger.info("Walking forward")
-        world_t_robot = self._tf_listener.lookup_a_tform_b_se2(
+        self._logger.info("Attempting to walk robot forward")
+        world_t_robot = self._robot.lookup_a_tform_b(
             self._robot.vision_frame_name, self._robot.body_frame_name
-        )
-        world_t_goal = world_t_robot * ROBOT_T_GOAL
-
+        ).yaw_SE2()
+        robot_t_goal = SE2(1.0, 0.0, 0.0)
+        world_t_goal = world_t_robot * robot_t_goal
         event = Event()
 
-        def _result_callback(_: Any) -> None:
+        def result_callback(_: RobotCommandFeedback) -> None:
             nonlocal event
             event.set()
 
-        self._robot.walk_to_async(world_t_goal, result_callback=_result_callback)
+        self._robot.walk_to_async(frame_t_goal=world_t_goal, result_callback=result_callback)
         event.wait()
-        self._logger.info("Successfully walked forward")
+        self._logger.info("Robot walked forward")
+
+        return 0
 
 
 def cli() -> argparse.ArgumentParser:
-    """Command-line interface."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("robot", help="Name of the robot if the ROS driver is inside that namespace")
+    parser.add_argument("robot_name", help="Name of the robot if the ROS driver is inside that namespace")
+
     return parser
 
 
-@ros_process.main(cli())
+@ros_process.main(cli(), uses_tf=True)
 def main(args: argparse.Namespace) -> int:
-    goto = WalkForward(args.robot)
-    if goto.initialize_robot():
-        goto.walk_forward_with_world_frame_goal()
-    return 0
+    example = Example(args.robot_name)
+
+    return example.start()
 
 
 if __name__ == "__main__":
