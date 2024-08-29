@@ -1,16 +1,15 @@
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import functools
-from typing import Any, Callable, Iterable, Optional, Union
+from typing import Any, Callable, Iterable, List, Optional, Protocol, TypeAlias, Union, overload
 
 import numpy as np
 from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai_ros.utilities.manual_conversions import se3_to_se3pose
-from bdai_ros2_wrappers.callables import generalized_method
-from bosdyn.api import (
-    robot_command_pb2,
-    trajectory_pb2,
-)
+from bdai_ros2_wrappers.action import ActionFuture
+from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
+from bdai_ros2_wrappers.futures import FutureLike
+from bosdyn.api import robot_command_pb2, trajectory_pb2
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.client.math_helpers import SE3Pose
 from bosdyn.client.robot_command import RobotCommandBuilder
@@ -25,7 +24,7 @@ from spot_msgs.action import RobotCommand as RobotCommandAction
 from spot_utilities.spot_basic.command import SpotCommandBuilder, SpotCommandProtocol
 from spot_utilities.spot_basic.command.helpers import timestamped_se2_vecs_to_robot_command_proto
 from spot_utilities.spot_basic.state import FrameHint
-from spot_utilities.spot_basic.utilities import RobotComposeCommandHandle, SpotActionHandle
+from spot_utilities.spot_basic.utilities import RobotComposeCommandHandle, SpotActionableProtocol, SpotActionHandle
 from spot_utilities.spot_util import spot_namespaced
 
 
@@ -194,13 +193,15 @@ class SpotMobilityCommandBuilder(SpotCommandBuilder):
         *,
         base_frame: Optional[FrameHint] = None,
     ) -> Iterable[robot_command_pb2.RobotCommand]:
-        """Build a walk to SE(3) pose maneuver.
+        """Build a walk to SE(2) x SO(3) pose maneuver.
 
         The manuever comprises a walk to SE(2) pose command followed
-        by a stand command with target body height and orientation.
+        by a stand command with target body height and SO(3) orientation.
 
         Args:
-            frame_t_goal: pose to walk to, defined w.r.t. the given `base_frame`.
+            frame_t_goal: pose to walk to, defined w.r.t. the given `base_frame`. Assumed planar,
+            its SE(2) equivalent disregarding roll and pitch is used for walking, and the full
+            SO(3) rotation is used for standing.
             body_height: body height, in meters, relative to the nominal stand height.
             base_frame: optional base frame, defaults to the VISION frame.
         """
@@ -251,6 +252,396 @@ class SpotMobilityCommandBuilder(SpotCommandBuilder):
         return self.stand_with_orientation_command(gravbody_r_target)
 
 
+RobotCommandActionableProtocol: TypeAlias = SpotActionableProtocol[
+    RobotCommandAction.Goal, RobotCommandAction.Result, RobotCommandAction.Feedback
+]
+
+
+class SpotMobilityCommandProtocol(SpotCommandProtocol, Protocol):
+    """Spot general mobility capabilities protocol."""
+
+    class SitProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol for robot sitting."""
+
+        @overload
+        def synchronously(
+            self,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Make the robot sit synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.sit_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        @overload
+        def synchronously(
+            self,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+            nothrow: bool = False,
+        ) -> Optional[RobotCommandAction.Result]:
+            """Make the robot sit synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.sit_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        def asynchronously(
+            self,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Make the robot sit asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.sit_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+    class StandProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol for robot standing."""
+
+        @overload
+        def synchronously(
+            self,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Make the robot stand synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.stand_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        @overload
+        def synchronously(
+            self,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+            nothrow: bool = False,
+        ) -> Optional[RobotCommandAction.Result]:
+            """Make the robot stand synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.stand_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        def asynchronously(
+            self,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Make the robot stand asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.stand_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+    class StandWithOrientationProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol for robot standing with a given orientation."""
+
+        @overload
+        def synchronously(
+            self,
+            gravbody_r_goal: SO3,
+            body_height: float = 0.0,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Make the robot stand with target body height and orientation synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.stand_with_orientation_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        @overload
+        def synchronously(
+            self,
+            gravbody_r_goal: SO3,
+            body_height: float = 0.0,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+            nothrow: bool = False,
+        ) -> Optional[RobotCommandAction.Result]:
+            """Make the robot stand with target body height and orientation synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.stand_with_orientation_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        def asynchronously(
+            self,
+            gravbody_r_goal: SO3,
+            body_height: float = 0.0,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Make the robot stand with target body height and orientation asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.stand_with_orientation_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+    class WalkProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol for robot walking."""
+
+        @overload
+        def synchronously(
+            self,
+            frame_t_goal: SE2,
+            body_height: float = 0.0,
+            *,
+            base_frame: Optional[FrameHint] = None,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Make the robot walk to an SE(2) pose synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.walk_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        @overload
+        def synchronously(
+            self,
+            frame_t_goal: SE2,
+            body_height: float = 0.0,
+            *,
+            base_frame: Optional[FrameHint] = None,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+            nothrow: bool = False,
+        ) -> Optional[RobotCommandAction.Result]:
+            """Make the robot walk to an SE(2) pose synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.walk_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        def asynchronously(
+            self,
+            frame_t_goal: SE2,
+            body_height: float = 0.0,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Make the robot walk to an SE(2) pose asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.walk_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+    class WalkTrajectoryProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol for robot trajectory walking."""
+
+        @overload
+        def synchronously(
+            self,
+            frame_t_trajectory: SE2Trajectory,
+            timestep_sec: float = 0.1,
+            interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
+            *,
+            base_frame: Optional[FrameHint] = None,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Make the robot walk along an SE(2) trajectory synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.walk_trajectory_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        @overload
+        def synchronously(
+            self,
+            frame_t_trajectory: SE2Trajectory,
+            timestep_sec: float = 0.1,
+            interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
+            *,
+            base_frame: Optional[FrameHint] = None,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+            nothrow: bool = False,
+        ) -> Optional[RobotCommandAction.Result]:
+            """Make the robot walk along an SE(2) trajectory synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.walk_trajectory_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        def asynchronously(
+            self,
+            frame_t_trajectory: SE2Trajectory,
+            timestep_sec: float = 0.1,
+            interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
+            *,
+            base_frame: Optional[FrameHint] = None,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Make the robot walk along an SE(2) trajectory asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.walk_trajectory_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+    class WalkAndOrientProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol for the robot walking and reorienting maneuver.
+
+        The manuever comprises a walk to SE(2) pose command followed
+        by a stand command with target body height and SO(3) orientation.
+        """
+
+        @overload
+        def synchronously(
+            self,
+            frame_t_goal: SE3,
+            body_height: Optional[float] = None,
+            *,
+            base_frame: Optional[FrameHint] = None,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> List[RobotCommandAction.Result]:
+            """Make the robot walk to an SE(2) x SO(3) pose synchronously.
+
+            This is typically implemented by sequentially `SpotCommandProtocol.execute`ing
+            a `SpotMobilityCommandBuilder.walk_and_orient_maneuver` synchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Returns:
+                the maneuver results, one for walking and one for standing.
+
+            Raises:
+                ActionTimeout: if either command during the maneuver timed out.
+                ActionRejected: if either command during the maneuver was not accepted.
+                ActionCancelled: if either command during the maneuver was cancelled.
+                ActionAborted: if either command during the maneuver was aborted.
+            """
+
+        @overload
+        def synchronously(
+            self,
+            frame_t_goal: SE3,
+            body_height: Optional[float] = None,
+            *,
+            base_frame: Optional[FrameHint] = None,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+            nothrow: bool = False,
+        ) -> Optional[List[RobotCommandAction.Result]]:
+            """Make the robot walk to an SE(2) x SO(3) pose synchronously.
+
+            This is typically implemented by sequentially `SpotCommandProtocol.execute`ing
+            a `SpotMobilityCommandBuilder.walk_and_orient_maneuver` synchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Returns:
+                the maneuver results or None on timeout or failure.
+            """
+
+        def asynchronously(
+            self,
+            frame_t_goal: SE3,
+            body_height: Optional[float] = None,
+            *,
+            base_frame: Optional[FrameHint] = None,
+        ) -> FutureLike[List[RobotCommandAction.Result]]:
+            """Make the robot walk to an SE(2) x SO(3) pose synchronously.
+
+            This is typically implemented by sequentially `SpotCommandProtocol.execute`ing
+            a `SpotMobilityCommandBuilder.walk_and_orient_maneuver` asynchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Returns:
+                the future maneuver results, one for walking, one for standing.
+            """
+
+    class BodyGazeProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol for robot fully body gazing.
+
+        Body gazing is basically standing with an orientation defined in terms
+        of a point in space the robot should align its body frame x-axis with.
+        """
+
+        @overload
+        def synchronously(
+            self,
+            target: R3,
+            frame: Optional[FrameHint] = None,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Make the robot point its body towards some point in space synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.body_gaze_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        @overload
+        def synchronously(
+            self,
+            target: R3,
+            frame: Optional[FrameHint] = None,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+            nothrow: bool = False,
+        ) -> Optional[RobotCommandAction.Result]:
+            """Make the robot point its body towards some point in space synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.body_gaze_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        def asynchronously(
+            self,
+            target: R3,
+            frame: Optional[FrameHint] = None,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Make the robot point its body towards some point in space asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.body_gaze_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+    sit: GeneralizedMethodLike[SitProtocol]
+    stand: GeneralizedMethodLike[StandProtocol]
+    stand_with_orientation: GeneralizedMethodLike[StandWithOrientationProtocol]
+
+    walk: GeneralizedMethodLike[WalkProtocol]
+    walk_trajectory: GeneralizedMethodLike[WalkTrajectoryProtocol]
+    walk_and_orient: GeneralizedMethodLike[WalkAndOrientProtocol]
+
+    body_gaze: GeneralizedMethodLike[BodyGazeProtocol]
+
+
 class SpotMobilityCommandMixin(SpotCommandProtocol):
     """Mixin that eases basic Spot mobility command execution."""
 
@@ -274,8 +665,15 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
             Twist, spot_namespaced(self.robot_name, "cmd_vel"), 10
         )
 
-    @generalized_method(transitional=True)
-    def sit(self, timeout_sec: float = 5.0) -> Optional[RobotCommandFeedback]:
+    @generalized_method(spec=GeneralizedMethodLike[SpotMobilityCommandProtocol.SitProtocol])
+    def sit(self, **kwargs: Any) -> RobotCommandAction.Result:
+        """Make the robot sit.
+
+        See `SpotMobilityCommandProtocol.SitProtocol` for further reference.
+        """
+
+    @sit.legacy
+    def _legacy_sit(self, timeout_sec: float = 5.0) -> Optional[RobotCommandFeedback]:
         """Make the robot sit.
 
         Returns:
@@ -310,8 +708,15 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
             on_failure_callback=on_failure_callback,
         )
 
-    @generalized_method(transitional=True)
-    def stand(self, timeout_sec: float = 5.0) -> Optional[RobotCommandFeedback]:
+    @generalized_method(spec=GeneralizedMethodLike[SpotMobilityCommandProtocol.StandProtocol])
+    def stand(self, **kwargs: Any) -> RobotCommandAction.Result:
+        """Make the robot stand.
+
+        See `SpotMobilityCommandProtocol.StandProtocol` for further reference.
+        """
+
+    @stand.legacy
+    def _legacy_stand(self, timeout_sec: float = 5.0) -> Optional[RobotCommandFeedback]:
         """Make the robot stand.
 
         Returns:
@@ -346,8 +751,17 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
             on_failure_callback=on_failure_callback,
         )
 
-    @generalized_method(transitional=True)
+    @generalized_method(spec=GeneralizedMethodLike[SpotMobilityCommandProtocol.StandWithOrientationProtocol])
     def stand_with_orientation(
+        self, gravbody_r_goal: SO3, body_height: float = 0.0, **kwargs: Any
+    ) -> RobotCommandAction.Result:
+        """Make the robot stand with target body height and orientation.
+
+        See `SpotMobilityCommandProtocol.StandWithOrientationProtocol` for further reference.
+        """
+
+    @stand_with_orientation.legacy
+    def _legacy_stand_with_orientation(
         self, gravbody_r_goal: SO3, body_height: float = 0.0, timeout_sec: Optional[float] = None
     ) -> Optional[RobotCommandFeedback]:
         """Make the robot stand with target body height and orientation.
@@ -401,8 +815,17 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
             on_failure_callback=on_failure_callback,
         )
 
-    @generalized_method(transitional=True)
+    @generalized_method(spec=GeneralizedMethodLike[SpotMobilityCommandProtocol.WalkProtocol])
     def walk(
+        self, frame_t_goal: SE2, body_height: float = 0.0, *, base_frame: Optional[FrameHint] = None, **kwargs: Any
+    ) -> RobotCommandAction.Result:
+        """Make the robot walk to an SE(2) pose.
+
+        See `SpotMobilityCommandProtocol.WalkProtocol` for further reference.
+        """
+
+    @walk.legacy
+    def _legacy_walk(
         self,
         frame_t_goal: SE2,
         body_height: float = 0.0,
@@ -465,8 +888,23 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
             on_failure_callback=on_failure_callback,
         )
 
-    @generalized_method(transitional=True)
+    @generalized_method(spec=GeneralizedMethodLike[SpotMobilityCommandProtocol.WalkTrajectoryProtocol])
     def walk_trajectory(
+        self,
+        frame_t_trajectory: SE2Trajectory,
+        timestep_sec: float = 0.1,
+        interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
+        *,
+        base_frame: Optional[FrameHint] = None,
+        **kwargs: Any,
+    ) -> RobotCommandAction.Result:
+        """Make the robot walk along an SE(2) trajectory.
+
+        See `SpotMobilityCommandProtocol.WalkTrajectoryProtocol` for further reference.
+        """
+
+    @walk_trajectory.legacy
+    def _legacy_walk_trajectory(
         self,
         frame_t_trajectory: SE2Trajectory,
         timestep_sec: float = 0.1,
@@ -540,8 +978,22 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
             on_failure_callback=on_failure_callback,
         )
 
-    @generalized_method(transitional=True)
+    @generalized_method(spec=GeneralizedMethodLike[SpotMobilityCommandProtocol.WalkAndOrientProtocol])
     def walk_and_orient(
+        self,
+        frame_t_goal: SE3,
+        body_height: Optional[float] = None,
+        *,
+        base_frame: Optional[FrameHint] = None,
+        **kwargs: Any,
+    ) -> RobotCommandAction.Result:
+        """Make the robot walk to an SE(2) x SO(3) pose.
+
+        See `SpotMobilityCommandProtocol.WalkAndOrientProtocol` for further reference.
+        """
+
+    @walk_and_orient.legacy
+    def _legacy_walk_and_orient(
         self,
         frame_t_goal: SE3,
         body_height: Optional[float] = None,
@@ -549,7 +1001,7 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
         *,
         base_frame: Optional[FrameHint] = None,
     ) -> Optional[RobotCommandFeedback]:
-        """Make the robot walk to an SE(2) pose.
+        """Make the robot walk to an SE(3) pose.
 
         Args:
             frame_t_goal: pose to walk to, defined w.r.t. the given `base_frame`.
@@ -606,13 +1058,11 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
         )
         return RobotComposeCommandHandle([walk_partial, stand_partial], result_callback)
 
-    @generalized_method
+    @generalized_method(spec=GeneralizedMethodLike[SpotMobilityCommandProtocol.BodyGazeProtocol])
     def body_gaze(self, target: R3, frame: Optional[FrameHint] = None, **kwargs: Any) -> Any:
         """Make the robot point its body towards some point in space.
 
-        Args:
-            target: Point in space to gaze, defined w.r.t. the given frame.
-            frame: optional frame, defaults to the VISION frame if none is provided.
+        See `SpotMobilityCommandProtocol.BodyGazeProtocol` for further reference.
         """
 
     def body_gaze_at(
@@ -722,9 +1172,3 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
                 elapsed_time = clock.now() - start_time
 
     walk_velocity = walk_with_velocity
-
-
-class SpotMobilityCommandProtocol(SpotCommandProtocol):
-
-    @generalized_method
-    def stand_with_orientation(self, *args: Any, **kwargs: Any) -> Any: ...

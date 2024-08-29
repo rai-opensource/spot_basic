@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Callable, Optional, Sequence, Union
+from typing import Any, Callable, Optional, Protocol, Sequence, Union
 
-from bdai_ros2_wrappers.callables import GeneralizedGuard, generalized_method
+import bosdyn_api_msgs.msg
+from bdai_ros2_wrappers.action import ActionFuture
+from bdai_ros2_wrappers.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
+from bdai_ros2_wrappers.futures import FutureLike
 from bosdyn.api import geometry_pb2, image_pb2, manipulation_api_pb2
 from bosdyn.api.manipulation_api_pb2 import ApiGraspOverride
 from bosdyn.api.robot_state_pb2 import ManipulatorState
@@ -17,7 +20,13 @@ from spatialmath.base.types import R3
 from spot_msgs.action import Manipulation
 from spot_msgs.srv import OverrideGraspOrCarry
 from spot_utilities.spot_basic.state import FrameHint, SpotStateProtocol
-from spot_utilities.spot_basic.utilities import SpotActionable, SpotActionHandle, SpotServiced
+from spot_utilities.spot_basic.utilities import (
+    SpotActionable,
+    SpotActionableProtocol,
+    SpotActionHandle,
+    SpotServiced,
+    SpotServicedProtocol,
+)
 from spot_utilities.spot_util import spot_namespaced
 
 
@@ -74,6 +83,9 @@ class SpotManipulationCommandBuilder:
             camera_info: camera intrinsics and extrinsics assocated with the image the robot took.
             grasp_params: optional object grasping parameters.
             walk_gaze_mode: optional mode for walking and gazing before grasping.
+
+        Returns:
+            the object grasping manipulation request.
         """
         pinhole_model = image_pb2.ImageSource.PinholeModel()
         pinhole_model.intrinsics.focal_length.x = camera_info.k[0]
@@ -115,6 +127,9 @@ class SpotManipulationCommandBuilder:
             image_timestamp: image timestamp, used to fetch the associated transformation tree snapshot.
             camera_info: camera intrinsics and extrinsics assocated with the image the robot took.
             offset_distance: optional distance between the robot's CoM and the object.
+
+        Returns:
+            the walk-to-object manipulation request.
         """
         pinhole_model = image_pb2.ImageSource.PinholeModel()
         pinhole_model.intrinsics.focal_length.x = camera_info.k[0]
@@ -157,6 +172,9 @@ class SpotManipulationCommandBuilder:
             frame: frame of reference w.r.t. which the ray is defined.
             offset_distance: optional distance between the robot's CoM and the object.
 
+        Returns:
+            the walk-to-object manipulation request.
+
         See: https://github.com/boston-dynamics/spot-sdk/blob/master/protos/bosdyn/api/manipulation_api.proto#L20
         """
         proto = manipulation_api_pb2.WalkToObjectRayInWorld(
@@ -190,6 +208,9 @@ class SpotManipulationCommandBuilder:
             grasp_params: optional object grasping parameters.
             walk_gaze_mode: optional mode for walking and gazing before grasping.
 
+        Returns:
+            the object grasping manipulation request.
+
         See: https://github.com/boston-dynamics/spot-sdk/blob/master/protos/bosdyn/api/manipulation_api.proto
         """
         proto = manipulation_api_pb2.PickObjectRayInWorld(
@@ -206,65 +227,392 @@ class SpotManipulationCommandBuilder:
         return manipulation_api_pb2.ManipulationApiRequest(pick_object_ray_in_world=proto)
 
 
+class SpotManipulationProtocol(SpotStateProtocol, Protocol):
+    """Spot manipulation capabilities protocol."""
+
+    class PerformProtocol(
+        SpotActionableProtocol[Manipulation.Goal, Manipulation.Result, Manipulation.Feedback], Protocol
+    ):
+        """Manipulation request execution protocol."""
+
+        def synchronous(
+            self,
+            request: Union[bosdyn_api_msgs.msg.ManipulationApiRequest, manipulation_api_pb2.ManipulationApiRequest],
+            *,
+            feedback_callback: Optional[Callable[[Manipulation.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> Manipulation.Result:
+            """Perform manipulation request synchronously.
+
+            Args:
+                request: manipulation request to perform, in its Protobuf or ROS 2 form.
+                feedback_callback: optional action feedback callback.
+                timeout_sec: optional action timeout, in seconds. If a timeout is specified and it
+                expires, the manipulation request will be cancelled and the call will raise. Note this
+                timeout is local to the caller. It may take some time for the action to be cancelled,
+                if cancellation is not rejected by the action server.
+
+            Returns:
+                the manipulation result.
+
+            Raises:
+                ActionTimeout: if the manipulation request timed out.
+                ActionRejected: if the manipulation request was not accepted.
+                ActionCancelled: if the manipulation request was cancelled.
+                ActionAborted: if the manipulation request was aborted.
+                RuntimeError: if the robot has no arm.
+            """
+
+        def asynchronous(
+            self,
+            request: Union[bosdyn_api_msgs.msg.ManipulationApiRequest, manipulation_api_pb2.ManipulationApiRequest],
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[Manipulation.Result, Manipulation.Feedback]:
+            """Perform manipulation request asynchronously.
+
+            Args:
+                request: manipulation request to perform, in its Protobuf or ROS 2 form.
+                track_feedback: whether and how to track action feedback. Other
+                than a boolean to enable or disable tracking, a positive integer
+                may be provided to cap feedback buffer size.
+
+            Returns:
+                the future manipulation outcome.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+    class WalkToObjectInImageProtocol(
+        SpotActionableProtocol[Manipulation.Goal, Manipulation.Result, Manipulation.Feedback], Protocol
+    ):
+        """Protocol for walking towards an object seen by the robot."""
+
+        def synchronously(
+            self,
+            image_pixel_xy: Sequence[float],
+            camera_info: CameraInfo,
+            image_timestamp: Optional[Union[Time, float]] = None,
+            offset_distance: Optional[float] = None,
+            *,
+            feedback_callback: Optional[Callable[[Manipulation.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> Manipulation.Result:
+            """Walk to an object synchronously.
+
+            The object is referenced by a pixel on an image taken by the robot.
+
+            This method is typically implemented by `SpotManipulationProtocol.perform`ing a
+            `SpotManipulationCommandBuilder.walk_to_object_in_image_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        def asynchronously(
+            self,
+            image_pixel_xy: Sequence[float],
+            camera_info: CameraInfo,
+            image_timestamp: Optional[Union[Time, float]] = None,
+            offset_distance: Optional[float] = None,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[Manipulation.Result, Manipulation.Feedback]:
+            """Walk to an object asynchronously.
+
+            The object is referenced by a pixel on an image taken by the robot.
+
+            This method is typically implemented by `SpotManipulationProtocol.perform`ing a
+            `SpotManipulationCommandBuilder.walk_to_object_in_image_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+    class PickObjectInImageProtocol(
+        SpotActionableProtocol[Manipulation.Goal, Manipulation.Result, Manipulation.Feedback], Protocol
+    ):
+        """Protocol for grasping an object seen by the robot."""
+
+        def synchronously(
+            self,
+            image_pixel_xy: Sequence[float],
+            camera_info: CameraInfo,
+            image_timestamp: Optional[Union[Time, float]] = None,
+            grasp_params: Optional[manipulation_api_pb2.GraspParams] = None,
+            walk_gaze_mode: Optional[manipulation_api_pb2.WalkGazeMode] = None,
+            *,
+            feedback_callback: Optional[Callable[[Manipulation.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> Manipulation.Result:
+            """Grasp an object synchronously.
+
+            The object is referenced by a pixel on an image taken by the robot.
+
+            This is typically implemented by `SpotManipulationProtocol.perform`ing a
+            `SpotManipulationCommandBuilder.pick_object_in_image_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        def asynchronously(
+            self,
+            image_pixel_xy: Sequence[float],
+            camera_info: CameraInfo,
+            image_timestamp: Optional[Union[Time, float]] = None,
+            grasp_params: Optional[manipulation_api_pb2.GraspParams] = None,
+            walk_gaze_mode: Optional[manipulation_api_pb2.WalkGazeMode] = None,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[Manipulation.Result, Manipulation.Feedback]:
+            """Grasp an object asynchronously.
+
+            The object is referenced by a pixel on an image taken by the robot.
+
+            This is typically implemented by `SpotManipulationProtocol.perform`ing a
+            `SpotManipulationCommandBuilder.pick_object_in_image_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+    class WalkToObjectRayInWorldProtocol(
+        SpotActionableProtocol[Manipulation.Goal, Manipulation.Result, Manipulation.Feedback], Protocol
+    ):
+        """Protocol for walking towards an object along a ray in the world."""
+
+        def synchronously(
+            self,
+            ray_start_rt_frame: R3,
+            ray_end_rt_frame: R3,
+            frame: Union[str, FrameHint],
+            offset_distance: Optional[float] = None,
+            *,
+            feedback_callback: Optional[Callable[[Manipulation.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> Manipulation.Result:
+            """Walk to an object synchronously.
+
+            The object is the first one found along a given ray in the world.
+
+            This method is typically implemented by `SpotManipulationProtocol.perform`ing a
+            `SpotManipulationCommandBuilder.walk_to_object_ray_in_world_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        def asynchronously(
+            self,
+            ray_start_rt_frame: R3,
+            ray_end_rt_frame: R3,
+            frame: Union[str, FrameHint],
+            offset_distance: Optional[float] = None,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[Manipulation.Result, Manipulation.Feedback]:
+            """Walk to an object asynchronously.
+
+            The object is the first one found along a given ray in the world.
+
+            This method is typically implemented by `SpotManipulationProtocol.perform`ing a
+            `SpotManipulationCommandBuilder.walk_to_object_ray_in_world_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+    class PickObjectRayInWorldProtocol(
+        SpotActionableProtocol[Manipulation.Goal, Manipulation.Result, Manipulation.Feedback], Protocol
+    ):
+        """Protocol for grasping an object along a ray in the world."""
+
+        def synchronously(
+            self,
+            ray_start_rt_frame: R3,
+            ray_end_rt_frame: R3,
+            frame: Union[str, FrameHint],
+            grasp_params: Optional[manipulation_api_pb2.GraspParams] = None,
+            walk_gaze_mode: Optional[manipulation_api_pb2.WalkGazeMode] = None,
+            *,
+            feedback_callback: Optional[Callable[[Manipulation.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> Manipulation.Result:
+            """Grasp an object synchronously.
+
+            The object is the first one found along a given ray in the world.
+
+            This is typically implemented by `SpotManipulationProtocol.perform`ing a
+            `SpotManipulationCommandBuilder.pick_object_ray_in_world_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        def asynchronously(
+            self,
+            ray_start_rt_frame: R3,
+            ray_end_rt_frame: R3,
+            frame: Union[str, FrameHint],
+            grasp_params: Optional[manipulation_api_pb2.GraspParams] = None,
+            walk_gaze_mode: Optional[manipulation_api_pb2.WalkGazeMode] = None,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[Manipulation.Result, Manipulation.Feedback]:
+            """Grasp an object asynchronously.
+
+            The object is the first one found along a given ray in the world.
+
+            This is typically implemented by `SpotManipulationProtocol.perform`ing a
+            `SpotManipulationCommandBuilder.pick_object_ray_in_world_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+    class OverrideGraspOrCarryProtocol(
+        SpotServicedProtocol[OverrideGraspOrCarry.Request, OverrideGraspOrCarry.Response], Protocol
+    ):
+        """Protocol for overriding grasp or carry behavior.
+
+        The robot's grasp state is whether or not it's holding an object. Usually the robot is aware of whether or not
+        it is grasping something but sometimes (e.g. when the object is small and the gripper is almost closed) it makes
+        mistakes. Valid override values are:
+
+            - OVERRIDE_UNKNOWN: If this is set, this function will not request that the grasp state be changed.
+            - OVERRIDE_HOLDING: Grasp state will be changed to HOLDING
+            - OVERRIDE_NOT_HOLDING: Grasp state will be changed to NOT HOLDING
+
+        The robot's carry state governs what the robot will do when control of the arm is requested to stow (usually by
+        a hijack). This only matters if the grasp state is HOLDING (otherwise the arm will always stow). Overriding
+        the carry state will not affect the grasp state. Valid override values are:
+
+            - CARRY_STATE_UNKNOWN: If this is set, this function will not request that the carry state be changed.
+            - CARRY_STATE_NOT_CARRYABLE: When the arm is requested to stow, it will open the gripper (let go) first.
+            - CARRY_STATE_CARRIABLE: When the arm is requested to stow, it will not do anything.
+            - CARRY_STATE_CARRIABLE_AND_STOWABLE: When the arm is requested to stow, it will stow without attempting to
+                first release the object.
+        """
+
+        def synchronous(
+            self,
+            grasp_override: Optional[ApiGraspOverride.Override] = None,
+            carry_override: Optional[ManipulatorState.CarryState] = None,
+            *,
+            timeout_sec: Optional[float] = None,
+        ) -> OverrideGraspOrCarry.Response:
+            """Override grasping state and arm behavior on stow synchronously.
+
+            Args:
+                grasp_override: optional grasp state override.
+                carry_override: optional carry state override.
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
+                expires, the override request will be cancelled and the call will raise.
+                Note this timeout is local to the caller (and it may take a while for the
+                robot to react).
+
+            Returns:
+                the response to the override request.
+
+            Raises:
+                ServiceError: if the override request fails.
+                ServiceTimeout: if the override request times out.
+                RuntimeError: if the robot has no arm.
+            """
+
+        def asynchronous(
+            self,
+            grasp_override: Optional[ApiGraspOverride.Override] = None,
+            carry_override: Optional[ManipulatorState.CarryState] = None,
+        ) -> FutureLike[OverrideGraspOrCarry.Response]:
+            """Override grasping state and arm behavior on stow synchronously.
+
+            Args:
+                grasp_override: optional grasp state override.
+                carry_override: optional carry state override.
+
+            Returns:
+                a future response to the override request.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+    perform: GeneralizedMethodLike[PerformProtocol]
+    walk_to_object_in_image: GeneralizedMethodLike[WalkToObjectInImageProtocol]
+    pick_object_in_image: GeneralizedMethodLike[PickObjectInImageProtocol]
+    walk_to_object_ray_in_world: GeneralizedMethodLike[WalkToObjectRayInWorldProtocol]
+    pick_object_ray_in_world: GeneralizedMethodLike[PickObjectRayInWorldProtocol]
+    override_grasp_or_carry: GeneralizedMethodLike[OverrideGraspOrCarryProtocol]
+
+
 class SpotManipulationMixin(SpotStateProtocol):
-    """Mixin that enables Spot to perform manipulation commands."""
+    """Mixin offering Spot manipulation capabilities.
+
+    Note that the robot must have an arm for any of these APIs to be available.
+    """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         command_builder = SpotManipulationCommandBuilder(self)
 
-        do_perform = GeneralizedGuard(
-            self.has_arm,
-            SpotActionable(Manipulation, spot_namespaced(self.robot_name, "manipulation"), node=self.node),
-            f"{self.robot_name} has no arm, cannot manipulate",
-        )
-        SpotManipulationMixin.perform.rebind(self, do_perform)
-
-        do_walk_to_object_in_image = GeneralizedGuard(
-            self.has_arm,
-            self.perform.compose(command_builder.walk_to_object_in_image_command),
-            f"{self.robot_name} has no arm, cannot manipulate",
-        )
-        SpotManipulationMixin.walk_to_object_in_image.rebind(self, do_walk_to_object_in_image)
-
-        do_pick_object_in_image = GeneralizedGuard(
-            self.has_arm,
-            self.perform.compose(command_builder.pick_object_in_image_command),
-            f"{self.robot_name} has no arm, cannot manipulate",
-        )
-        SpotManipulationMixin.pick_object_in_image.rebind(self, do_pick_object_in_image)
-
-        do_walk_to_object_ray_in_world = GeneralizedGuard(
-            self.has_arm,
-            self.perform.compose(command_builder.walk_to_object_ray_in_world_command),
-            f"{self.robot_name} has no arm, cannot manipulate",
-        )
-        SpotManipulationMixin.walk_to_object_ray_in_world.rebind(self, do_walk_to_object_ray_in_world)
-
-        do_pick_object_ray_in_world = GeneralizedGuard(
-            self.has_arm,
-            self.perform.compose(command_builder.pick_object_ray_in_world_command),
-            f"{self.robot_name} has no arm, cannot manipulate",
-        )
-        SpotManipulationMixin.pick_object_ray_in_world.rebind(self, do_pick_object_ray_in_world)
-
-        do_override_grasp_or_carry = GeneralizedGuard(
-            self.has_arm,
-            SpotServiced(
-                OverrideGraspOrCarry, spot_namespaced(self.robot_name, "override_grasp_or_carry"), node=self.node
+        SpotManipulationMixin.perform.rebind(
+            self,
+            GeneralizedGuard(
+                self.has_arm,
+                SpotActionable(Manipulation, spot_namespaced(self.robot_name, "manipulation"), node=self.node),
+                f"{self.robot_name} has no arm, cannot manipulate",
             ),
-            f"{self.robot_name} has no arm, nothing to override",
         )
-        SpotManipulationMixin.override_grasp_or_carry.rebind(self, do_override_grasp_or_carry)
 
-    @generalized_method
+        SpotManipulationMixin.walk_to_object_in_image.rebind(
+            self,
+            GeneralizedGuard(
+                self.has_arm,
+                self.perform.compose(command_builder.walk_to_object_in_image_command),
+                f"{self.robot_name} has no arm, cannot manipulate",
+            ),
+        )
+
+        SpotManipulationMixin.pick_object_in_image.rebind(
+            self,
+            GeneralizedGuard(
+                self.has_arm,
+                self.perform.compose(command_builder.pick_object_in_image_command),
+                f"{self.robot_name} has no arm, cannot manipulate",
+            ),
+        )
+
+        SpotManipulationMixin.walk_to_object_ray_in_world.rebind(
+            self,
+            GeneralizedGuard(
+                self.has_arm,
+                self.perform.compose(command_builder.walk_to_object_ray_in_world_command),
+                f"{self.robot_name} has no arm, cannot manipulate",
+            ),
+        )
+
+        SpotManipulationMixin.pick_object_ray_in_world.rebind(
+            self,
+            GeneralizedGuard(
+                self.has_arm,
+                self.perform.compose(command_builder.pick_object_ray_in_world_command),
+                f"{self.robot_name} has no arm, cannot manipulate",
+            ),
+        )
+
+        SpotManipulationMixin.override_grasp_or_carry.rebind(
+            self,
+            GeneralizedGuard(
+                self.has_arm,
+                SpotServiced(
+                    OverrideGraspOrCarry, spot_namespaced(self.robot_name, "override_grasp_or_carry"), node=self.node
+                ),
+                f"{self.robot_name} has no arm, nothing to override",
+            ),
+        )
+
+    @generalized_method(spec=GeneralizedMethodLike[SpotManipulationProtocol.PerformProtocol])
     def perform(self, *args: Any, **kwargs: Any) -> Any:
-        """Perform a manipulation command on the robot."""
+        """Perform a manipulation command with the robot.
+
+        See `SpotManipulationProtocol.PerformProtocol` for further reference.
+        """
 
     def manipulation(
         self, command_name: str, goal: Manipulation.Goal, timeout_sec: Optional[float] = None
     ) -> Optional[ManipulationApiFeedbackResponse]:
-        """Synchronously run a manipulation request
+        """Synchronously run a manipulation request.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
 
         Args:
             command_name (str): A representative name of the command for logging
@@ -317,8 +665,22 @@ class SpotManipulationMixin(SpotStateProtocol):
             context=self.node.context,
         )
 
-    @generalized_method(transitional=True)
-    def walk_to_object_image(
+    @generalized_method(spec=GeneralizedMethodLike[SpotManipulationProtocol.WalkToObjectInImageProtocol])
+    def walk_to_object_in_image(
+        self,
+        image_pixel_xy: Sequence[float],
+        camera_info: CameraInfo,
+        image_timestamp: Optional[Union[Time, float]] = None,
+        offset_distance: Optional[float] = None,
+        **kwargs: Any,
+    ) -> Manipulation.Result:
+        """Walk to an object seen by the robot.
+
+        See `SpotManipulationProtocol.WalkToObjectInImageProtocol` for further reference.
+        """
+
+    @walk_to_object_in_image.legacy
+    def _legacy_walk_to_object_in_image(
         self,
         pixel_xy: Sequence[float],
         image_timestamp: Union[Time, float],
@@ -327,6 +689,10 @@ class SpotManipulationMixin(SpotStateProtocol):
         timeout_sec: Optional[float] = 10.0,
     ) -> Optional[ManipulationApiFeedbackResponse]:
         """Walk to an object in an image taken with a camera on spot.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
 
         Args:
             pixel_xy: The point in the image where spot will detect the object.
@@ -346,7 +712,7 @@ class SpotManipulationMixin(SpotStateProtocol):
         convert(command, goal.command)
         return self.manipulation("walk_to_object_image", goal, timeout_sec=timeout_sec)
 
-    walk_to_object_in_image = walk_to_object_image
+    walk_to_object_image = walk_to_object_in_image
 
     def walk_to_object_image_async(
         self,
@@ -359,6 +725,10 @@ class SpotManipulationMixin(SpotStateProtocol):
         on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Walk to an object in an image taken with a camera on spot asynchronously.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
 
         Args:
             pixel_xy: The point in the image where spot will detect the object.
@@ -386,8 +756,23 @@ class SpotManipulationMixin(SpotStateProtocol):
             on_failure_callback=on_failure_callback,
         )
 
-    @generalized_method(transitional=True)
+    @generalized_method(spec=GeneralizedMethodLike[SpotManipulationProtocol.PickObjectInImageProtocol])
     def pick_object_in_image(
+        self,
+        image_pixel_xy: Sequence[float],
+        camera_info: CameraInfo,
+        image_timestamp: Optional[Union[Time, float]] = None,
+        grasp_params: Optional[manipulation_api_pb2.GraspParams] = None,
+        walk_gaze_mode: Optional[manipulation_api_pb2.WalkGazeMode] = None,
+        **kwargs: Any,
+    ) -> Manipulation.Result:
+        """Grasp an object seen by the robot.
+
+        See `SpotManipulationProtocol.PickObjectInImageProtocol` for further reference.
+        """
+
+    @pick_object_in_image.legacy
+    def _legacy_pick_object_in_image(
         self,
         pixel_xy: Sequence[float],
         image_timestamp: Union[Time, float],
@@ -395,7 +780,11 @@ class SpotManipulationMixin(SpotStateProtocol):
         palm_placement_ratio: float,
         apply_grasp_params_func: Optional[Callable] = None,
     ) -> Optional[ManipulationApiFeedbackResponse]:
-        """Grasp an item in an image taken with a camera on spot.
+        """Grasp an object in an image taken with a camera on spot.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
 
         Args:
             pixel_xy: The point in the image where spot will do object detection,
@@ -440,6 +829,10 @@ class SpotManipulationMixin(SpotStateProtocol):
     ) -> Optional[SpotActionHandle]:
         """Grasp an item in an image taken with a camera on spot asynchronously.
 
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
+
         Args:
             pixel_xy: The point in the image where spot will do object detection,
                 and then grasp the object.
@@ -476,8 +869,22 @@ class SpotManipulationMixin(SpotStateProtocol):
             on_failure_callback=on_failure_callback,
         )
 
-    @generalized_method(transitional=True)
+    @generalized_method(spec=GeneralizedMethodLike[SpotManipulationProtocol.WalkToObjectRayInWorldProtocol])
     def walk_to_object_ray_in_world(
+        self,
+        ray_start_rt_frame: R3,
+        ray_end_rt_frame: R3,
+        frame: Union[str, FrameHint],
+        offset_distance: Optional[float] = None,
+        **kwargs: Any,
+    ) -> Manipulation.Result:
+        """Walk to an object along a ray in the world.
+
+        See `SpotManipulationProtocol.WalkToObjectRayInWorldProtocol` for further reference.
+        """
+
+    @walk_to_object_ray_in_world.legacy
+    def _legacy_walk_to_object_ray_in_world(
         self,
         ray_start_rt_frame: R3,
         ray_end_rt_frame: R3,
@@ -486,6 +893,10 @@ class SpotManipulationMixin(SpotStateProtocol):
         timeout_sec: Optional[float] = None,
     ) -> Optional[ManipulationApiFeedbackResponse]:
         """Walks the robot up to an object.  Useful to prepare to grasp or manipulate something.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
 
         See: https://github.com/boston-dynamics/spot-sdk/blob/master/protos/bosdyn/api/manipulation_api.proto#L20
         """
@@ -510,6 +921,10 @@ class SpotManipulationMixin(SpotStateProtocol):
     ) -> Optional[ManipulationApiFeedbackResponse]:
         """Walks the robot up to an object.  Useful to prepare to grasp or manipulate something.
 
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
+
         See: https://github.com/boston-dynamics/spot-sdk/blob/master/protos/bosdyn/api/manipulation_api.proto#L20
         """
         goal = Manipulation.Goal()
@@ -526,8 +941,15 @@ class SpotManipulationMixin(SpotStateProtocol):
             on_failure_callback=on_failure_callback,
         )
 
-    @generalized_method(transitional=True)
-    def pick_object_ray_in_world(
+    @generalized_method(spec=GeneralizedMethodLike[SpotManipulationProtocol.PickObjectRayInWorldProtocol])
+    def pick_object_ray_in_world(self, *args: Any, **kwargs: Any) -> Manipulation.Result:
+        """Grasp an object along a ray in the world.
+
+        See `SpotManipulationProtocol.PickObjectRayInWorldProtocol` for further reference.
+        """
+
+    @pick_object_ray_in_world.legacy
+    def _legacy_pick_object_ray_in_world(
         self,
         ray_start_rt_frame: R3,
         ray_end_rt_frame: R3,
@@ -540,6 +962,10 @@ class SpotManipulationMixin(SpotStateProtocol):
 
         This is the lowest-level grasping message; all other grasp options internally
         use this message to trigger a grasp.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
 
         See: https://github.com/boston-dynamics/spot-sdk/blob/master/protos/bosdyn/api/manipulation_api.proto
         """
@@ -568,6 +994,10 @@ class SpotManipulationMixin(SpotStateProtocol):
         This is the lowest-level grasping message; all other grasp options internally
         use this message to trigger a grasp.
 
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
+
         See: https://github.com/boston-dynamics/spot-sdk/blob/master/protos/bosdyn/api/manipulation_api.proto
         """
         goal = Manipulation.Goal()
@@ -584,14 +1014,25 @@ class SpotManipulationMixin(SpotStateProtocol):
             on_failure_callback=on_failure_callback,
         )
 
-    @generalized_method(transitional=True)
-    def override_grasp_or_carry(
+    @generalized_method(spec=GeneralizedMethodLike[SpotManipulationProtocol.OverrideGraspOrCarryProtocol])
+    def override_grasp_or_carry(self, *args: Any, **kwargs: Any) -> OverrideGraspOrCarry.Response:
+        """Override grasping state and arm behavior on stow.
+
+        See `SpotManipulationProtocol.OverrideGraspOrCarryProtocol` for further reference.
+        """
+
+    @override_grasp_or_carry.legacy
+    def _legacy_override_grasp_or_carry(
         self,
         grasp_override: ApiGraspOverride.Override = ApiGraspOverride.Override.OVERRIDE_UNKNOWN,
         carry_override: ManipulatorState.CarryState = ManipulatorState.CarryState.CARRY_STATE_UNKNOWN,
     ) -> OverrideGraspOrCarry.Response:
         """
         Allows overriding of whether spot is grasping something and its behavior on stow.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
 
         Grasp Override:
 

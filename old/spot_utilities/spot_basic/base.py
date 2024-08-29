@@ -10,24 +10,29 @@ from spot_utilities.spot_util import spot_namespaced
 
 
 class SpotBaseProtocol(Protocol):
+    """Spot base protocol."""
 
     @property
-    def robot_name(self) -> str: ...
+    def robot_name(self) -> str:
+        """Target robot name."""
 
     @property
-    def node(self) -> Node: ...
+    def node(self) -> Node:
+        """Parent ROS 2 node."""
 
-    def has_arm(self) -> Optional[bool]: ...
+    def has_arm(self) -> Optional[bool]:
+        """Checks if the robot has an arm."""
 
 
-class SpotBase:
+class SpotBase(SpotBaseProtocol):
     """Base Spot interface for interacting with its ROS 2 driver."""
 
-    def __init__(self, robot_name: str, *args: Any, node: Optional[Node] = None, **kwargs: Any):
-        """Constructor
+    def __init__(self, robot_name: str, *args: Any, node: Optional[Node] = None, **kwargs: Any) -> None:
+        """Initialize the robot interface.
+
         Args:
-            robot_name: name of the robot
-            node: optional parent node, defaults to the current process node
+            robot_name: name of the robot.
+            node: optional parent node, defaults to the current process node if none is given.
         """
         self._robot_name = robot_name
         node = node or ros_scope.node()
@@ -42,18 +47,21 @@ class SpotBase:
 
     @property
     def robot_name(self) -> str:
+        """Target robot name."""
         return self._robot_name
 
     @property
     def node(self) -> Node:
+        """Parent ROS 2 node."""
         return self._node
 
-    def has_arm(self) -> Optional[bool]:
-        """Queries if the spot has an arm
+    def has_arm(self) -> bool:
+        """Check if the robot has an arm.
+
         Returns:
-            True if the spot has an arm, False if it does not, and None if the query failed
+            True if the robot has an arm, False if it does not.
         """
-        self.node.get_logger().info(f"Checking if {self.robot_name} has an arm")
+        self.node.get_logger().debug(f"Checking if {self.robot_name} has an arm")
 
         if not self._get_spot_parameters.wait_for_service(timeout_sec=5.0):
             self.node.get_logger().error(f"No {self.robot_name} driver found, assuming there is no arm")

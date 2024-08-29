@@ -2,11 +2,12 @@
 
 import functools
 from collections.abc import Sequence
-from typing import Any, Callable, Dict, Optional, Protocol, Type, Union
+from typing import Any, Callable, Dict, Optional, Protocol, Type, TypeVar, Union
 
-from bdai_ros2_wrappers.action import Actionable
+from bdai_ros2_wrappers.action import Actionable, ActionableProtocol, ActionFuture
 from bdai_ros2_wrappers.action_handle import ActionHandle
-from bdai_ros2_wrappers.service import Serviced
+from bdai_ros2_wrappers.futures import FutureLike
+from bdai_ros2_wrappers.service import Serviced, ServicedProtocol
 from bdai_ros2_wrappers.service_handle import ServiceHandle
 from bosdyn_api_msgs.conversions import convert
 from bosdyn_api_msgs.msg import RobotCommandFeedback
@@ -15,13 +16,16 @@ from rclpy.client import Client
 from rclpy.context import Context
 
 
-class MessageT(Protocol):
+class MessageProtocol(Protocol):
 
     @classmethod
     def get_fields_and_field_types(self) -> Dict[str, str]: ...
 
 
-def make_message(cls: Type[MessageT], *args: Any, **kwargs: Any) -> Any:
+MessageT = TypeVar("MessageT", bound=MessageProtocol)
+
+
+def make_message(cls: Type[MessageT], *args: Any, **kwargs: Any) -> MessageT:
     """Makes a ROS 2 message.
 
     Note no copies are performed by this function.
@@ -71,34 +75,49 @@ def make_message(cls: Type[MessageT], *args: Any, **kwargs: Any) -> Any:
     return message
 
 
-class SpotServiced(Serviced):
+ServiceRequestT = TypeVar("ServiceRequestT", contravariant=True)
+ServiceResponseT = TypeVar("ServiceResponseT", covariant=True)
+
+SpotServicedProtocol = ServicedProtocol  # alias for now
+
+
+class SpotServiced(Serviced[ServiceRequestT, ServiceResponseT]):
     """Ergonomic ROS 2 service wrapper subclass.
 
     Supports legacy invocation signatures and piecewise request specifications (see `make_message`).
     """
 
-    def synchronous(self, *args: Any, timeout_sec: Optional[float] = None, nothrow: bool = False, **kwargs: Any) -> Any:
+    def synchronous(  # type: ignore[override]
+        self, *args: Any, timeout_sec: Optional[float] = None, nothrow: bool = False, **kwargs: Any
+    ) -> Optional[ServiceResponseT]:
         request = make_message(self.service_type.Request, *args, **kwargs)
         return super().synchronous(request, timeout_sec=timeout_sec, nothrow=nothrow)
 
-    def asynchronous(self, *args: Any, **kwargs: Any) -> Any:
+    def asynchronous(self, *args: Any, **kwargs: Any) -> FutureLike[ServiceResponseT]:
         return super().asynchronous(make_message(self.service_type.Request, *args, **kwargs))
 
 
-class SpotActionable(Actionable):
+ActionGoalT = TypeVar("ActionGoalT", contravariant=True)
+ActionResultT = TypeVar("ActionResultT", covariant=True)
+ActionFeedbackT = TypeVar("ActionFeedbackT", covariant=True)
+
+SpotActionableProtocol = ActionableProtocol  # alias for now
+
+
+class SpotActionable(Actionable[ActionGoalT, ActionResultT, ActionFeedbackT]):
     """Ergonomic ROS 2 action wrapper subclass.
 
     Supports legacy invocation signatures and piecewise goal specifications (see `make_message`).
     """
 
-    def synchronous(
+    def synchronous(  # type: ignore[override]
         self,
         *args: Any,
-        feedback_callback: Optional[Callable] = None,
+        feedback_callback: Optional[Callable[[ActionFeedbackT], None]] = None,
         timeout_sec: Optional[float] = None,
         nothrow: bool = False,
         **kwargs: Any,
-    ) -> Any:
+    ) -> Optional[ActionResultT]:
         return super().synchronous(
             make_message(self.action_type.Goal, *args, **kwargs),
             feedback_callback=feedback_callback,
@@ -106,7 +125,9 @@ class SpotActionable(Actionable):
             nothrow=nothrow,
         )
 
-    def asynchronous(self, *args: Any, track_feedback: Union[int, bool] = False, **kwargs: Any) -> Any:
+    def asynchronous(
+        self, *args: Any, track_feedback: Union[int, bool] = False, **kwargs: Any
+    ) -> ActionFuture[ActionResultT, ActionFeedbackT]:
         goal = make_message(self.action_type.Goal, *args, **kwargs)
         return super().asynchronous(goal, track_feedback=track_feedback)
 

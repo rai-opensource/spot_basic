@@ -1,19 +1,83 @@
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Optional, Protocol, Union
 
-from bdai_ros2_wrappers.callables import generalized_method
+from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
+from bdai_ros2_wrappers.futures import FutureLike
 from bdai_ros2_wrappers.subscription import Subscription
 from rclpy.task import Future
 from spot_msgs.msg import PowerState
 from spot_utilities.spot_basic.base import SpotBaseProtocol
-from spot_utilities.spot_basic.utilities import SpotServiced, SpotServiceHandle
+from spot_utilities.spot_basic.utilities import SpotServiced, SpotServicedProtocol, SpotServiceHandle
 from spot_utilities.spot_util import spot_namespaced
 from std_srvs.srv import Trigger
 
 
+class SpotPowerProtocol(SpotBaseProtocol, Protocol):
+    """Spot power management protocol."""
+
+    class PowerOnProtocol(SpotServicedProtocol[Trigger.Request, Trigger.Response], Protocol):
+        """Motor power on protocol."""
+
+        def synchronously(self, *, timeout_sec: Optional[float] = None) -> Trigger.Response:
+            """Power on the robot (motors) synchronously.
+
+            Args:
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
+                expires, the power on request will be cancelled and the call will raise. Note
+                this timeout is local to the caller (and it may take a while for the robot
+                to react).
+
+            Returns:
+                the response to the power on request.
+
+            Raises:
+                ServiceError: if the power on request fails.
+                ServiceTimeout: if the power on request times out.
+            """
+
+        def asynchronously(self) -> FutureLike[Trigger.Response]:
+            """Power on the robot (motors) asynchronously.
+
+            Returns:
+                a future response to the power on request.
+            """
+
+    class PowerOffProtocol(SpotServicedProtocol[Trigger.Request, Trigger.Response], Protocol):
+        """Motor power off protocol."""
+
+        def synchronously(self, *, timeout_sec: Optional[float] = None) -> Trigger.Response:
+            """Power off the robot (motors) synchronously.
+
+            Args:
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
+                expires, the power off request will be cancelled and the call will raise. Note
+                this timeout is local to the caller (and it may take a while for the robot
+                to react).
+
+            Returns:
+                the response to the power off request.
+
+            Raises:
+                ServiceError: if the power off request fails.
+                ServiceTimeout: if the power off request times out.
+            """
+
+        def asynchronously(self) -> FutureLike[Trigger.Response]:
+            """Power off the robot (motors) asynchronously.
+
+            Returns:
+                a future response to the power off request.
+            """
+
+    power_on: GeneralizedMethodLike[PowerOnProtocol]
+    power_motors_on: GeneralizedMethodLike[PowerOnProtocol]
+    power_off: GeneralizedMethodLike[PowerOffProtocol]
+    power_motors_off: GeneralizedMethodLike[PowerOffProtocol]
+
+
 class SpotPowerMixin(SpotBaseProtocol):
-    """Mixin that manages Spot power."""
+    """Mixin offering Spot power management support."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -27,18 +91,35 @@ class SpotPowerMixin(SpotBaseProtocol):
             self, SpotServiced(Trigger, spot_namespaced(self.robot_name, "power_off"), node=self.node)
         )
 
-    @generalized_method(transitional=True)
-    def power_on(
+    @generalized_method(spec=GeneralizedMethodLike[SpotPowerProtocol.PowerOnProtocol])
+    def power_on(self, **kwargs: Any) -> Trigger.Response:
+        """Power on the robot (motors).
+
+        See `SpotPowerProtocol.PowerOnProtocol` for further reference.
+        """
+
+    @power_on.legacy
+    def _legacy_power_on(
         self,
         *,
         asynchronous: bool = False,
         result_callback: Optional[Callable[[Future], None]] = None,
         on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Union[bool, SpotServiceHandle]:
-        """Turn on the robot.
+        """Power on the robot (motors).
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
+
+        Args:
+            asynchronous: whether the power on request is asynchronous or not.
+            result_callback: optional callback for power on request response.
+            on_failure_callback: optional callback for power on request failure.
 
         Returns:
-            A boolean to flag its outcome and an error message on failure.
+            a boolean to flag its outcome for synchronous calls, and
+            a service handle for asynchronous calls.
         """
         handle = SpotServiceHandle.call(
             self.robot_name,
@@ -56,18 +137,35 @@ class SpotPowerMixin(SpotBaseProtocol):
 
     power_motors_on = power_on
 
-    @generalized_method(transitional=True)
-    def power_off(
+    @generalized_method(spec=GeneralizedMethodLike[SpotPowerProtocol.PowerOffProtocol])
+    def power_off(self, **kwargs: Any) -> Trigger.Response:
+        """Power off the robot (motors).
+
+        See `SpotPowerProtocol.PowerOffProtocol` for further reference.
+        """
+
+    @power_off.legacy
+    def _legacy_power_off(
         self,
         *,
         asynchronous: bool = False,
         result_callback: Optional[Callable[[Future], None]] = None,
         on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Union[bool, SpotServiceHandle]:
-        """Turn off the robot.
+        """Power off the robot (motors).
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
+
+        Args:
+            asynchronous: whether the power off request is asynchronous or not.
+            result_callback: optional callback for power off request response.
+            on_failure_callback: optional callback for power off request failure.
 
         Returns:
-            A boolean to flag its outcome and an error message on failure.
+            a boolean to flag its outcome for synchronous calls, and
+            a service handle for asynchronous calls.
         """
         handle = SpotServiceHandle.call(
             self.robot_name,

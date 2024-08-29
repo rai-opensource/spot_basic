@@ -2,7 +2,8 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Optional, Sequence, Union
+from functools import cached_property
+from typing import Any, Optional, Protocol, Sequence, TypeAlias, Union
 
 import bdai_ros2_wrappers.scope as ros_scope
 from bdai_ros.utilities.manual_conversions import (
@@ -125,32 +126,55 @@ class LegJointMap:
         )
 
 
+class FrameHint(str, Enum):
+    """Well known Spot frames."""
+
+    BODY = BODY_FRAME_NAME
+    VISION = VISION_FRAME_NAME
+    ODOM = ODOM_FRAME_NAME
+    HAND = HAND_FRAME_NAME
+    GRAV_ALIGNED_BODY = GRAV_ALIGNED_BODY_FRAME_NAME
+    GROUND_PLANE = GROUND_PLANE_FRAME_NAME
+    WRIST = "arm_link_wr1"
+    HEAD = "head"
+    BACK = "back"
+    LEFT = "left"
+    RIGHT = "right"
+    FRONT_LEFT = "frontleft"
+    FRONT_RIGHT = "frontright"
+    BACK_CAMERA = "back_fisheye"
+    FRONT_LEFT_CAMERA = "frontleft_fisheye"
+    FRONT_RIGHT_CAMERA = "frontright_fisheye"
+    LEFT_CAMERA = "left_fisheye"
+    RIGHT_CAMERA = "right_fisheye"
+    HAND_CAMERA = "hand_color_image_sensor"
+    HAND_DEPTH_CAMERA = "hand_depth_sensor"
+
+
+class SpotStateProtocol(SpotBaseProtocol, Protocol):
+    """Spot state tracking protocol."""
+
+    def lookup_a_tform_b(
+        self,
+        frame_a: Union[FrameHint, str],
+        frame_b: Union[FrameHint, str],
+        transform_time: Optional[Time] = None,
+        timeout: Optional[float] = None,
+        wait_for_frames: bool = False,
+    ) -> SE3: ...
+
+    def get_transforms_tree_snapshot(
+        self,
+        transform_time: Optional[Time] = None,
+        root_frame: Optional[Union[FrameHint, str]] = None,
+        timeout_sec: Optional[float] = None,
+    ) -> FrameTreeSnapshot: ...
+
+
 class SpotStateMixin(SpotBaseProtocol):
-    """Mixin that tracks Spot state."""
+    """Mixin offering Spot state tracking support."""
 
-    class FrameHint(str, Enum):
-        """Well known Spot frames."""
-
-        BODY = BODY_FRAME_NAME
-        VISION = VISION_FRAME_NAME
-        ODOM = ODOM_FRAME_NAME
-        HAND = HAND_FRAME_NAME
-        GRAV_ALIGNED_BODY = GRAV_ALIGNED_BODY_FRAME_NAME
-        GROUND_PLANE = GROUND_PLANE_FRAME_NAME
-        WRIST = "arm_link_wr1"
-        HEAD = "head"
-        BACK = "back"
-        LEFT = "left"
-        RIGHT = "right"
-        FRONT_LEFT = "frontleft"
-        FRONT_RIGHT = "frontright"
-        BACK_CAMERA = "back_fisheye"
-        FRONT_LEFT_CAMERA = "frontleft_fisheye"
-        FRONT_RIGHT_CAMERA = "frontright_fisheye"
-        LEFT_CAMERA = "left_fisheye"
-        RIGHT_CAMERA = "right_fisheye"
-        HAND_CAMERA = "hand_color_image_sensor"
-        HAND_DEPTH_CAMERA = "hand_depth_sensor"
+    FrameHint: TypeAlias = FrameHint
 
     def __init__(self, *args: Any, tf_listener: Optional[TFListenerWrapper] = None, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -162,8 +186,6 @@ class SpotStateMixin(SpotBaseProtocol):
         self.vision_frame_name = namespace_with(self.robot_name, VISION_FRAME_NAME)
         self.odom_frame_name = namespace_with(self.robot_name, ODOM_FRAME_NAME)
 
-        self.joint_states = Subscription(JointState, spot_namespaced(self.robot_name, "joint_states"), node=self.node)
-
     def set_tf_listener(self, tf_listener: TFListenerWrapper) -> None:
         """Attach a TFListenerWrapper instance to the robot.
 
@@ -174,6 +196,11 @@ class SpotStateMixin(SpotBaseProtocol):
 
     def unset_tf_listener(self) -> None:
         self.tf_listener = None
+
+    @cached_property
+    def joint_states(self) -> Subscription[JointState]:
+        """Get joint states feed."""
+        return Subscription(JointState, spot_namespaced(self.robot_name, "joint_states"), node=self.node)
 
     @property
     def arm_joint_positions(self) -> ArmJointMap:
@@ -226,7 +253,7 @@ class SpotStateMixin(SpotBaseProtocol):
         transform_time: Optional[Time] = None,
         timeout_sec: Optional[float] = None,
     ) -> bool:
-        """Waits for a robot specific transform from `frame_a` to `frame_b`.
+        """Wait for a robot specific transform from `frame_a` to `frame_b`.
 
         The transform returned will be frame_a_t_frame_b, which is robot robot specific.
         So instead if frame_a is VISION, we internally append it to the robot name
@@ -272,7 +299,7 @@ class SpotStateMixin(SpotBaseProtocol):
         timeout: Optional[float] = None,
         wait_for_frames: bool = False,
     ) -> SE3:
-        """Looks up a robot specific transform from `frame_a` to `frame_b`.
+        """Look up a robot specific transform from `frame_a` to `frame_b`.
 
         The transform returned will be frame_a_t_frame_b, which is robot robot specific.
         So instead if frame_a is VISION, we internally append it to the robot name
@@ -320,7 +347,7 @@ class SpotStateMixin(SpotBaseProtocol):
         root_frame: Optional[Union[FrameHint, str]] = None,
         timeout_sec: Optional[float] = None,
     ) -> FrameTreeSnapshot:
-        """Takes a full snapshot of all robot-specific transforms in the system.
+        """Take a full snapshot of all robot-specific transforms in the system.
 
         Only transforms between frames prefixed by the robot name and available at the requested
         time will be retrieved -- missing transforms are not an error.
@@ -507,26 +534,3 @@ class SpotStateMixin(SpotBaseProtocol):
         )
 
         return FrameTreeSnapshot(child_to_parent_edge_map=child_to_parent_edge_map)
-
-
-# Alias
-FrameHint = SpotStateMixin.FrameHint
-
-
-class SpotStateProtocol(SpotBaseProtocol):
-
-    def lookup_a_tform_b(
-        self,
-        frame_a: Union[FrameHint, str],
-        frame_b: Union[FrameHint, str],
-        transform_time: Optional[Time] = None,
-        timeout: Optional[float] = None,
-        wait_for_frames: bool = False,
-    ) -> SE3: ...
-
-    def get_transforms_tree_snapshot(
-        self,
-        transform_time: Optional[Time] = None,
-        root_frame: Optional[Union[FrameHint, str]] = None,
-        timeout_sec: Optional[float] = None,
-    ) -> FrameTreeSnapshot: ...

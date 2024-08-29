@@ -1,13 +1,11 @@
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
 from enum import IntEnum
-from typing import Any, Callable, Optional, TypeAlias, Union
+from typing import Any, Callable, Optional, Protocol, TypeAlias, Union, overload
 
-from bdai_ros2_wrappers.callables import generalized_method
-from bosdyn.api import (
-    full_body_command_pb2,
-    robot_command_pb2,
-)
+from bdai_ros2_wrappers.action import ActionFuture
+from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
+from bosdyn.api import full_body_command_pb2, robot_command_pb2
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.client.math_helpers import SE3Pose
 from bosdyn.client.robot_command import RobotCommandBuilder
@@ -20,15 +18,16 @@ from spot_utilities.spot_basic.command.arm import SpotArmCommandBuilder
 from spot_utilities.spot_basic.command.gripper import SpotGripperCommandBuilder
 from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandBuilder
 from spot_utilities.spot_basic.state import ArmJointMap
-from spot_utilities.spot_basic.utilities import SpotActionHandle
+from spot_utilities.spot_basic.utilities import SpotActionableProtocol, SpotActionHandle
+
+
+class BatteryChangeDirHint(IntEnum):
+    RIGHT = 1
+    LEFT = 2
 
 
 class SpotFullBodyCommandBuilder(SpotCommandBuilder):
     """A builder for Spot full body commands."""
-
-    class BatteryChangeDirHint(IntEnum):
-        RIGHT = 1
-        LEFT = 2
 
     def roll_to_battery_change_pose_command(
         self,
@@ -82,13 +81,13 @@ class SpotFullBodyCommandBuilder(SpotCommandBuilder):
         See arm_joint_command(), torso_pose_command(), and claw_gripper_open/close_command() documentation for
         further reference.
         """
-        arm_builder = SpotArmCommandBuilder(self)
-        mobility_builder = SpotMobilityCommandBuilder(self)
+        arm_builder = SpotArmCommandBuilder(self.target)
+        mobility_builder = SpotMobilityCommandBuilder(self.target)
         torso_command = mobility_builder.torso_pose_command(torso_pose, duration)
         arm_command = arm_builder.arm_joint_command(joint_angles, duration, max_velocity, max_acceleration)
         if gripper_open is None:
             return RobotCommandBuilder.build_synchro_command(torso_command, arm_command)
-        gripper_builder = SpotGripperCommandBuilder(self)
+        gripper_builder = SpotGripperCommandBuilder(self.target)
         if gripper_open:
             gripper_command = gripper_builder.claw_gripper_open_command()
         else:
@@ -96,10 +95,119 @@ class SpotFullBodyCommandBuilder(SpotCommandBuilder):
         return RobotCommandBuilder.build_synchro_command(torso_command, arm_command, gripper_command)
 
 
+RobotCommandActionableProtocol: TypeAlias = SpotActionableProtocol[
+    RobotCommandAction.Goal, RobotCommandAction.Result, RobotCommandAction.Feedback
+]
+
+
+class SpotFullBodyCommandProtocol(SpotCommandProtocol, Protocol):
+    """Spot full body mobility capabilities protocol."""
+
+    class SelfRightProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol for robot self-righting.
+
+        Takes the robot from being dropped on the floor to an upright position.
+        """
+
+        @overload
+        def synchronously(
+            self,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Make the robot self right synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotFullBodyCommandProtocol.self_right_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        @overload
+        def synchronously(
+            self,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+            nothrow: bool = False,
+        ) -> Optional[RobotCommandAction.Result]:
+            """Make the robot self right synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotFullBodyCommandProtocol.self_right_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        def asynchronously(
+            self,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Make the robot self right asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotFullBodyCommandProtocol.self_right_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+    class RollToBatteryChangePoseProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol for robot rollover.
+
+        Takes the robot down to the floor, in an upside position that allows battery replacement.
+        """
+
+        @overload
+        def synchronously(
+            self,
+            direction_hint: BatteryChangeDirHint = BatteryChangeDirHint.RIGHT,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Make the robot roll to its battery change pose synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotFullBodyCommandProtocol.roll_to_battery_change_pose_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        @overload
+        def synchronously(
+            self,
+            direction_hint: BatteryChangeDirHint = BatteryChangeDirHint.RIGHT,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+            nothrow: bool = False,
+        ) -> Optional[RobotCommandAction.Result]:
+            """Make the robot roll to its battery change pose synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotFullBodyCommandProtocol.roll_to_battery_change_pose_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        def asynchronously(
+            self,
+            direction_hint: BatteryChangeDirHint = BatteryChangeDirHint.RIGHT,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Make the robot roll to its battery change pose asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotFullBodyCommandProtocol.roll_to_battery_change_pose_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+    self_right: GeneralizedMethodLike[SelfRightProtocol]
+    roll_to_battery_change_pose: GeneralizedMethodLike[RollToBatteryChangePoseProtocol]
+
+
 class SpotFullBodyCommandMixin(SpotCommandProtocol):
     """Mixin that eases Spot full body command execution."""
 
-    BatteryChangeDirHint: TypeAlias = SpotFullBodyCommandBuilder.BatteryChangeDirHint
+    BatteryChangeDirHint: TypeAlias = BatteryChangeDirHint
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -109,8 +217,15 @@ class SpotFullBodyCommandMixin(SpotCommandProtocol):
             self, self.execute.compose(command_builder.roll_to_battery_change_pose_command)
         )
 
-    @generalized_method(transitional=True)
-    def self_right(self, timeout_sec: float = 5.0) -> bool:
+    @generalized_method(spec=GeneralizedMethodLike[SpotFullBodyCommandProtocol.SelfRightProtocol])
+    def self_right(self, **kwargs: Any) -> RobotCommandAction.Result:
+        """Make the robot self right.
+
+        See `SpotFullBodyCommandProtocol.SelfRightProtocol` for further reference.
+        """
+
+    @self_right.legacy
+    def _legacy_self_right(self, timeout_sec: float = 5.0) -> bool:
         """Make the robot self right."""
         response = self.self_right.synchronously(timeout_sec=timeout_sec, nothrow=True)
         return response is not None and response.success
@@ -147,8 +262,17 @@ class SpotFullBodyCommandMixin(SpotCommandProtocol):
             on_failure_callback=on_failure_callback,
         )
 
-    @generalized_method(transitional=True)
+    @generalized_method(spec=GeneralizedMethodLike[SpotFullBodyCommandProtocol.RollToBatteryChangePoseProtocol])
     def roll_to_battery_change_pose(
+        self, direction_hint: BatteryChangeDirHint = BatteryChangeDirHint.RIGHT, **kwargs: Any
+    ) -> RobotCommandAction.Result:
+        """Make the robot roll to its battery change pose.
+
+        See `SpotFullBodyCommandProtocol.RollToBatteryChangePoseProtocol` for further reference.
+        """
+
+    @roll_to_battery_change_pose.legacy
+    def _legacy_roll_to_battery_change_pose(
         self, dir_hint: BatteryChangeDirHint = BatteryChangeDirHint.RIGHT, timeout_sec: Optional[float] = None
     ) -> Optional[RobotCommandFeedback]:
         """Make the robot roll to its battery change pose.
@@ -194,7 +318,3 @@ class SpotFullBodyCommandMixin(SpotCommandProtocol):
             feedback_callback=feedback_callback,
             on_failure_callback=on_failure_callback,
         )
-
-
-# Alias
-BatteryChangeDirHint: TypeAlias = SpotFullBodyCommandMixin.BatteryChangeDirHint

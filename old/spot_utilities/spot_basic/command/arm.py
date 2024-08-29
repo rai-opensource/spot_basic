@@ -1,10 +1,11 @@
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import dataclasses
-from typing import Any, Callable, Optional, Sequence, Union
+from typing import Any, Callable, List, Optional, Protocol, Sequence, Tuple, TypeAlias, Union, overload
 
 from bdai_ros.utilities.manual_conversions import se3_to_se3pose_proto
-from bdai_ros2_wrappers.callables import GeneralizedGuard, generalized_method
+from bdai_ros2_wrappers.action import ActionFuture
+from bdai_ros2_wrappers.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
 from bosdyn.api import (
     arm_command_pb2,
     basic_command_pb2,
@@ -28,7 +29,7 @@ from spot_utilities.spot_basic.command.helpers import (
     timestamped_spatialforces_to_wrench_protos,
 )
 from spot_utilities.spot_basic.state import ArmJointMap, FrameHint
-from spot_utilities.spot_basic.utilities import SpotActionHandle
+from spot_utilities.spot_basic.utilities import SpotActionableProtocol, SpotActionHandle
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -112,7 +113,7 @@ class SpotArmCommandBuilder(SpotCommandBuilder):
 
     def arm_joint_command(
         self,
-        joint_positions: Union[ArmJointMap, list[float]],
+        joint_positions: Union[ArmJointMap, List[float]],
         duration_sec: Optional[float] = None,
         max_velocity: Optional[float] = None,
         max_acceleration: Optional[float] = None,
@@ -375,7 +376,7 @@ class SpotArmCommandBuilder(SpotCommandBuilder):
 
     def arm_end_effector_impedance_command(
         self,
-        trajectory: list[tuple[SE3, float]],
+        trajectory: List[Tuple[SE3, float]],
         root_frame: Optional[FrameHint] = None,
         wrist_t_tool: Optional[SE3] = None,
         root_t_task: Optional[SE3] = None,
@@ -462,95 +463,633 @@ class SpotArmCommandBuilder(SpotCommandBuilder):
         )
 
 
+RobotCommandActionableProtocol: TypeAlias = SpotActionableProtocol[
+    RobotCommandAction.Goal, RobotCommandAction.Result, RobotCommandAction.Feedback
+]
+
+
+class SpotArmCommandProtocol(SpotCommandProtocol, Protocol):
+    """Spot arm capabilities protocol."""
+
+    class StowArmProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol for arm stowing."""
+
+        def synchronously(
+            self,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Stow the robot arm synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_stow_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+        def asynchronously(
+            self,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Stow the robot arm asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_stow_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+    class ReadyArmProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol for arm unstowing (or readying)."""
+
+        def synchronously(
+            self,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Unstow the robot arm synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_ready_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+        def asynchronously(
+            self,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Unstow the robot arm asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_ready_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+    class CarryArmProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol for arm carrying."""
+
+        def synchronously(
+            self,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Put the robot arm in carry configuration synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_carry_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+        def asynchronously(
+            self,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Put the robot arm in carry configuration asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_carry_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+    class LockArmProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol for arm locking (in-place)."""
+
+        def synchronously(
+            self,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Lock the robot arm inplace synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_lock_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+        def asynchronously(
+            self,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Lock the robot arm inplace asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_lock_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+    class ArmGazeProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol for arm gazing ie. pointing to a location in space."""
+
+        def synchronously(
+            self,
+            point: R3,
+            frame: FrameHint,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Make the robot arm point to a location in space synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_gaze_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+        def asynchronously(
+            self,
+            point: R3,
+            frame: FrameHint,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Make the robot arm point to a location in space asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_gaze_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+    class MoveArmProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol for arm displacement in joint space."""
+
+        def synchronously(
+            self,
+            joint_positions: Union[ArmJointMap, List[float]],
+            duration_sec: Optional[float] = None,
+            max_velocity: Optional[float] = None,
+            max_acceleration: Optional[float] = None,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Move robot arm to a new joint configuration synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_joint_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+        def asynchronously(
+            self,
+            joint_positions: Union[ArmJointMap, List[float]],
+            duration_sec: Optional[float] = None,
+            max_velocity: Optional[float] = None,
+            max_acceleration: Optional[float] = None,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Move robot arm to a new joint configuration asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_joint_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+    class MoveArmAlongTrajectoryProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol for arm trajectories in joint space."""
+
+        def synchronously(
+            self,
+            joint_positions: Sequence[ArmJointMap],
+            times: Sequence[float],
+            joint_velocities: Optional[Sequence[ArmJointMap]] = None,
+            reference_time: Optional[float] = None,
+            max_acceleration: Optional[float] = None,
+            max_velocity: Optional[float] = None,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Move robot arm along a trajectory in joint space synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_joint_trajectory_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+        def asynchronously(
+            self,
+            joint_positions: Sequence[ArmJointMap],
+            times: Sequence[float],
+            joint_velocities: Optional[Sequence[ArmJointMap]] = None,
+            reference_time: Optional[float] = None,
+            max_acceleration: Optional[float] = None,
+            max_velocity: Optional[float] = None,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Move robot arm along a trajectory in joint space asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_joint_trajectory_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+    class MoveEndEffectorProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol for arm end effector displacement in Cartesian space."""
+
+        def synchronously(
+            self,
+            frame_t_goal: SE3,
+            duration_sec: float,
+            body_follow: bool = False,
+            body_hip_assist: bool = False,
+            body_yaw_assist: bool = False,
+            disable_collisions: bool = False,
+            base_frame: Optional[FrameHint] = None,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Move robot arm end effector in Cartesian space synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_end_effector_cartesian_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+        def asynchronously(
+            self,
+            frame_t_goal: SE3,
+            duration_sec: float,
+            body_follow: bool = False,
+            body_hip_assist: bool = False,
+            body_yaw_assist: bool = False,
+            disable_collisions: bool = False,
+            base_frame: Optional[FrameHint] = None,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Move robot arm end effector in Cartesian space asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_end_effector_cartesian_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+    class MoveEndEffectorAlongTrajectoryProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol for arm end effector trajectories in Cartesian space."""
+
+        def synchronously(
+            self,
+            root_frame: FrameHint,
+            axis_mode_map: AxisModeMap,
+            *,
+            timestamps_between_poses: Optional[ArrayLike] = None,
+            timestamps_between_wrenches: Optional[ArrayLike] = None,
+            pose_vecs: Optional[Sequence[SE3]] = None,
+            vel_vecs: Optional[Sequence[Twist3]] = None,
+            wrench_vecs: Optional[Sequence[SpatialForce]] = None,
+            wrist_t_tool: Optional[SE3] = None,
+            root_t_task: Optional[SE3] = None,
+            max_acceleration: Optional[float] = None,
+            max_linear_velocity: Optional[float] = None,
+            max_angular_velocity: Optional[float] = None,
+            max_pos_tracking_error: Optional[float] = None,
+            max_rot_tracking_error: Optional[float] = None,
+            stay_near_current_joint_configuration: Optional[bool] = None,
+            preferred_joint_configuration: Optional[arm_command_pb2.ArmJointPosition] = None,
+            reference_time: Optional[float] = None,
+            positional_interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
+            rotational_interpolation: trajectory_pb2.AngularInterpolation = trajectory_pb2.ANG_INTERP_CUBIC_EULER,
+            body_follow_arm: bool = False,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Move robot arm end effector along a trajectory in Cartesian space synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_end_effector_cartesian_trajectory_command`
+            synchronously. See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+        def asynchronously(
+            self,
+            root_frame: FrameHint,
+            axis_mode_map: AxisModeMap,
+            *,
+            timestamps_between_poses: Optional[ArrayLike] = None,
+            timestamps_between_wrenches: Optional[ArrayLike] = None,
+            pose_vecs: Optional[Sequence[SE3]] = None,
+            vel_vecs: Optional[Sequence[Twist3]] = None,
+            wrench_vecs: Optional[Sequence[SpatialForce]] = None,
+            wrist_t_tool: Optional[SE3] = None,
+            root_t_task: Optional[SE3] = None,
+            max_acceleration: Optional[float] = None,
+            max_linear_velocity: Optional[float] = None,
+            max_angular_velocity: Optional[float] = None,
+            max_pos_tracking_error: Optional[float] = None,
+            max_rot_tracking_error: Optional[float] = None,
+            stay_near_current_joint_configuration: Optional[bool] = None,
+            preferred_joint_configuration: Optional[arm_command_pb2.ArmJointPosition] = None,
+            reference_time: Optional[float] = None,
+            positional_interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
+            rotational_interpolation: trajectory_pb2.AngularInterpolation = trajectory_pb2.ANG_INTERP_CUBIC_EULER,
+            body_follow_arm: bool = False,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Move robot arm end effector along a trajectory in Cartesian space asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_end_effector_cartesian_trajectory_command`
+            asynchronously. See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+    class MoveEndEffectorWithControlledImpedanceProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol for arm end effector displacement with controlled impedance in Cartesian space."""
+
+        def synchronously(
+            self,
+            trajectory: List[Tuple[SE3, float]],
+            root_frame: Optional[FrameHint] = None,
+            wrist_t_tool: Optional[SE3] = None,
+            root_t_task: Optional[SE3] = None,
+            stiffness: Optional[SpatialVector] = None,
+            damping: Optional[SpatialVector] = None,
+            wrench_nm: Optional[SpatialForce] = None,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Move robot arm end effector while controlling arm impedance synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_end_effector_impedance_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+        def asynchronously(
+            self,
+            trajectory: List[Tuple[SE3, float]],
+            root_frame: Optional[FrameHint] = None,
+            wrist_t_tool: Optional[SE3] = None,
+            root_t_task: Optional[SE3] = None,
+            stiffness: Optional[SpatialVector] = None,
+            damping: Optional[SpatialVector] = None,
+            wrench_nm: Optional[SpatialForce] = None,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Move robot arm end effector in Cartesian space asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_end_effector_impedance_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+    class ArmZeroGProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol to mimic zero gravity with the robot arm."""
+
+        @overload
+        def synchronously(
+            self,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Put the robot arm in zero-g mode synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_zero_g_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+        @overload
+        def synchronously(
+            self,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+            nothrow: bool = False,
+        ) -> Optional[RobotCommandAction.Result]:
+            """Put the robot arm in zero-g mode synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_zero_g_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+            """
+
+        def asynchronously(
+            self,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Put the robot arm in zero-g mode asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.arm_zero_g_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+    stow_arm: GeneralizedMethodLike[StowArmProtocol]
+    ready_arm: GeneralizedMethodLike[ReadyArmProtocol]
+    carry_arm: GeneralizedMethodLike[CarryArmProtocol]
+    lock_arm: GeneralizedMethodLike[LockArmProtocol]
+    arm_gaze: GeneralizedMethodLike[ArmGazeProtocol]
+    move_arm: GeneralizedMethodLike[MoveArmProtocol]
+    move_arm_along_trajectory: GeneralizedMethodLike[MoveArmAlongTrajectoryProtocol]
+    move_end_effector: GeneralizedMethodLike[MoveEndEffectorProtocol]
+    move_end_effector_along_trajectory: GeneralizedMethodLike[MoveEndEffectorAlongTrajectoryProtocol]
+    move_end_effector_with_controlled_impedance: GeneralizedMethodLike[MoveEndEffectorWithControlledImpedanceProtocol]
+    arm_zero_g: GeneralizedMethodLike[ArmZeroGProtocol]
+
+
 class SpotArmCommandMixin(SpotCommandProtocol):
-    """Mixin that eases Spot arm command execution."""
+    """Mixin that enables Spot arm command execution.
+
+    Note that the robot must have an arm for any of these APIs to be available.
+    """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         command_builder = SpotArmCommandBuilder(self)
 
-        do_stow_arm = GeneralizedGuard(
-            self.has_arm,
-            self.execute.compose(command_builder.arm_stow_command),
-            f"{self.robot_name} has no arm, nothing to stow",
+        SpotArmCommandMixin.stow_arm.rebind(
+            self,
+            GeneralizedGuard(
+                self.has_arm,
+                self.execute.compose(command_builder.arm_stow_command),
+                f"{self.robot_name} has no arm, nothing to stow",
+            ),
         )
-        SpotArmCommandMixin.stow_arm.rebind(self, do_stow_arm)
 
-        do_ready_arm = GeneralizedGuard(
-            self.has_arm,
-            self.execute.compose(command_builder.arm_ready_command),
-            f"{self.robot_name} has no arm, nothing to unstow",
+        SpotArmCommandMixin.ready_arm.rebind(
+            self,
+            GeneralizedGuard(
+                self.has_arm,
+                self.execute.compose(command_builder.arm_ready_command),
+                f"{self.robot_name} has no arm, nothing to unstow",
+            ),
         )
-        SpotArmCommandMixin.ready_arm.rebind(self, do_ready_arm)
 
-        do_carry_arm = GeneralizedGuard(
-            self.has_arm,
-            self.execute.compose(command_builder.arm_carry_command),
-            f"{self.robot_name} has no arm, nothing to carry",
+        SpotArmCommandMixin.carry_arm.rebind(
+            self,
+            GeneralizedGuard(
+                self.has_arm,
+                self.execute.compose(command_builder.arm_carry_command),
+                f"{self.robot_name} has no arm, nothing to carry",
+            ),
         )
-        SpotArmCommandMixin.carry_arm.rebind(self, do_carry_arm)
 
-        do_lock_arm = GeneralizedGuard(
-            self.has_arm,
-            self.execute.compose(command_builder.arm_lock_command),
-            f"{self.robot_name} has no arm, nothing to lock",
+        SpotArmCommandMixin.lock_arm.rebind(
+            self,
+            GeneralizedGuard(
+                self.has_arm,
+                self.execute.compose(command_builder.arm_lock_command),
+                f"{self.robot_name} has no arm, nothing to lock",
+            ),
         )
-        SpotArmCommandMixin.lock_arm.rebind(self, do_lock_arm)
 
-        do_arm_gaze = GeneralizedGuard(
-            self.has_arm,
-            self.execute.compose(command_builder.arm_gaze_command),
-            f"{self.robot_name} has no arm, cannot gaze",
+        SpotArmCommandMixin.arm_gaze.rebind(
+            self,
+            GeneralizedGuard(
+                self.has_arm,
+                self.execute.compose(command_builder.arm_gaze_command),
+                f"{self.robot_name} has no arm, cannot gaze",
+            ),
         )
-        SpotArmCommandMixin.arm_gaze.rebind(self, do_arm_gaze)
 
-        do_move_arm = GeneralizedGuard(
-            self.has_arm,
-            self.execute.compose(command_builder.arm_joint_command),
-            f"{self.robot_name} has no arm, nothing to move",
+        SpotArmCommandMixin.move_arm.rebind(
+            self,
+            GeneralizedGuard(
+                self.has_arm,
+                self.execute.compose(command_builder.arm_joint_command),
+                f"{self.robot_name} has no arm, nothing to move",
+            ),
         )
-        SpotArmCommandMixin.move_arm.rebind(self, do_move_arm)
 
-        do_move_arm_along_trajectory = GeneralizedGuard(
-            self.has_arm,
-            self.execute.compose(command_builder.arm_joint_trajectory_command),
-            f"{self.robot_name} has no arm, nothing to move",
+        SpotArmCommandMixin.move_arm_along_trajectory.rebind(
+            self,
+            GeneralizedGuard(
+                self.has_arm,
+                self.execute.compose(command_builder.arm_joint_trajectory_command),
+                f"{self.robot_name} has no arm, nothing to move",
+            ),
         )
-        SpotArmCommandMixin.move_arm_along_trajectory.rebind(self, do_move_arm_along_trajectory)
 
-        do_move_end_effector = GeneralizedGuard(
-            self.has_arm,
-            self.execute.compose(command_builder.arm_end_effector_cartesian_command),
-            f"{self.robot_name} has no arm, no end effector to move",
+        SpotArmCommandMixin.move_end_effector.rebind(
+            self,
+            GeneralizedGuard(
+                self.has_arm,
+                self.execute.compose(command_builder.arm_end_effector_cartesian_command),
+                f"{self.robot_name} has no arm, no end effector to move",
+            ),
         )
-        SpotArmCommandMixin.move_end_effector.rebind(self, do_move_end_effector)
 
-        do_move_end_effector_along_trajectory = GeneralizedGuard(
-            self.has_arm,
-            self.execute.compose(command_builder.arm_end_effector_cartesian_trajectory_command),
-            f"{self.robot_name} has no arm, no end effector to move",
+        SpotArmCommandMixin.move_end_effector_along_trajectory.rebind(
+            self,
+            GeneralizedGuard(
+                self.has_arm,
+                self.execute.compose(command_builder.arm_end_effector_cartesian_trajectory_command),
+                f"{self.robot_name} has no arm, no end effector to move",
+            ),
         )
-        SpotArmCommandMixin.move_end_effector_along_trajectory.rebind(self, do_move_end_effector_along_trajectory)
 
-        do_move_end_effector_with_controlled_impedance = GeneralizedGuard(
-            self.has_arm,
-            self.execute.compose(command_builder.arm_end_effector_impedance_command),
-            f"{self.robot_name} has no arm, no end effector to move",
-        )
         SpotArmCommandMixin.move_end_effector_with_controlled_impedance.rebind(
-            self, do_move_end_effector_with_controlled_impedance
+            self,
+            GeneralizedGuard(
+                self.has_arm,
+                self.execute.compose(command_builder.arm_end_effector_impedance_command),
+                f"{self.robot_name} has no arm, no end effector to move",
+            ),
         )
 
-        do_arm_zero_g = GeneralizedGuard(
-            self.has_arm,
-            self.execute.compose(command_builder.arm_zero_g_command),
-            f"{self.robot_name} has no arm, cannot emulate zero g motion",
+        SpotArmCommandMixin.arm_zero_g.rebind(
+            self,
+            GeneralizedGuard(
+                self.has_arm,
+                self.execute.compose(command_builder.arm_zero_g_command),
+                f"{self.robot_name} has no arm, cannot emulate zero g motion",
+            ),
         )
-        SpotArmCommandMixin.arm_zero_g.rebind(self, do_arm_zero_g)
 
-    @generalized_method(transitional=True)
-    def stow_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
-        """Stow the robot arm."""
+    @generalized_method(spec=GeneralizedMethodLike[SpotArmCommandProtocol.StowArmProtocol])
+    def stow_arm(self, **kwargs: Any) -> RobotCommandAction.Result:
+        """Stow robot arm.
+
+        See `SpotArmCommandProtocol.StowArmProtocol` for further reference.
+        """
+
+    @stow_arm.legacy
+    def _legacy_stow_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
+        """Stow the robot arm.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
+        """
         goal = RobotCommandAction.Goal()
         command_builder = SpotArmCommandBuilder(self)
         convert(command_builder.arm_stow_command(), goal.command)
@@ -564,6 +1103,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Send a command to stow the arm asynchronously.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
 
         Args:
             result_callback: A callback to process/handle the resulting feedback from executing the command
@@ -585,9 +1128,21 @@ class SpotArmCommandMixin(SpotCommandProtocol):
             on_failure_callback=on_failure_callback,
         )
 
-    @generalized_method(transitional=True)
-    def ready_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
-        """Ready (ie. unstow) the robot arm."""
+    @generalized_method(spec=GeneralizedMethodLike[SpotArmCommandProtocol.ReadyArmProtocol])
+    def ready_arm(self, **kwargs: Any) -> RobotCommandAction.Result:
+        """Ready (ie. unstow) robot arm.
+
+        See `SpotArmCommandProtocol.ReadyArmProtocol` for further reference.
+        """
+
+    @ready_arm.legacy
+    def _legacy_ready_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
+        """Ready (ie. unstow) the robot arm.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
+        """
         goal = RobotCommandAction.Goal()
         command_builder = SpotArmCommandBuilder(self)
         convert(command_builder.arm_ready_command(), goal.command)
@@ -604,6 +1159,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Send a command to move the arm to the ready position asynchronously.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
 
         Args:
             result_callback: A callback to process/handle the resulting feedback from executing the command
@@ -628,9 +1187,21 @@ class SpotArmCommandMixin(SpotCommandProtocol):
     # Alias
     unstow_arm_async = ready_arm_async
 
-    @generalized_method(transitional=True)
-    def carry_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
-        """Carry the robot arm."""
+    @generalized_method(spec=GeneralizedMethodLike[SpotArmCommandProtocol.CarryArmProtocol])
+    def carry_arm(self, **kwargs: Any) -> RobotCommandAction.Result:
+        """Take robot arm to carry configuration.
+
+        See `SpotArmCommandProtocol.CarryArmProtocol` for further reference.
+        """
+
+    @carry_arm.legacy
+    def _legacy_carry_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
+        """Carry the robot arm.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
+        """
         goal = RobotCommandAction.Goal()
         command_builder = SpotArmCommandBuilder(self)
         convert(command_builder.arm_carry_command(), goal.command)
@@ -643,7 +1214,11 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
-        """Move the arm to the carry position asynchronously.
+        """Move robot arm to the carry position asynchronously.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
 
         Args:
             result_callback: A callback to process/handle the resulting feedback from executing the command
@@ -665,9 +1240,21 @@ class SpotArmCommandMixin(SpotCommandProtocol):
             on_failure_callback=on_failure_callback,
         )
 
-    @generalized_method(transitional=True)
-    def lock_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
-        """Lock the robot arm joints in place."""
+    @generalized_method(spec=GeneralizedMethodLike[SpotArmCommandProtocol.LockArmProtocol])
+    def lock_arm(self, **kwargs: Any) -> RobotCommandAction.Result:
+        """Lock the robot arm inplace.
+
+        See `SpotArmCommandProtocol.LockArmProtocol` for further reference.
+        """
+
+    @lock_arm.legacy
+    def _legacy_lock_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
+        """Lock the robot arm joints in place.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
+        """
         goal = RobotCommandAction.Goal()
         command_builder = SpotArmCommandBuilder(self)
         convert(command_builder.arm_lock_command(), goal.command)
@@ -681,6 +1268,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Locks the arm joint in place asynchronously.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
 
         Args:
             result_callback: A callback to process/handle the resulting feedback from executing the command
@@ -702,11 +1293,22 @@ class SpotArmCommandMixin(SpotCommandProtocol):
             on_failure_callback=on_failure_callback,
         )
 
-    @generalized_method(transitional=True)
-    def arm_gaze(
+    @generalized_method(spec=GeneralizedMethodLike[SpotArmCommandProtocol.ArmGazeProtocol])
+    def arm_gaze(self, point: R3, frame: FrameHint, **kwargs: Any) -> RobotCommandAction.Result:
+        """Gaze the robot arm (and hand camera) at a location in space.
+
+        See `SpotArmCommandProtocol.ArmGazeProtocol` for further reference.
+        """
+
+    @arm_gaze.legacy
+    def _legacy_arm_gaze(
         self, point: R3, frame: FrameHint, timeout_sec: Optional[float] = None
     ) -> Optional[RobotCommandFeedback]:
         """Gaze the robot arm (and hand camera) at a point in space.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
 
         Args:
             point: the point to gaze at, relative to `base_frame`.
@@ -730,6 +1332,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
     ) -> Optional[SpotActionHandle]:
         """Gaze the arm/hand camera at a point relative to a frame.
 
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
+
         Args:
             point: A 3d vector representing a point, relative to a frame.
             frame: A frame hint representing one of spot's default frames, like vision or body.
@@ -750,8 +1356,24 @@ class SpotArmCommandMixin(SpotCommandProtocol):
             on_failure_callback=on_failure_callback,
         )
 
-    @generalized_method(transitional=True)
+    @generalized_method(spec=GeneralizedMethodLike[SpotArmCommandProtocol.MoveArmAlongTrajectoryProtocol])
     def move_arm_along_trajectory(
+        self,
+        joint_positions: Sequence[ArmJointMap],
+        times: Sequence[float],
+        joint_velocities: Optional[Sequence[ArmJointMap]] = None,
+        reference_time: Optional[float] = None,
+        max_acceleration: Optional[float] = None,
+        max_velocity: Optional[float] = None,
+        **kwargs: Any,
+    ) -> RobotCommandAction.Result:
+        """Move robot arm along a trajectory in joint space.
+
+        See `SpotArmCommandProtocol.MoveArmAlongTrajectoryProtocol` for further reference.
+        """
+
+    @move_arm_along_trajectory.legacy
+    def _legacy_move_arm_along_trajectory(
         self,
         joint_angles: Sequence[ArmJointMap],
         times: Sequence[float],
@@ -762,7 +1384,11 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         max_vel: Optional[float] = None,
         timeout_sec: float = 5.0,
     ) -> Optional[RobotCommandFeedback]:
-        """Move the robot arm along a trajectory in joint (i.e. configuration) space.
+        """Move robot arm along a trajectory in joint (i.e. configuration) space.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
 
         Args:
             joint_angles: List of joint angles to command the arm to move to. Each set of joint
@@ -802,6 +1428,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
         """Move the joint angles of the arm along a specified trajectory.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
 
         Args:
             joint_angles: List of joint angles to command the arm to move to. Each set of joint
@@ -843,8 +1473,22 @@ class SpotArmCommandMixin(SpotCommandProtocol):
             on_failure_callback=on_failure_callback,
         )
 
-    @generalized_method(transitional=True)
+    @generalized_method(spec=GeneralizedMethodLike[SpotArmCommandProtocol.MoveArmProtocol])
     def move_arm(
+        self,
+        joint_positions: Union[ArmJointMap, List[float]],
+        duration_sec: Optional[float] = None,
+        max_velocity: Optional[float] = None,
+        max_acceleration: Optional[float] = None,
+        **kwargs: Any,
+    ) -> RobotCommandAction.Result:
+        """Move robot arm to a new joint configuration.
+
+        See `SpotArmCommandProtocol.MoveArmProtocol` for further reference.
+        """
+
+    @move_arm.legacy
+    def _legacy_move_arm(
         self,
         joint_angles: Optional[ArmJointMap],
         *,
@@ -852,6 +1496,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         timeout_sec: float = 5.0,
     ) -> Optional[RobotCommandFeedback]:
         """Move robot arm to a given joint configuration.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
 
         Args:
             joint_angles: the joint angles of the robot, in order from shoulder to wrist.
@@ -887,6 +1535,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
     ) -> Optional[SpotActionHandle]:
         """Moves the arm to a specific set of joint angles
 
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
+
         Args:
             joint_angles: the joint angles of the robot, in order from shoulder to wrist.
                           If the joint angles is None, then the arm is locked in place.
@@ -916,8 +1568,25 @@ class SpotArmCommandMixin(SpotCommandProtocol):
             on_failure_callback=on_failure_callback,
         )
 
-    @generalized_method(transitional=True)
+    @generalized_method(spec=GeneralizedMethodLike[SpotArmCommandProtocol.MoveEndEffectorProtocol])
     def move_end_effector(
+        self,
+        frame_t_goal: SE3,
+        duration_sec: float,
+        body_follow: bool = False,
+        body_hip_assist: bool = False,
+        body_yaw_assist: bool = False,
+        disable_collisions: bool = False,
+        base_frame: Optional[FrameHint] = None,
+        **kwargs: Any,
+    ) -> RobotCommandAction.Result:
+        """Move robot arm end effector to a given pose in cartesian space.
+
+        See `SpotArmCommandProtocol.MoveEndEffectorProtocol` for further reference.
+        """
+
+    @move_end_effector.legacy
+    def _legacy_move_end_effector(
         self,
         frame_t_goal: SE3,
         move_duration_sec: float = 5.0,
@@ -930,6 +1599,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         disable_collisions: bool = False,
     ) -> Optional[RobotCommandFeedback]:
         """Move robot arm end effector to a given pose in Cartesian space.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
 
         Args:
             frame_t_goal: A pose for the end effector to move to relative to the base frame
@@ -980,6 +1653,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
     ) -> Optional[SpotActionHandle]:
         """Send command to move the end effector to a specific pose asynchronously
 
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
+
         Args:
             frame_t_goal: A pose for the end effector to move to relative to the base frame
             move_duration_sec: The duration of the move
@@ -1016,8 +1693,39 @@ class SpotArmCommandMixin(SpotCommandProtocol):
             on_failure_callback=on_failure_callback,
         )
 
-    @generalized_method(transitional=True)
+    @generalized_method(spec=GeneralizedMethodLike[SpotArmCommandProtocol.MoveEndEffectorAlongTrajectoryProtocol])
     def move_end_effector_along_trajectory(
+        self,
+        root_frame: FrameHint,
+        axis_mode_map: AxisModeMap,
+        *,
+        timestamps_between_poses: Optional[ArrayLike] = None,
+        timestamps_between_wrenches: Optional[ArrayLike] = None,
+        pose_vecs: Optional[Sequence[SE3]] = None,
+        vel_vecs: Optional[Sequence[Twist3]] = None,
+        wrench_vecs: Optional[Sequence[SpatialForce]] = None,
+        wrist_t_tool: Optional[SE3] = None,
+        root_t_task: Optional[SE3] = None,
+        max_acceleration: Optional[float] = None,
+        max_linear_velocity: Optional[float] = None,
+        max_angular_velocity: Optional[float] = None,
+        max_pos_tracking_error: Optional[float] = None,
+        max_rot_tracking_error: Optional[float] = None,
+        stay_near_current_joint_configuration: Optional[bool] = None,
+        preferred_joint_configuration: Optional[arm_command_pb2.ArmJointPosition] = None,
+        reference_time: Optional[float] = None,
+        positional_interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
+        rotational_interpolation: trajectory_pb2.AngularInterpolation = trajectory_pb2.ANG_INTERP_CUBIC_EULER,
+        body_follow_arm: bool = False,
+        **kwargs: Any,
+    ) -> RobotCommandAction.Result:
+        """Move robot arm end effector along a trajectory in Cartesian space.
+
+        See `SpotArmCommandProtocol.MoveEndEffectorAlongTrajectoryProtocol` for further reference.
+        """
+
+    @move_end_effector_along_trajectory.legacy
+    def _legacy_move_end_effector_along_trajectory(
         self,
         root_frame_name: str,
         axis_mode_map: AxisModeMap,
@@ -1048,6 +1756,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         wrench space. It can also be hybrid of the two, but any axis can only exist in either the
         pose or wrench mode. Modes that plan on being fixed in space should be set to
         AXIS_MODE_POSITION to avoid unexpected behaviour.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
 
         Args:
             root_frame_name: task frame that all trajectories are defined with respect to.
@@ -1142,6 +1854,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         pose or wrench mode. Modes that plan on being fixed in space should be set to
         AXIS_MODE_POSITION to avoid unexpected behaviour.
 
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
+
         Args:
             root_frame_name: optional task frame that all trajectories are defined with respect to.
             root_frame_name: optional task frame that all trajectories are defined with respect to.
@@ -1207,8 +1923,27 @@ class SpotArmCommandMixin(SpotCommandProtocol):
             on_failure_callback=on_failure_callback,
         )
 
-    @generalized_method(transitional=True)
+    @generalized_method(
+        spec=GeneralizedMethodLike[SpotArmCommandProtocol.MoveEndEffectorWithControlledImpedanceProtocol]
+    )
     def move_end_effector_with_controlled_impedance(
+        self,
+        trajectory: List[Tuple[SE3, float]],
+        root_frame: Optional[FrameHint] = None,
+        wrist_t_tool: Optional[SE3] = None,
+        root_t_task: Optional[SE3] = None,
+        stiffness: Optional[SpatialVector] = None,
+        damping: Optional[SpatialVector] = None,
+        wrench_nm: Optional[SpatialForce] = None,
+        **kwargs: Any,
+    ) -> RobotCommandAction.Result:
+        """Move robot arm end effector while controlling arm impedance.
+
+        See `SpotArmCommandProtocol.MoveEndEffectorWithControlledImpedanceProtocol` for further reference.
+        """
+
+    @move_end_effector_with_controlled_impedance.legacy
+    def _legacy_move_end_effector_with_controlled_impedance(
         self,
         root_frame_name: FrameHint,
         root_t_task: SE3,
@@ -1222,6 +1957,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         """Move robot arm end effector along a trajectory while controlling arm impedance.
 
         This command combines variable stiffness/damping position control with a feedforward force control.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
 
         Args:
             root_frame_name: name of root frame as a string (without 'RobotName/' as the prefix)
@@ -1271,6 +2010,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
     ) -> Optional[SpotActionHandle]:
         """Impedance control as variable stiffness/damping position control combined with a
             feed-forward force control as a wrench.
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
 
         Args:
             root_frame_name: name of root frame as a string
@@ -1338,13 +2081,26 @@ class SpotArmCommandMixin(SpotCommandProtocol):
             wrench_nm=wrench_nm,
         )
 
-    @generalized_method(transitional=True)
-    def arm_zero_g(self) -> Optional[RobotCommandFeedback]:
+    @generalized_method(spec=GeneralizedMethodLike[SpotArmCommandProtocol.ArmZeroGProtocol])
+    def arm_zero_g(self, **kwargs: Any) -> RobotCommandAction.Result:
+        """Put the robot arm in zero-g mode.
+
+        When in zero-g mode, the robot arm renders no apparent gravitational acceleration and low damping.
+
+        See `SpotArmCommandProtocol.ArmZeroGProtocol` for further reference.
+        """
+
+    @arm_zero_g.legacy
+    def _legacy_arm_zero_g(self) -> Optional[RobotCommandFeedback]:
         """Sets spot arm into gravity compensated mode such that the arm 'renders'
         no apparent gravitational acceleration and low damping.
 
         Useful for allowing a person to move the arm around freely. Does not compensate
         for additional unmodeled mass (like putting something in the gripper.)
+
+        This is a legacy interface and implementation.
+        It will eventually be deprecated.
+        Its usage is discouraged.
         """
         response = self.arm_zero_g.synchronously(timeout_sec=2.0, nothrow=True)
         if response is None or not response.success:

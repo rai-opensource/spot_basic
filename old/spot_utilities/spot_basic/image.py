@@ -19,7 +19,7 @@ from numpy.typing import NDArray
 from rclpy.node import Node
 from spatialmath import SO3
 from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandProtocol
-from spot_utilities.spot_basic.state import FrameHint, SpotStateProtocol
+from spot_utilities.spot_basic.state import FrameHint
 
 
 class CameraSubscription:
@@ -67,7 +67,7 @@ class CameraSubscription:
         return self._name
 
     @cached_property
-    def image(self) -> Subscription:
+    def image(self) -> Subscription[sensor_msgs.msg.Image]:
         """Get camera image topic subscription."""
         return Subscription(
             sensor_msgs.msg.Image,
@@ -78,7 +78,7 @@ class CameraSubscription:
         )
 
     @cached_property
-    def compressed_image(self) -> Subscription:
+    def compressed_image(self) -> Subscription[sensor_msgs.msg.CompressedImage]:
         """Get camera compressed image topic subscription."""
         return Subscription(
             sensor_msgs.msg.CompressedImage,
@@ -89,7 +89,7 @@ class CameraSubscription:
         )
 
     @cached_property
-    def info(self) -> Subscription:
+    def info(self) -> Subscription[sensor_msgs.msg.CameraInfo]:
         """Get camera info topic subscription."""
         return Subscription(
             sensor_msgs.msg.CameraInfo,
@@ -100,7 +100,7 @@ class CameraSubscription:
         )
 
     @cached_property
-    def image_with_info(self) -> MessageFeed:
+    def image_with_info(self) -> MessageFeed[ImageWithInfo]:
         """Get synchronized feed of camera image and info message pairs."""
         return AdaptedMessageFeed(
             SynchronizedMessageFeed(
@@ -115,7 +115,7 @@ class CameraSubscription:
         )
 
     @cached_property
-    def compressed_image_with_info(self) -> MessageFeed:
+    def compressed_image_with_info(self) -> MessageFeed[CompressedImageWithInfo]:
         """Get synchronized feed of camera compressed image and info message pairs."""
         return AdaptedMessageFeed(
             SynchronizedMessageFeed(
@@ -320,7 +320,7 @@ class SpotCameraSubscription:
         )
 
     @cached_property
-    def pointcloud_reconstruction(self) -> MessageFeed:
+    def pointcloud_reconstruction(self) -> MessageFeed[open3d.geometry.PointCloud]:
         """Get pointcloud reconstruction feed."""
         return make_pointcloud_reconstruction_feed(
             self.rgb.image,
@@ -332,7 +332,7 @@ class SpotCameraSubscription:
         )
 
     @cached_property
-    def pointcloud(self) -> MessageFeed:
+    def pointcloud(self) -> MessageFeed[sensor_msgs.msg.PointCloud2]:
         """Get pointcloud subscription."""
         return make_pointcloud_reconstruction_feed(
             self.rgb.image,
@@ -345,7 +345,7 @@ class SpotCameraSubscription:
         )
 
 
-class SpotImageMixin(SpotMobilityCommandProtocol, SpotStateProtocol):
+class SpotImageMixin(SpotMobilityCommandProtocol):
     """Mixin that provides access to Spot cameras."""
 
     CameraLocation: TypeAlias = SpotCameraSubscription.Location
