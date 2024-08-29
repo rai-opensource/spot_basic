@@ -1,64 +1,80 @@
-# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+#  Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 import argparse
-import time
+import logging
+import sys
 
 import bdai_ros2_wrappers.process as ros_process
-from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
+from bdai_ros2_wrappers.utilities import fqn
 from spot_utilities.spot_basic import SpotBasic
 from spot_utilities.spot_vision import CameraLocation, SpotImages
 
-""" This is a test script to demo how spot_ros2 publishes image and camera data on spot.
-It visualizes a point cloud, rgb, and depth images from a camera.
 
-Use:
-    1) start spot driver with a config file that makes spot_ros2 publish the depth registered in the rgb camera.
-        for example, 'bdai spot driver Autumn --config-file projects/_experimental/spot_ros.yaml --no-build'
-        where the yaml has the line 'publish_depth_registered: True'
+class Example:
+    """
+    Spot recieves image and camera data. It then visualizes point cloud, rgb, and depth images from a camera
 
-    2) execute this script, pass in the robot name and camera location (see --help for valid locations)
-    3) three GUI's will pop up in succession: a pointcloud, am rgb image, and a grayscale image representing depth
-        (might be hard to make out any detail in this one)
-"""
+    Use the following command to run the example:
+    `python example_spot_image_viz.py <robot_name> -c <camera_location>`
+    """
+
+    def __init__(self, robot_name: str, camera_location: str) -> None:
+        self._robot = SpotBasic(robot_name=robot_name)
+        self._logger = logging.getLogger(fqn(self.__class__))
+        self._camera_location = CameraLocation(camera_location)
+
+    def start(self) -> int:
+        self._logger.info("Attempting to initialize robot")
+        self._robot.initialize_robot()
+        self._logger.info("Robot is initialized")
+
+        self._logger.info("Attempting to stand robot up")
+        self._robot.stand.synchronously()
+        self._logger.info("Robot is standing up")
+
+        spot_images = SpotImages(use_registered_depth=True)
+
+        self._logger.info("Attempting to display point cloud")
+        spot_images.display_pointcloud(self._camera_location, self._robot, 10.0)
+        self._logger.info("Point cloud finished displaying")
+
+        rotation_angle = 0
+        if self._camera_location == CameraLocation.FRONT_LEFT or self._camera_location == CameraLocation.FRONT_RIGHT:
+            rotation_angle = -90
+        if self._camera_location == CameraLocation.RIGHT:
+            rotation_angle = -180
+
+        [rgb, depth] = spot_images.rbg_and_depth_camera_from_location(self._camera_location)
+
+        self._logger.info("Attempting to display rgb image")
+        spot_images.display_image(rgb, self._robot, rotation_angle=rotation_angle, timeout_sec=5.0)
+        self._logger.info("rgb image finished displaying")
+
+        self._logger.info("Attempting to display depth image")
+        spot_images.display_image(depth, self._robot, rotation_angle=rotation_angle, timeout_sec=5.0)
+        self._logger.info("Depth image finished displaying")
+
+        return 0
 
 
 def cli() -> argparse.ArgumentParser:
-    """Command-line interface."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("robot", help="Name of the robot if the ROS driver is inside that namespace.")
+    parser.add_argument("robot_name", help="Name of the robot if the ROS driver is inside that namespace")
     parser.add_argument(
         "-c",
         "--camera-location",
         help=f"Choose a camera to get the image:\n{[e.value for e in CameraLocation]}.",
         default="frontleft",
     )
+
     return parser
 
 
-@ros_process.main(cli())
-def main(args: argparse.Namespace) -> None:
-    ###############################################
-    # Boiler plate code
-    spot = SpotBasic(args.robot)
-    tf = TFListenerWrapper(cache_time_s=30)
-    tf.wait_for_a_tform_b(spot.body_frame_name, spot.vision_frame_name)
-    spot.set_tf_listener(tf)
-    cam_loc = CameraLocation(args.camera_location)
-    time.sleep(1.0)
-    ###############################################
+@ros_process.main(cli(), uses_tf=True)
+def main(args: argparse.Namespace) -> int:
+    example = Example(args.robot_name, args.camera_location)
 
-    spot_images = SpotImages(use_registered_depth=True)
-
-    spot_images.display_pointcloud(cam_loc, spot, 10.0)
-
-    rotation_angle = 0
-    if cam_loc == CameraLocation.FRONT_LEFT or cam_loc == CameraLocation.FRONT_RIGHT:
-        rotation_angle = -90
-    if cam_loc == CameraLocation.RIGHT:
-        rotation_angle = -180
-    [rgb, depth] = spot_images.rbg_and_depth_camera_from_location(cam_loc)
-    spot_images.display_image(rgb, spot, rotation_angle=rotation_angle, timeout_sec=5.0)
-    spot_images.display_image(depth, spot, rotation_angle=rotation_angle, timeout_sec=5.0)
+    return example.start()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -10,7 +10,12 @@ from spot_utilities.spot_basic import SpotBasic
 
 
 class Example:
-    """Spot walks forward synchronously"""
+    """
+    Spot walks forward synchronously
+
+    Use the following command to run the example:
+    `python example_walk_forward.py <robot_name>`
+    """
 
     def __init__(self, robot_name: str) -> None:
         self._robot = SpotBasic(robot_name=robot_name)
@@ -25,12 +30,14 @@ class Example:
         self._robot.stand.synchronously()
         self._logger.info("Robot is standing up")
 
-        self._logger.info("Attempting to walk robot forward")
         world_t_robot = self._robot.lookup_a_tform_b(
             self._robot.vision_frame_name, self._robot.body_frame_name
         ).yaw_SE2()
+
         robot_t_goal = SE2(1.0, 0.0, 0.0)
         world_t_goal = world_t_robot * robot_t_goal
+
+        self._logger.info("Attempting to walk robot forward")
         self._robot.walk_to.synchronously(world_t_goal)
         self._logger.info("Robot walked forward")
 
