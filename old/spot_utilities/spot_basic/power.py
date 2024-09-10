@@ -1,6 +1,7 @@
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
-from typing import Any, Callable, Optional, Protocol, Union
+import contextlib
+from typing import Any, Callable, Generator, Optional, Protocol, Union
 
 from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
 from bdai_ros2_wrappers.futures import FutureLike
@@ -90,6 +91,19 @@ class SpotPowerMixin(SpotBaseProtocol):
         SpotPowerMixin.power_off.rebind(
             self, SpotServiced(Trigger, spot_namespaced(self.robot_name, "power_off"), node=self.node)
         )
+
+    @contextlib.contextmanager
+    def power(self, timeout_sec: Optional[float] = None) -> Generator:
+        """Maintain power for the robot while in scope.
+
+        Args:
+            timeout_sec: optional timeout, in seconds. May block indefinitely if none is provided.
+        """
+        self.power_on.synchronously(timeout_sec=timeout_sec)
+        try:
+            yield
+        finally:
+            self.power_off.synchronously(timeout_sec=timeout_sec)
 
     @generalized_method(spec=GeneralizedMethodLike[SpotPowerProtocol.PowerOnProtocol])
     def power_on(self, **kwargs: Any) -> Trigger.Response:

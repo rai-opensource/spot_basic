@@ -1,8 +1,7 @@
-#!/usr/bin/env python3
 # Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
 from __future__ import annotations
 
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 import numpy as np
 from bosdyn.api import (
@@ -17,81 +16,25 @@ from bosdyn_api_msgs.conversions import convert
 from bosdyn_api_msgs.msg import (
     RobotCommandFeedback,
 )
-from rcl_interfaces.srv import GetParameters
-from rclpy.node import Node
 from spot_msgs.action import RobotCommand as RobotCommandAction
-from spot_utilities.spot_basic.base import SpotBase
-from spot_utilities.spot_basic.cam.audio import SpotCAMAudioMixin
-from spot_utilities.spot_basic.choreography import SpotChoreographyMixin
-from spot_utilities.spot_basic.command import SpotCommandMixin
-from spot_utilities.spot_basic.command.arm import SpotArmCommandMixin
-from spot_utilities.spot_basic.command.full_body import SpotFullBodyCommandMixin
-from spot_utilities.spot_basic.command.gripper import SpotGripperCommandMixin
-from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandMixin
-from spot_utilities.spot_basic.docking import SpotDockingMixin
-from spot_utilities.spot_basic.estop import SpotEStopMixin
-from spot_utilities.spot_basic.graph_nav import SpotGraphNavMixin
-from spot_utilities.spot_basic.gripper_camera import SpotGripperCameraMixin
-from spot_utilities.spot_basic.ik import SpotIKMixin
-from spot_utilities.spot_basic.image import SpotImageMixin
-from spot_utilities.spot_basic.lease import SpotLeaseMixin
-from spot_utilities.spot_basic.manipulation import SpotManipulationMixin
-from spot_utilities.spot_basic.power import SpotPowerMixin
-from spot_utilities.spot_basic.state import FrameHint, SpotStateMixin
+from spot_utilities.spot_basic.command import SpotCommandProtocol
+from spot_utilities.spot_basic.lease import SpotLeaseProtocol
+from spot_utilities.spot_basic.manipulation import SpotManipulationProtocol
+from spot_utilities.spot_basic.power import SpotPowerProtocol
+from spot_utilities.spot_basic.state import FrameHint
 from spot_utilities.spot_basic.utilities import SpotActionHandle
-from spot_utilities.spot_basic.world import SpotWorldMixin
-from spot_utilities.spot_util import spot_namespaced
 
 
-class SpotBasic(
-    SpotBase,
-    SpotLeaseMixin,
-    SpotEStopMixin,
-    SpotPowerMixin,
-    SpotDockingMixin,
-    SpotStateMixin,
-    SpotCAMAudioMixin,
-    SpotGraphNavMixin,
-    SpotIKMixin,
-    SpotWorldMixin,
-    SpotArmCommandMixin,
-    SpotGripperCommandMixin,
-    SpotGripperCameraMixin,
-    SpotMobilityCommandMixin,
-    SpotFullBodyCommandMixin,
-    SpotChoreographyMixin,
-    SpotManipulationMixin,
-    SpotCommandMixin,
-    SpotImageMixin,
+class SpotLegacyMixin(
+    SpotCommandProtocol,
+    SpotManipulationProtocol,
+    SpotLeaseProtocol,
+    SpotPowerProtocol,
 ):
     """Base ROS2 Node that provides interfaces to calling various commands"""
 
-    def __init__(
-        self,
-        robot_name: str,
-        *,
-        node: Optional[Node] = None,
-        disable_collisions: bool = False,
-        dry: bool = False,
-        rviz: bool = False,
-    ):
-        """Constructor
-
-        Args:
-            robot_name: name of the robot
-            node: optional parent node, defaults to the current process node
-            disable_collisions: True if collisions should be ignored, False otherwise
-            dry: True if this is a dry run and commands should not actually be sent, False otherwise
-            rviz: True if visuals should be published, False otherwise
-        """
-        super().__init__(robot_name, dry=dry, disable_collisions=disable_collisions, node=node)
-        self._dry = dry
-        self._rviz = rviz
-
-        self._get_parameters_client = self.node.create_client(
-            GetParameters, spot_namespaced(self.robot_name, "spot_ros2/get_parameters")
-        )
-
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
         self.node.get_logger().info(f"Waiting for the 'RobotCommand' action server for {self.robot_name} ...")
         self.execute.wait_for_server()
         self.node.get_logger().info(f"Found the 'RobotCommand' action server for {self.robot_name}.")
@@ -124,7 +67,7 @@ class SpotBasic(
 
     @staticmethod
     def convert_proto_to_robot_cmd_action_goal(proto: robot_command_pb2.RobotCommand) -> RobotCommandAction.Goal:
-        return SpotBasic._convert_proto_to_robot_cmd_action_goal(proto)
+        return SpotLegacyMixin._convert_proto_to_robot_cmd_action_goal(proto)
 
     @staticmethod
     def _convert_proto_to_robot_cmd_action_goal(proto: robot_command_pb2.RobotCommand) -> RobotCommandAction.Goal:
