@@ -9,10 +9,10 @@ import geometry_msgs.msg
 import numpy
 import open3d
 import sensor_msgs.msg
+from bdai_ros.perception.camera_subscription import CameraSubscription
 from bdai_ros.utilities.manual_conversions import open3d_pointcloud_to_ros_pointcloud2, to_se3
 from bdai_ros2_wrappers.feeds import AdaptedMessageFeed, FramedMessageFeed, MessageFeed, SynchronizedMessageFeed
 from bdai_ros2_wrappers.futures import unwrap_future
-from bdai_ros2_wrappers.subscription import Subscription
 from bdai_ros2_wrappers.utilities import namespace_with
 from cv_bridge import CvBridge
 from numpy.typing import NDArray
@@ -20,114 +20,6 @@ from rclpy.node import Node
 from spatialmath import SO3
 from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandProtocol
 from spot_utilities.spot_basic.state import FrameHint
-
-
-class CameraSubscription:
-    """An ergonomic camera subscription in ROS 2.
-
-    Simply a collection for well-known topic subscriptions.
-    """
-
-    class ImageWithInfo(NamedTuple):
-        """A convenient image and camera info message pair."""
-
-        image: sensor_msgs.msg.Image
-        camera_info: sensor_msgs.msg.CameraInfo
-
-    class CompressedImageWithInfo(NamedTuple):
-        """A convenient compressed image and camera info message pair."""
-
-        compressed_image: sensor_msgs.msg.CompressedImage
-        camera_info: sensor_msgs.msg.CameraInfo
-
-    def __init__(
-        self,
-        name: str,
-        history_length: Optional[int] = None,
-        node: Optional[Node] = None,
-        **kwargs: Any,
-    ) -> None:
-        """Initializes the camera subscription.
-
-        Args:
-            name: camera name, used for topic namespacing.
-            history_length: optional historic data size, defaults to 1.
-            node: optional node for subscription, defaults to the current process node.
-            kwargs: all other keyword arguments are used for
-            `bdai_ros2_wrappers.subscription.Subscription` instantiation.
-        """
-        self._name = name
-        self._history_length = history_length
-        self._node = node
-        self._kwargs = kwargs
-
-    @property
-    def name(self) -> str:
-        """Get camera name (ie. camera topics' prefix)."""
-        return self._name
-
-    @cached_property
-    def image(self) -> Subscription[sensor_msgs.msg.Image]:
-        """Get camera image topic subscription."""
-        return Subscription(
-            sensor_msgs.msg.Image,
-            f"{self.name}/image",
-            history_length=self._history_length,
-            node=self._node,
-            **self._kwargs,
-        )
-
-    @cached_property
-    def compressed_image(self) -> Subscription[sensor_msgs.msg.CompressedImage]:
-        """Get camera compressed image topic subscription."""
-        return Subscription(
-            sensor_msgs.msg.CompressedImage,
-            f"{self.name}/compressed",
-            history_length=self._history_length,
-            node=self._node,
-            **self._kwargs,
-        )
-
-    @cached_property
-    def info(self) -> Subscription[sensor_msgs.msg.CameraInfo]:
-        """Get camera info topic subscription."""
-        return Subscription(
-            sensor_msgs.msg.CameraInfo,
-            f"{self.name}/camera_info",
-            history_length=self._history_length,
-            node=self._node,
-            **self._kwargs,
-        )
-
-    @cached_property
-    def image_with_info(self) -> MessageFeed[ImageWithInfo]:
-        """Get synchronized feed of camera image and info message pairs."""
-        return AdaptedMessageFeed(
-            SynchronizedMessageFeed(
-                self.image,
-                self.info,
-                history_length=0,
-                node=self._node,
-            ),
-            fn=CameraSubscription.ImageWithInfo,
-            history_length=self._history_length,
-            node=self._node,
-        )
-
-    @cached_property
-    def compressed_image_with_info(self) -> MessageFeed[CompressedImageWithInfo]:
-        """Get synchronized feed of camera compressed image and info message pairs."""
-        return AdaptedMessageFeed(
-            SynchronizedMessageFeed(
-                self.compressed_image,
-                self.info,
-                history_length=0,
-                node=self._node,
-            ),
-            fn=CameraSubscription.CompressedImageWithInfo,
-            history_length=self._history_length,
-            node=self._node,
-        )
 
 
 def reconstruct_pointcloud(
