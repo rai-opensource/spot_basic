@@ -2,13 +2,14 @@
 
 from typing import Any, Callable, Optional, Protocol, Union
 
-from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
-from bdai_ros2_wrappers.futures import FutureLike
 from spot_msgs.srv import Dock
 from spot_utilities.spot_basic.base import SpotBaseProtocol
 from spot_utilities.spot_basic.utilities import SpotServiced, SpotServicedProtocol, SpotServiceHandle
 from spot_utilities.spot_util import spot_namespaced
 from std_srvs.srv import Trigger
+
+from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
+from bdai_ros2_wrappers.futures import FutureLike
 
 
 class SpotDockingProtocol(SpotBaseProtocol, Protocol):

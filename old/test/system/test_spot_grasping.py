@@ -3,12 +3,13 @@
 
 import numpy as np
 import pytest
-from bdai.test_utilities.testing_prompt_session import TestingPromptSession
 from hil_utilities import prompt_for_click
 from rclpy.time import Time
 from spatialmath import SE3, SO3
 from spot_utilities.spot_basic import SpotBasic
 from spot_utilities.spot_basic.state import FrameHint
+
+from bdai.test_utilities.testing_prompt_session import TestingPromptSession
 
 
 @pytest.mark.manual

@@ -1,13 +1,14 @@
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import pytest
-from bdai_ros2_wrappers.futures import wait_for_future
-from bdai_ros2_wrappers.scope import ROSAwareScope
 from bosdyn.api.basic_command_pb2 import RobotCommandFeedbackStatus, StandCommand
 from bosdyn.api.docking.docking_pb2 import PREP_POSE_UNDOCK, DockingCommandFeedbackResponse, DockingCommandResponse
 from bosdyn.api.robot_command_pb2 import RobotCommandFeedbackResponse, RobotCommandResponse
 from spot_utilities.spot_basic import SpotBasic
 from spot_wrapper.testing.fixtures import SpotFixture
+
+from bdai_ros2_wrappers.futures import wait_for_future
+from bdai_ros2_wrappers.scope import ROSAwareScope
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)

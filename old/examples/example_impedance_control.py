@@ -3,12 +3,13 @@ import argparse
 import logging
 import sys
 
-import bdai_ros2_wrappers.process as ros_process
 import numpy as np
-from bdai_ros2_wrappers.utilities import fqn
 from spatialmath import SE3, SpatialForce
 from spatialmath.spatialvector import SpatialVector
 from spot_utilities.spot_basic import SpotBasic
+
+import bdai_ros2_wrappers.process as ros_process
+from bdai_ros2_wrappers.utilities import fqn
 
 
 class Example:

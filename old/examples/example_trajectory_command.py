@@ -6,16 +6,17 @@ import argparse
 import time
 from typing import Optional
 
-import bdai_ros2_wrappers.process as ros_process
 import matplotlib.pyplot as plt
 import numpy as np
+from bosdyn.client.frame_helpers import BODY_FRAME_NAME, VISION_FRAME_NAME
+from spatialmath import SE2
+from spot_utilities.spot_basic import SpotBasic
+
+import bdai_ros2_wrappers.process as ros_process
 from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai.trajectory.se2_trajectory_plotting import draw_shape
 from bdai.trajectory.spot_se2_properties import BODY_SHAPE, MAX_SPEED_FORWARD, MAX_SPEED_VEC
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
-from bosdyn.client.frame_helpers import BODY_FRAME_NAME, VISION_FRAME_NAME
-from spatialmath import SE2
-from spot_utilities.spot_basic import SpotBasic
 
 """ This is a test script to demo having spot walk along a trajectory.
 

@@ -9,9 +9,10 @@
 import argparse
 import math
 
-import bdai_ros2_wrappers.process as ros_process
 from spatialmath.twist import Twist2
 from spot_utilities.spot_basic import SpotBasic
+
+import bdai_ros2_wrappers.process as ros_process
 
 
 def cli() -> argparse.ArgumentParser:

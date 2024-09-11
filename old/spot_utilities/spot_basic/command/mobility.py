@@ -4,11 +4,6 @@ import functools
 from typing import Any, Callable, Iterable, List, Optional, Protocol, TypeAlias, Union, overload
 
 import numpy as np
-from bdai.trajectory.se2_trajectory import SE2Trajectory
-from bdai_ros.utilities.manual_conversions import se3_to_se3pose
-from bdai_ros2_wrappers.action import ActionFuture
-from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
-from bdai_ros2_wrappers.futures import FutureLike
 from bosdyn.api import robot_command_pb2, trajectory_pb2
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.client.math_helpers import SE3Pose
@@ -26,6 +21,12 @@ from spot_utilities.spot_basic.command.helpers import timestamped_se2_vecs_to_ro
 from spot_utilities.spot_basic.state import FrameHint
 from spot_utilities.spot_basic.utilities import RobotComposeCommandHandle, SpotActionableProtocol, SpotActionHandle
 from spot_utilities.spot_util import spot_namespaced
+
+from bdai.trajectory.se2_trajectory import SE2Trajectory
+from bdai_ros.utilities.manual_conversions import se3_to_se3pose
+from bdai_ros2_wrappers.action import ActionFuture
+from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
+from bdai_ros2_wrappers.futures import FutureLike
 
 
 class SpotMobilityCommandBuilder(SpotCommandBuilder):

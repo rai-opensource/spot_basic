@@ -3,8 +3,6 @@
 import math
 
 import pytest
-from bdai_ros2_wrappers.futures import unwrap_future, wait_for_future
-from bdai_ros2_wrappers.scope import ROSAwareScope
 from bosdyn.api.basic_command_pb2 import RobotCommandFeedbackStatus
 from bosdyn.api.gripper_camera_param_pb2 import (
     GripperCameraGetParamResponse,
@@ -16,6 +14,9 @@ from bosdyn.api.robot_command_pb2 import RobotCommandFeedbackResponse, RobotComm
 from bosdyn_api_msgs.msg import ClawGripperCommandFeedbackStatus
 from spot_utilities.spot_basic import SpotBasic
 from spot_wrapper.testing.fixtures import SpotFixture
+
+from bdai_ros2_wrappers.futures import unwrap_future, wait_for_future
+from bdai_ros2_wrappers.scope import ROSAwareScope
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_without_arm_graph_description)

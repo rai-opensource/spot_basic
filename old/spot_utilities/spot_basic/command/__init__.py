@@ -6,9 +6,6 @@ from typing import Any, Callable, Optional, Protocol, TypeAlias, Union, overload
 import bosdyn_api_msgs.msg
 import builtin_interfaces.msg
 import rclpy.duration
-from bdai_ros2_wrappers.action import ActionFuture
-from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
-from bdai_ros2_wrappers.futures import FutureLike
 from bosdyn.api import robot_command_pb2
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn_api_msgs.msg import RobotCommandFeedback
@@ -29,6 +26,10 @@ from spot_utilities.spot_basic.utilities import (
 )
 from spot_utilities.spot_util import spot_namespaced
 from std_srvs.srv import SetBool, Trigger
+
+from bdai_ros2_wrappers.action import ActionFuture
+from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
+from bdai_ros2_wrappers.futures import FutureLike
 
 
 class LocomotionHint(IntEnum):

@@ -2,10 +2,11 @@
 
 
 import pytest
-from bdai_ros2_wrappers.scope import ROSAwareScope
 from bosdyn.api.manipulation_api_pb2 import ApiGraspOverrideResponse
 from spot_utilities.spot_basic import SpotBasic
 from spot_wrapper.testing.fixtures import SpotFixture
+
+from bdai_ros2_wrappers.scope import ROSAwareScope
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)

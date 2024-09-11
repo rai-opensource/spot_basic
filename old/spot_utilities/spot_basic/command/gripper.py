@@ -2,8 +2,6 @@
 
 from typing import Any, Callable, Optional, Protocol, TypeAlias, Union
 
-from bdai_ros2_wrappers.action import ActionFuture
-from bdai_ros2_wrappers.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
 from bosdyn.api import robot_command_pb2
 from bosdyn.client.robot_command import _CLAW_GRIPPER_CLOSED_ANGLE, _CLAW_GRIPPER_OPEN_ANGLE, RobotCommandBuilder
 from bosdyn_api_msgs.conversions import convert
@@ -11,6 +9,9 @@ from bosdyn_api_msgs.msg import RobotCommandFeedback
 from spot_msgs.action import RobotCommand as RobotCommandAction
 from spot_utilities.spot_basic.command import SpotCommandBuilder, SpotCommandProtocol
 from spot_utilities.spot_basic.utilities import SpotActionableProtocol, SpotActionHandle
+
+from bdai_ros2_wrappers.action import ActionFuture
+from bdai_ros2_wrappers.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
 
 
 class SpotGripperCommandBuilder(SpotCommandBuilder):

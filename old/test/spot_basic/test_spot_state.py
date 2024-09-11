@@ -4,12 +4,13 @@ import math
 from dataclasses import asdict
 
 import pytest
-from bdai_ros2_wrappers.futures import wait_for_future
-from bdai_ros2_wrappers.scope import ROSAwareScope
 from numpy.testing import assert_equal
 from spatialmath import SO3
 from spot_utilities.spot_basic import FrameHint, SpotBasic
 from spot_wrapper.testing.fixtures import SpotFixture
+
+from bdai_ros2_wrappers.futures import wait_for_future
+from bdai_ros2_wrappers.scope import ROSAwareScope
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)

@@ -3,8 +3,6 @@
 import pathlib
 
 import pytest
-from bdai_ros2_wrappers.futures import wait_for_future
-from bdai_ros2_wrappers.scope import ROSAwareScope
 from bosdyn.api.spot_cam.audio_pb2 import (
     DeleteSoundResponse,
     GetVolumeResponse,
@@ -16,6 +14,9 @@ from bosdyn.api.spot_cam.audio_pb2 import (
 )
 from spot_utilities.spot_basic import SpotBasic
 from spot_wrapper.testing.fixtures import SpotFixture
+
+from bdai_ros2_wrappers.futures import wait_for_future
+from bdai_ros2_wrappers.scope import ROSAwareScope
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)

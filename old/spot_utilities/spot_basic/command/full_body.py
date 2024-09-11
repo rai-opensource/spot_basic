@@ -3,8 +3,6 @@
 from enum import IntEnum
 from typing import Any, Callable, Optional, Protocol, TypeAlias, Union, overload
 
-from bdai_ros2_wrappers.action import ActionFuture
-from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
 from bosdyn.api import full_body_command_pb2, robot_command_pb2
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.client.math_helpers import SE3Pose
@@ -19,6 +17,9 @@ from spot_utilities.spot_basic.command.gripper import SpotGripperCommandBuilder
 from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandBuilder
 from spot_utilities.spot_basic.state import ArmJointMap
 from spot_utilities.spot_basic.utilities import SpotActionableProtocol, SpotActionHandle
+
+from bdai_ros2_wrappers.action import ActionFuture
+from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
 
 
 class BatteryChangeDirHint(IntEnum):

@@ -9,14 +9,15 @@ import time
 from threading import Event
 from typing import Any, Optional, Sequence
 
-import bdai_ros2_wrappers.process as ros_process
 import numpy as np
-from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
-from bdai_ros2_wrappers.utilities import fqn
 from bosdyn.client.frame_helpers import BODY_FRAME_NAME
 from spatialmath import SE3
 from spot_utilities.spot_basic import SpotBasic
 from spot_utilities.spot_dataclasses import ArmJointMap
+
+import bdai_ros2_wrappers.process as ros_process
+from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
+from bdai_ros2_wrappers.utilities import fqn
 
 
 class SpotRunner:

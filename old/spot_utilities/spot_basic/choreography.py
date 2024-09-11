@@ -4,10 +4,6 @@ import os
 import tempfile
 from typing import Any, Callable, Optional, Protocol, Union, cast, overload
 
-import bdai.interactive_choreo.choreo_builders.serialization_utils as serialization_utils
-from bdai_ros2_wrappers.action import ActionFuture
-from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
-from bdai_ros2_wrappers.futures import FutureLike
 from bosdyn.api.spot.choreography_sequence_pb2 import Animation, ChoreographySequence
 from spot_msgs.action import ExecuteDance
 from spot_msgs.srv import (
@@ -30,6 +26,11 @@ from spot_utilities.spot_basic.utilities import (
 )
 from spot_utilities.spot_util import spot_namespaced
 from std_srvs.srv import Trigger
+
+import bdai.interactive_choreo.choreo_builders.serialization_utils as serialization_utils
+from bdai_ros2_wrappers.action import ActionFuture
+from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
+from bdai_ros2_wrappers.futures import FutureLike
 
 
 class SpotChoreographyProtocol(SpotBaseProtocol, Protocol):

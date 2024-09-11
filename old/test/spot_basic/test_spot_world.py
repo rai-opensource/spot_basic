@@ -1,7 +1,6 @@
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import pytest
-from bdai_ros2_wrappers.scope import ROSAwareScope
 from bosdyn.api.world_object_pb2 import (
     AprilTagProperties,
     ListWorldObjectRequest,
@@ -11,6 +10,8 @@ from bosdyn.api.world_object_pb2 import (
 )
 from spot_utilities.spot_basic import SpotBasic
 from spot_wrapper.testing.fixtures import SpotFixture
+
+from bdai_ros2_wrappers.scope import ROSAwareScope
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)

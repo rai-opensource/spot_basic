@@ -3,12 +3,13 @@
 import os
 from typing import Any, Optional, Protocol, cast, overload
 
-from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
-from bdai_ros2_wrappers.futures import FutureLike
 from spot_msgs.srv import DeleteSound, GetVolume, ListSounds, LoadSound, PlaySound, SetVolume
 from spot_utilities.spot_basic.base import SpotBaseProtocol
 from spot_utilities.spot_basic.utilities import SpotServiced, SpotServicedProtocol
 from spot_utilities.spot_util import spot_namespaced
+
+from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
+from bdai_ros2_wrappers.futures import FutureLike
 
 
 class SpotCAMAudioProtocol(SpotBaseProtocol, Protocol):

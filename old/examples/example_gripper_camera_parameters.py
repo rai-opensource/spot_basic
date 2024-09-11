@@ -13,10 +13,11 @@ This example shows how to query and set the camera parameters for the gripper.
 import argparse
 import logging
 
-import bdai_ros2_wrappers.process as ros_process
-from bdai_ros2_wrappers.utilities import fqn
 from bosdyn_msgs.msg import GripperCameraParams
 from spot_utilities.spot_basic import SpotBasic
+
+import bdai_ros2_wrappers.process as ros_process
+from bdai_ros2_wrappers.utilities import fqn
 
 
 class SpotGripperCameraParameters:

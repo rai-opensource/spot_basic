@@ -3,14 +3,15 @@
 from typing import Any, Optional, Protocol, Union, overload
 
 import bosdyn_spot_api_msgs.msg
-from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
-from bdai_ros2_wrappers.futures import FutureLike
 from bosdyn.api.spot import inverse_kinematics_pb2
 from bosdyn_api_msgs.conversions import convert
 from spot_msgs.srv import GetInverseKinematicSolutions
 from spot_utilities.spot_basic.base import SpotBaseProtocol
 from spot_utilities.spot_basic.utilities import SpotServiced, SpotServicedProtocol
 from spot_utilities.spot_util import spot_namespaced
+
+from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
+from bdai_ros2_wrappers.futures import FutureLike
 
 
 class SpotIKProtocol(SpotBaseProtocol, Protocol):

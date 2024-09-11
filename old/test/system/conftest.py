@@ -3,12 +3,20 @@
 import pathlib
 from typing import Iterator
 
-import bdai_ros2_wrappers.scope as ros_scope
 import domain_coordinator
 import launch_pytest
 import pytest
 import yaml
 from ament_index_python import get_package_share_directory
+from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
+from launch.launch_description import LaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import PathJoinSubstitution
+from launch_pytest.actions import ReadyToTest
+from launch_ros.substitutions import FindPackageShare
+from spot_utilities.spot_basic import SpotBasic
+
+import bdai_ros2_wrappers.scope as ros_scope
 from bdai.test_utilities.testing_prompt_session import TestingPromptSession
 from bdai_core.robots.load_robot_configs import (
     get_default_spot_password,
@@ -17,13 +25,6 @@ from bdai_core.robots.load_robot_configs import (
     get_spot_ip,
 )
 from bdai_ros2_wrappers.scope import ROSAwareScope
-from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
-from launch.launch_description import LaunchDescription
-from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import PathJoinSubstitution
-from launch_pytest.actions import ReadyToTest
-from launch_ros.substitutions import FindPackageShare
-from spot_utilities.spot_basic import SpotBasic
 
 
 @pytest.fixture(scope="session")

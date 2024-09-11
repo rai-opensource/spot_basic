@@ -1,12 +1,13 @@
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import pytest
-from bdai_ros2_wrappers.futures import unwrap_future
-from bdai_ros2_wrappers.scope import ROSAwareScope
 from bosdyn.api.spot.inverse_kinematics_pb2 import InverseKinematicsRequest, InverseKinematicsResponse
 from spot_utilities.spot_basic import SpotBasic
 from spot_utilities.spot_basic.state import FrameHint
 from spot_wrapper.testing.fixtures import SpotFixture
+
+from bdai_ros2_wrappers.futures import unwrap_future
+from bdai_ros2_wrappers.scope import ROSAwareScope
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)

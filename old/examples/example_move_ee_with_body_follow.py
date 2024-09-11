@@ -11,16 +11,17 @@
 # python example_move_ee_with_body_follow.py Stitch 1.0 0.1 0.25 0 15 0
 import argparse
 
-import bdai_ros2_wrappers.process as ros_process
-from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
-from bdai_ros2_wrappers.action_client import ActionClientWrapper
-from bdai_ros2_wrappers.utilities import namespace_with
 from bosdyn.client.frame_helpers import VISION_FRAME_NAME
 from bosdyn.client.robot_command import RobotCommandBuilder
 from bosdyn_msgs.conversions import convert
 from spatialmath import SE3, UnitQuaternion
 from spot_msgs.action import RobotCommand
 from spot_utilities.spot_basic import SpotBasic
+
+import bdai_ros2_wrappers.process as ros_process
+from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
+from bdai_ros2_wrappers.action_client import ActionClientWrapper
+from bdai_ros2_wrappers.utilities import namespace_with
 
 
 def cli() -> argparse.ArgumentParser:

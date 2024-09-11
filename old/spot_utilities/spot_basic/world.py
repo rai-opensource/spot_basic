@@ -3,13 +3,14 @@
 from typing import Any, Optional, Protocol, Union, overload
 
 import bosdyn_api_msgs.msg
-from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
-from bdai_ros2_wrappers.futures import FutureLike
 from bosdyn.api import world_object_pb2
 from spot_msgs.srv import ListWorldObjects
 from spot_utilities.spot_basic.base import SpotBaseProtocol
 from spot_utilities.spot_basic.utilities import SpotServiced, SpotServicedProtocol
 from spot_utilities.spot_util import spot_namespaced
+
+from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
+from bdai_ros2_wrappers.futures import FutureLike
 
 
 class SpotWorldProtocol(SpotBaseProtocol, Protocol):

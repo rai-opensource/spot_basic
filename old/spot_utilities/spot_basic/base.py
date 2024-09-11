@@ -2,11 +2,12 @@
 
 from typing import Any, Optional, Protocol
 
-import bdai_ros2_wrappers.scope as ros_scope
-from bdai_ros2_wrappers.service import Serviced
 from rcl_interfaces.srv import GetParameters
 from rclpy.node import Node
 from spot_utilities.spot_util import spot_namespaced
+
+import bdai_ros2_wrappers.scope as ros_scope
+from bdai_ros2_wrappers.service import Serviced
 
 
 class SpotBaseProtocol(Protocol):

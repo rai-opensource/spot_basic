@@ -5,13 +5,14 @@ import pathlib
 import numpy as np
 import open3d
 import pytest
-from bdai.test_utilities.testing_prompt_session import TestingPromptSession
-from bdai_ros.utilities.manual_conversions import to_se3
-from bdai_ros2_wrappers.futures import unwrap_future
 from cv_bridge import CvBridge
 from numpy.testing import assert_almost_equal
 from spatialmath import SE2, SO3
 from spot_utilities.spot_basic import FrameHint, SpotBasic
+
+from bdai.test_utilities.testing_prompt_session import TestingPromptSession
+from bdai_ros.utilities.manual_conversions import to_se3
+from bdai_ros2_wrappers.futures import unwrap_future
 
 
 @pytest.mark.manual

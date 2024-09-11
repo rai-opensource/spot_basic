@@ -4,9 +4,6 @@ import pathlib
 
 import geometry_msgs.msg
 import pytest
-from bdai_ros2_wrappers.futures import wait_for_future
-from bdai_ros2_wrappers.scope import ROSAwareScope
-from bdai_ros2_wrappers.utilities import ensure
 from bosdyn.api.graph_nav.graph_nav_pb2 import (
     ClearGraphResponse,
     DownloadGraphResponse,
@@ -19,6 +16,10 @@ from bosdyn.api.graph_nav.map_pb2 import Graph
 from bosdyn.api.graph_nav.nav_pb2 import Localization
 from spot_utilities.spot_basic import SpotBasic
 from spot_wrapper.testing.fixtures import SpotFixture
+
+from bdai_ros2_wrappers.futures import wait_for_future
+from bdai_ros2_wrappers.scope import ROSAwareScope
+from bdai_ros2_wrappers.utilities import ensure
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)

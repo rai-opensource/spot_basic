@@ -4,13 +4,14 @@
 import argparse
 import time
 
-import bdai_ros2_wrappers.process as ros_process
 import numpy as np
+from spatialmath import SE2, SE3, SO3
+from spot_utilities.spot_basic import SpotBasic
+
+import bdai_ros2_wrappers.process as ros_process
 from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai.trajectory.spot_se2_properties import MAX_SPEED_FORWARD
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
-from spatialmath import SE2, SE3, SO3
-from spot_utilities.spot_basic import SpotBasic
 
 
 def cli() -> argparse.ArgumentParser:

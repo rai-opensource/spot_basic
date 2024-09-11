@@ -3,9 +3,10 @@
 import argparse
 import sys
 
+from spot_utilities.spot_basic import SpotBasic
+
 import bdai_ros2_wrappers.process as ros_process
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
-from spot_utilities.spot_basic import SpotBasic
 
 """This example demonstrates using the WalkToObjectRayInWorld manipulation API request from the spot-sdk through the
     ros2 wrapper. The robot should walk forward about 0.5 meters.

@@ -3,11 +3,12 @@
 import argparse
 import time
 
-import bdai_ros2_wrappers.process as ros_process
 import open3d as o3d
-from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 from spot_utilities.spot_basic import SpotBasic
 from spot_utilities.spot_vision import CameraLocation, create_point_cloud_in_place
+
+import bdai_ros2_wrappers.process as ros_process
+from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 
 """
 This example makes spot grab point clouds from multiple cameras and

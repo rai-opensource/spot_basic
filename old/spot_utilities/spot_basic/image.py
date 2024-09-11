@@ -9,17 +9,18 @@ import geometry_msgs.msg
 import numpy
 import open3d
 import sensor_msgs.msg
-from bdai_ros.perception.camera_subscription import CameraSubscription, RgbdFrameWithInfo
-from bdai_ros.utilities.manual_conversions import open3d_pointcloud_to_ros_pointcloud2, to_se3
-from bdai_ros2_wrappers.feeds import AdaptedMessageFeed, FramedMessageFeed, MessageFeed, SynchronizedMessageFeed
-from bdai_ros2_wrappers.futures import unwrap_future
-from bdai_ros2_wrappers.utilities import namespace_with
 from cv_bridge import CvBridge
 from numpy.typing import NDArray
 from rclpy.node import Node
 from spatialmath import SO3
 from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandProtocol
 from spot_utilities.spot_basic.state import FrameHint
+
+from bdai_ros.perception.camera_subscription import CameraSubscription, RgbdFrameWithInfo
+from bdai_ros.utilities.manual_conversions import open3d_pointcloud_to_ros_pointcloud2, to_se3
+from bdai_ros2_wrappers.feeds import AdaptedMessageFeed, FramedMessageFeed, MessageFeed, SynchronizedMessageFeed
+from bdai_ros2_wrappers.futures import unwrap_future
+from bdai_ros2_wrappers.utilities import namespace_with
 
 
 def reconstruct_pointcloud(

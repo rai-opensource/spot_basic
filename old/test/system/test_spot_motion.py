@@ -3,15 +3,16 @@
 import math
 
 import pytest
-from bdai.interactive_choreo.choreo_builders.animation_builder import AnimationBuilder
-from bdai.interactive_choreo.choreo_builders.sequence_builder import SequenceBuilder
-from bdai.test_utilities.testing_prompt_session import TestingPromptSession
-from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bosdyn.client.robot_command import RobotCommandBuilder
 from bosdyn_api_msgs.msg import SE2TrajectoryCommandFeedbackStatus
 from spatialmath import SE2, SE3, SO3
 from spot_utilities.spot_basic import FrameHint, SpotBasic
 from spot_utilities.spot_basic.command import LocomotionHint
+
+from bdai.interactive_choreo.choreo_builders.animation_builder import AnimationBuilder
+from bdai.interactive_choreo.choreo_builders.sequence_builder import SequenceBuilder
+from bdai.test_utilities.testing_prompt_session import TestingPromptSession
+from bdai.trajectory.se2_trajectory import SE2Trajectory
 
 
 @pytest.mark.manual

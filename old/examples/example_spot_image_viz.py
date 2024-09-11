@@ -3,10 +3,11 @@ import argparse
 import logging
 import sys
 
-import bdai_ros2_wrappers.process as ros_process
-from bdai_ros2_wrappers.utilities import fqn
 from spot_utilities.spot_basic import SpotBasic
 from spot_utilities.spot_vision import CameraLocation, SpotImages
+
+import bdai_ros2_wrappers.process as ros_process
+from bdai_ros2_wrappers.utilities import fqn
 
 
 class Example:

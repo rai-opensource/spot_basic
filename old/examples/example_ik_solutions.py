@@ -14,12 +14,7 @@ the robot arm to that solution.
 import argparse
 import logging
 
-import bdai_ros2_wrappers.process as ros_process
 import numpy as np
-from bdai_ros.utilities.manual_conversions import se3_to_se3pose
-from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
-from bdai_ros2_wrappers.action_client import ActionClientWrapper
-from bdai_ros2_wrappers.utilities import fqn, namespace_with
 from bosdyn.api.spot import inverse_kinematics_pb2, robot_command_pb2
 from bosdyn.client.frame_helpers import (
     BODY_FRAME_NAME,
@@ -33,6 +28,12 @@ from bosdyn.client.robot_command import RobotCommandBuilder
 from bosdyn_msgs.conversions import convert
 from spot_msgs.action import RobotCommand  # type: ignore
 from spot_utilities.spot_basic import SpotBasic
+
+import bdai_ros2_wrappers.process as ros_process
+from bdai_ros.utilities.manual_conversions import se3_to_se3pose
+from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
+from bdai_ros2_wrappers.action_client import ActionClientWrapper
+from bdai_ros2_wrappers.utilities import fqn, namespace_with
 
 
 class SpotRunner:

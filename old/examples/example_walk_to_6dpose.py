@@ -5,12 +5,13 @@ import argparse
 import logging
 import typing
 
-import bdai_ros2_wrappers.process as ros_process
-from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
-from bdai_ros2_wrappers.utilities import fqn
 from bosdyn_msgs.msg import RobotCommandFeedback
 from spatialmath import SE3, UnitQuaternion
 from spot_utilities.spot_basic import SpotBasic
+
+import bdai_ros2_wrappers.process as ros_process
+from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
+from bdai_ros2_wrappers.utilities import fqn
 
 
 class Test6DPoseCommand:

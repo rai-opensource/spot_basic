@@ -6,9 +6,6 @@ import math
 from typing import Any, Callable, Optional, Protocol, Sequence, Union
 
 import bosdyn_api_msgs.msg
-from bdai_ros2_wrappers.action import ActionFuture
-from bdai_ros2_wrappers.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
-from bdai_ros2_wrappers.futures import FutureLike
 from bosdyn.api import geometry_pb2, image_pb2, manipulation_api_pb2
 from bosdyn.api.manipulation_api_pb2 import ApiGraspOverride
 from bosdyn.api.robot_state_pb2 import ManipulatorState
@@ -28,6 +25,10 @@ from spot_utilities.spot_basic.utilities import (
     SpotServicedProtocol,
 )
 from spot_utilities.spot_util import spot_namespaced
+
+from bdai_ros2_wrappers.action import ActionFuture
+from bdai_ros2_wrappers.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
+from bdai_ros2_wrappers.futures import FutureLike
 
 
 class SpotManipulationCommandBuilder:

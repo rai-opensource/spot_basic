@@ -1,9 +1,10 @@
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import pytest
-from bdai_ros2_wrappers.futures import wait_for_future
 from spot_msgs.msg import PowerState
 from spot_utilities.spot_basic import SpotBasic
+
+from bdai_ros2_wrappers.futures import wait_for_future
 
 
 @pytest.mark.manual

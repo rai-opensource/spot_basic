@@ -4,9 +4,10 @@ import argparse
 import logging
 import sys
 
+from spot_utilities.spot_basic import SpotBasic
+
 import bdai_ros2_wrappers.process as ros_process
 from bdai_ros2_wrappers.utilities import fqn
-from spot_utilities.spot_basic import SpotBasic
 
 
 class Example:

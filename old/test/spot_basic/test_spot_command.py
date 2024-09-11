@@ -5,9 +5,6 @@ from unittest.mock import Mock
 
 import numpy as np
 import pytest
-from bdai.trajectory.se2_trajectory import SE2Trajectory
-from bdai_ros2_wrappers.futures import wait_for_future
-from bdai_ros2_wrappers.scope import ROSAwareScope
 from bosdyn.api.basic_command_pb2 import (
     BatteryChangePoseCommand,
     RobotCommandFeedbackStatus,
@@ -37,6 +34,10 @@ from spot_utilities.spot_basic.command.full_body import BatteryChangeDirHint, Sp
 from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandBuilder
 from spot_utilities.spot_basic.state import FrameHint
 from spot_wrapper.testing.fixtures import SpotFixture
+
+from bdai.trajectory.se2_trajectory import SE2Trajectory
+from bdai_ros2_wrappers.futures import wait_for_future
+from bdai_ros2_wrappers.scope import ROSAwareScope
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)

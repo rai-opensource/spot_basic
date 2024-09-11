@@ -2,8 +2,6 @@
 
 import numpy as np
 import pytest
-from bdai_ros2_wrappers.futures import wait_for_future
-from bdai_ros2_wrappers.scope import ROSAwareScope
 from bosdyn.api import manipulation_api_pb2
 from bosdyn.api.manipulation_api_pb2 import ApiGraspOverride
 from bosdyn.api.robot_state_pb2 import ManipulatorState
@@ -12,6 +10,9 @@ from sensor_msgs.msg import CameraInfo
 from spot_utilities.spot_basic import SpotBasic
 from spot_utilities.spot_basic.state import FrameHint
 from spot_wrapper.testing.fixtures import SpotFixture
+
+from bdai_ros2_wrappers.futures import wait_for_future
+from bdai_ros2_wrappers.scope import ROSAwareScope
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)

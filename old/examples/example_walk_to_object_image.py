@@ -5,17 +5,18 @@ import logging
 import sys
 from typing import Any
 
-import bdai_ros2_wrappers.process as ros_process
 import cv2
 import numpy as np
-from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
-from bdai_ros2_wrappers.subscription import wait_for_message
-from bdai_ros2_wrappers.utilities import fqn, namespace_with
 from bosdyn.client.frame_helpers import BODY_FRAME_NAME, VISION_FRAME_NAME
 from cv_bridge import CvBridge
 from sensor_msgs.msg import CameraInfo, Image
 from spot_utilities.spot_basic import SpotBasic
 from tf2_ros import ExtrapolationException
+
+import bdai_ros2_wrappers.process as ros_process
+from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
+from bdai_ros2_wrappers.subscription import wait_for_message
+from bdai_ros2_wrappers.utilities import fqn, namespace_with
 
 """ This is a test script to demo using the manipulation api.
 

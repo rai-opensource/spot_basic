@@ -4,9 +4,6 @@ from enum import Enum
 from functools import cached_property
 from typing import Any, List, Optional, Protocol, TypeAlias, Union, overload
 
-from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
-from bdai_ros2_wrappers.futures import FutureLike
-from bdai_ros2_wrappers.subscription import Subscription
 from geometry_msgs.msg import Pose, PoseStamped
 from spot_msgs.srv import (
     GraphNavClearGraph,
@@ -18,6 +15,10 @@ from spot_msgs.srv import (
 from spot_utilities.spot_basic.base import SpotBaseProtocol
 from spot_utilities.spot_basic.utilities import SpotServiced, SpotServicedProtocol
 from spot_utilities.spot_util import spot_namespaced
+
+from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
+from bdai_ros2_wrappers.futures import FutureLike
+from bdai_ros2_wrappers.subscription import Subscription
 
 
 class LocalizationMethod(str, Enum):

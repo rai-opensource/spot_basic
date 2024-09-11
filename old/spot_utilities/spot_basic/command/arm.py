@@ -3,9 +3,6 @@
 import dataclasses
 from typing import Any, Callable, List, Optional, Protocol, Sequence, Tuple, TypeAlias, Union, overload
 
-from bdai_ros.utilities.manual_conversions import se3_to_se3pose_proto
-from bdai_ros2_wrappers.action import ActionFuture
-from bdai_ros2_wrappers.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
 from bosdyn.api import (
     arm_command_pb2,
     basic_command_pb2,
@@ -30,6 +27,10 @@ from spot_utilities.spot_basic.command.helpers import (
 )
 from spot_utilities.spot_basic.state import ArmJointMap, FrameHint
 from spot_utilities.spot_basic.utilities import SpotActionableProtocol, SpotActionHandle
+
+from bdai_ros.utilities.manual_conversions import se3_to_se3pose_proto
+from bdai_ros2_wrappers.action import ActionFuture
+from bdai_ros2_wrappers.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
 
 
 @dataclasses.dataclass(kw_only=True)

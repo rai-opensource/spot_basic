@@ -2,8 +2,9 @@
 import argparse
 import time
 
-import bdai_ros2_wrappers.process as ros_process
 from spot_utilities.spot_basic import SpotBasic
+
+import bdai_ros2_wrappers.process as ros_process
 
 """ This is a test script to demo gazing at a point in space with the body.
 

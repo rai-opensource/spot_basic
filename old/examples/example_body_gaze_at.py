@@ -2,9 +2,10 @@
 import argparse
 import time
 
+from spot_utilities.spot_basic import SpotBasic
+
 import bdai_ros2_wrappers.process as ros_process
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
-from spot_utilities.spot_basic import SpotBasic
 
 """ This is a test script to demo gazing at a point in space with the body.
 
