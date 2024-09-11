@@ -9,7 +9,7 @@ import geometry_msgs.msg
 import numpy
 import open3d
 import sensor_msgs.msg
-from bdai_ros.perception.camera_subscription import CameraSubscription
+from bdai_ros.perception.camera_subscription import CameraSubscription, RgbdFrameWithInfo
 from bdai_ros.utilities.manual_conversions import open3d_pointcloud_to_ros_pointcloud2, to_se3
 from bdai_ros2_wrappers.feeds import AdaptedMessageFeed, FramedMessageFeed, MessageFeed, SynchronizedMessageFeed
 from bdai_ros2_wrappers.futures import unwrap_future
@@ -209,6 +209,18 @@ class SpotCameraSubscription:
             history_length=self._history_length,
             node=self._node,
             **self._kwargs,
+        )
+
+    @cached_property
+    def rgbd_frame_with_info(self) -> AdaptedMessageFeed[RgbdFrameWithInfo]:
+        """Get synchronized rgb image, depth (registered) image, and camera info feed."""
+        return AdaptedMessageFeed(
+            SynchronizedMessageFeed(
+                self.rgb.image, self.depth_registered.image, self.rgb.info, history_length=0, node=self._node
+            ),
+            fn=RgbdFrameWithInfo,
+            history_length=self._history_length,
+            node=self._node,
         )
 
     @cached_property
