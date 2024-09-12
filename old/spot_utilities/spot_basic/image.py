@@ -15,6 +15,7 @@ from rclpy.node import Node
 from spatialmath import SO3
 from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandProtocol
 from spot_utilities.spot_basic.state import FrameHint
+from spot_utilities.spot_util import spot_namespaced
 
 from bdai_ros.perception.camera_subscription import CameraSubscription, RgbdFrameWithInfo
 from bdai_ros.utilities.manual_conversions import open3d_pointcloud_to_ros_pointcloud2, to_se3
@@ -186,7 +187,7 @@ class SpotCameraSubscription:
     def rgb(self) -> CameraSubscription:
         """Get rgb camera subscription."""
         return CameraSubscription(
-            f"{self.robot_name}/camera/{self.location.value}",
+            spot_namespaced(self.robot_name, "camera", self.location.value),
             history_length=self._history_length,
             node=self._node,
             **self._kwargs,
@@ -196,7 +197,7 @@ class SpotCameraSubscription:
     def depth(self) -> CameraSubscription:
         """Get depth camera subscription."""
         return CameraSubscription(
-            f"{self.robot_name}/depth/{self.location.value}",
+            spot_namespaced(self.robot_name, "depth", self.location.value),
             history_length=self._history_length,
             node=self._node,
             **self._kwargs,
@@ -206,7 +207,7 @@ class SpotCameraSubscription:
     def depth_registered(self) -> CameraSubscription:
         """Get (rgb-)registered depth camera subscription."""
         return CameraSubscription(
-            f"{self.robot_name}/depth_registered/{self.location.value}",
+            spot_namespaced(self.robot_name, "depth_registered", self.location.value),
             history_length=self._history_length,
             node=self._node,
             **self._kwargs,
