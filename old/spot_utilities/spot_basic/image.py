@@ -140,7 +140,7 @@ def make_pointcloud_reconstruction_feed(
 class SpotCameraSubscription:
     """An ergonomic interface to Spot RGBD cameras in ROS 2."""
 
-    class Location(Enum):
+    class Location(str, Enum):
         """Camera location on Spot."""
 
         BACK = "back"
@@ -149,6 +149,9 @@ class SpotCameraSubscription:
         FRONT_LEFT = "frontleft"
         FRONT_RIGHT = "frontright"
         HAND = "hand"
+
+        def __repr__(self) -> str:
+            return self.value
 
     def __init__(
         self,
