@@ -204,14 +204,14 @@ class SpotStateMixin(SpotBaseProtocol):
         return Subscription(JointState, spot_namespaced(self.robot_name, "joint_states"), node=self.node)
 
     @property
-    def arm_joint_positions(self) -> ArmJointMap:
-        """Get current arm joint joint positions.
+    def arm_joint_positions(self) -> Optional[ArmJointMap]:
+        """Get current arm joint joint positions, or None if no joint states have been received yet.
 
         Includes shoulder, elbow, and wrist.
         """
         joint_states = self.joint_states.latest
         if joint_states is None:
-            return ArmJointMap(sh0=0.0, sh1=0.0, el0=0.0, el1=0.0, wr0=0.0, wr1=0.0)
+            return None
         joint_positions = dict(zip(joint_states.name, joint_states.position, strict=True))
         return ArmJointMap(
             sh0=joint_positions[namespace_with(self.robot_name, "arm_sh0")],
@@ -223,14 +223,14 @@ class SpotStateMixin(SpotBaseProtocol):
         )
 
     @property
-    def leg_joint_positions(self) -> LegJointMap:
-        """Get current legs' joint positions.
+    def leg_joint_positions(self) -> Optional[LegJointMap]:
+        """Get current legs' joint positions, or None if no joint states have been received yet.
 
         Includes left and right hips and knees.
         """
         joint_states = self.joint_states.latest
         if joint_states is None:
-            return LegJointMap.from_list([0.0] * 12)
+            return None
         joint_positions = dict(zip(joint_states.name, joint_states.position, strict=True))
         return LegJointMap(
             front_left_hip_x=joint_positions[namespace_with(self.robot_name, "front_left_hip_x")],
