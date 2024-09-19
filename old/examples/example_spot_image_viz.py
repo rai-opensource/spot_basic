@@ -3,56 +3,67 @@ import argparse
 import logging
 import sys
 
+import open3d
+from cv_bridge import CvBridge
+from scipy import ndimage
 from spot_utilities.spot_basic import SpotBasic
-from spot_utilities.spot_vision import CameraLocation, SpotImages
+from spot_utilities.spot_basic.image import SpotCameraSubscription
 
 import bdai_ros2_wrappers.process as ros_process
+from bdai_ros2_wrappers.futures import unwrap_future
 from bdai_ros2_wrappers.utilities import fqn
 
 
 class Example:
     """
-    Spot recieves image and camera data. It then visualizes point cloud, rgb, and depth images from a camera
+    Spot recieves image and camera data. It then visualizes rgb, depth, and pointcloud images from a camera
 
     Use the following command to run the example:
-    `python example_spot_image_viz.py <robot_name> -c <camera_location>`
+    `python example_spot_image_viz.py <robot_name>`
     """
 
-    def __init__(self, robot_name: str, camera_location: str) -> None:
-        self._robot = SpotBasic(robot_name=robot_name)
+    def __init__(self, args: argparse.Namespace) -> None:
+        robot_name: str = args.robot_name
+        self._camera_location: SpotCameraSubscription.Location = args.camera_location
         self._logger = logging.getLogger(fqn(self.__class__))
-        self._camera_location = CameraLocation(camera_location)
+        self._robot = SpotBasic(robot_name=robot_name)
 
     def start(self) -> int:
-        self._logger.info("Attempting to initialize robot")
-        self._robot.initialize_robot()
-        self._logger.info("Robot is initialized")
+        with self._robot.leash():
+            self._logger.info("Attempting to stand robot up")
+            self._robot.stand.synchronously()
+            self._logger.info("Robot is standing up")
+            cv_bridge = CvBridge()
 
-        self._logger.info("Attempting to stand robot up")
-        self._robot.stand.synchronously()
-        self._logger.info("Robot is standing up")
+            camera = next(
+                camera
+                for camera in self._robot.cameras
+                if camera is not None and camera.location == self._camera_location
+            )
 
-        spot_images = SpotImages(use_registered_depth=True)
+            offset_rotation_angle = 0
 
-        self._logger.info("Attempting to display point cloud")
-        spot_images.display_pointcloud(self._camera_location, self._robot, 10.0)
-        self._logger.info("Point cloud finished displaying")
+            if (
+                camera.location == SpotCameraSubscription.Location.FRONT_LEFT
+                or camera.location == SpotCameraSubscription.Location.FRONT_RIGHT
+            ):
+                offset_rotation_angle = -90
 
-        rotation_angle = 0
-        if self._camera_location == CameraLocation.FRONT_LEFT or self._camera_location == CameraLocation.FRONT_RIGHT:
-            rotation_angle = -90
-        if self._camera_location == CameraLocation.RIGHT:
-            rotation_angle = -180
+            if camera.location == SpotCameraSubscription.Location.RIGHT:
+                offset_rotation_angle = 180
 
-        [rgb, depth] = spot_images.rbg_and_depth_camera_from_location(self._camera_location)
+            for sensor in (camera.rgb, camera.depth):
+                image_message = unwrap_future(sensor.image.update)
+                raw_image = cv_bridge.imgmsg_to_cv2(image_message)
+                rotated_image = ndimage.rotate(raw_image, offset_rotation_angle)
+                image = open3d.geometry.Image(rotated_image)
+                open3d.visualization.draw_geometries([image], window_name=f"Image with {sensor.name}")
+                self._logger.info(f"Drew image with {sensor.name}")
 
-        self._logger.info("Attempting to display rgb image")
-        spot_images.display_image(rgb, self._robot, rotation_angle=rotation_angle, timeout_sec=5.0)
-        self._logger.info("rgb image finished displaying")
-
-        self._logger.info("Attempting to display depth image")
-        spot_images.display_image(depth, self._robot, rotation_angle=rotation_angle, timeout_sec=5.0)
-        self._logger.info("Depth image finished displaying")
+            pointcloud = self._robot.scan_in_place().voxel_down_sample(voxel_size=0.02)
+            self._logger.info("Attempting to draw pointcloud")
+            open3d.visualization.draw_geometries([pointcloud], window_name="Pointcloud")
+            self._logger.info("Drew pointcloud")
 
         return 0
 
@@ -60,11 +71,13 @@ class Example:
 def cli() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("robot_name", help="Name of the robot if the ROS driver is inside that namespace")
+
     parser.add_argument(
         "-c",
         "--camera-location",
-        help=f"Choose a camera to get the image:\n{[e.value for e in CameraLocation]}.",
-        default="frontleft",
+        help="Choose a camera to get the image.",
+        choices=list(SpotCameraSubscription.Location),
+        default=SpotCameraSubscription.Location.FRONT_LEFT,
     )
 
     return parser
@@ -72,7 +85,7 @@ def cli() -> argparse.ArgumentParser:
 
 @ros_process.main(cli(), uses_tf=True)
 def main(args: argparse.Namespace) -> int:
-    example = Example(args.robot_name, args.camera_location)
+    example = Example(args)
 
     return example.start()
 

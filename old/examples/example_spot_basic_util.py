@@ -3,7 +3,7 @@ import argparse
 import logging
 import sys
 
-from spot_utilities.spot_basic_util import create_spot_basic_with_tf
+from spot_utilities.spot_basic import SpotBasic
 
 import bdai_ros2_wrappers.process as ros_process
 from bdai_ros2_wrappers.utilities import fqn
@@ -17,26 +17,22 @@ class Example:
     `python example_spot_basic_util.py <robot_name>`
     """
 
-    def __init__(self, robot_name: str) -> None:
-        self._robot = create_spot_basic_with_tf(robot_name=robot_name)
+    def __init__(self, args: argparse.Namespace) -> None:
+        robot_name: str = args.robot_name
         self._logger = logging.getLogger(fqn(self.__class__))
+        self._robot = SpotBasic(robot_name=robot_name)
 
     def start(self) -> int:
-        self._logger.info("Attempting to initialize robot")
-        self._robot.initialize_robot()
-        self._logger.info("Robot is initialized")
-
-        self._logger.info("Attempting to stand robot up")
-        self._robot.stand.synchronously()
-        self._logger.info("Robot is standing up")
-
-        self._logger.info("Attempting to ready arm")
-        self._robot.ready_arm()
-        self._logger.info("Arm is ready")
-
-        self._logger.info("Attempting to stow arm")
-        self._robot.stow_arm()
-        self._logger.info("Arm is stowed")
+        with self._robot.leash():
+            self._logger.info("Attempting to stand robot up")
+            self._robot.stand.synchronously()
+            self._logger.info("Robot is standing up")
+            self._logger.info("Attempting to ready arm")
+            self._robot.ready_arm.synchronously()
+            self._logger.info("Arm is ready")
+            self._logger.info("Attempting to stow arm")
+            self._robot.stow_arm.synchronously()
+            self._logger.info("Arm is stowed")
 
         return 0
 
@@ -48,9 +44,9 @@ def cli() -> argparse.ArgumentParser:
     return parser
 
 
-@ros_process.main(cli())
+@ros_process.main(cli(), uses_tf=True)
 def main(args: argparse.Namespace) -> int:
-    example = Example(args.robot_name)
+    example = Example(args)
 
     return example.start()
 

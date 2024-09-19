@@ -1,5 +1,4 @@
 # Copyright (c) 2023-2024 Boston Dynamics AI Institute LLC. All rights reserved.
-
 import argparse
 import logging
 import sys
@@ -18,26 +17,22 @@ class Example:
     `python example_zerog.py <robot_name>`
     """
 
-    def __init__(self, robot_name: str) -> None:
-        self._robot = SpotBasic(robot_name=robot_name)
+    def __init__(self, args: argparse.Namespace) -> None:
+        robot_name: str = args.robot_name
         self._logger = logging.getLogger(fqn(self.__class__))
+        self._robot = SpotBasic(robot_name=robot_name)
 
     def start(self) -> int:
-        self._logger.info("Attempting to initialize robot")
-        self._robot.initialize_robot()
-        self._logger.info("Robot is initialized")
-
-        self._logger.info("Attempting to stand robot up")
-        self._robot.stand.synchronously()
-        self._logger.info("Robot is standing up")
-
-        self._logger.info("Attempting to ready arm")
-        self._robot.ready_arm()
-        self._logger.info("Arm is ready")
-
-        self._logger.info("Attempting to set arm in zero gravity mode")
-        self._robot.zero_g()
-        self._logger.info("Arm is in zero gravity mode")
+        with self._robot.leash():
+            self._logger.info("Attempting to stand robot up")
+            self._robot.stand.synchronously()
+            self._logger.info("Robot is standing up")
+            self._logger.info("Attempting to ready arm")
+            self._robot.ready_arm.synchronously()
+            self._logger.info("Arm is ready")
+            self._logger.info("Attempting to set arm in zero gravity mode")
+            self._robot.zero_g.synchronously()
+            self._logger.info("Arm is in zero gravity mode")
 
         return 0
 
@@ -51,7 +46,7 @@ def cli() -> argparse.ArgumentParser:
 
 @ros_process.main(cli(), uses_tf=True)
 def main(args: argparse.Namespace) -> int:
-    example = Example(args.robot_name)
+    example = Example(args)
 
     return example.start()
 
