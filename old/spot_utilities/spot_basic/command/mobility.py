@@ -1168,7 +1168,7 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
             start_time = clock.now()
             elapsed_time = clock.now() - start_time
             while elapsed_time.nanoseconds * 1e-9 < duration:
-                self._velocity_command_publisher.publish(body_velocity)
+                self._velocity_command_publisher.publish(velocity_command)
                 rate_timer.sleep()
                 elapsed_time = clock.now() - start_time
 
