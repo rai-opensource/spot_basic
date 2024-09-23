@@ -1,8 +1,7 @@
-#!/usr/bin/env python
-# Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
-"""Example illustrating how to command movements in frames other than the vision frame for some functions"""
+#  Copyright (c) 2023-2024 Boston Dynamics AI Institute LLC. All rights reserved.
 import argparse
-import time
+import logging
+import sys
 
 import numpy as np
 from spatialmath import SE2, SE3, SO3
@@ -11,66 +10,102 @@ from spot_utilities.spot_basic import SpotBasic
 import bdai_ros2_wrappers.process as ros_process
 from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai.trajectory.spot_se2_properties import MAX_SPEED_FORWARD
-from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
+from bdai_ros2_wrappers.utilities import fqn
+
+
+class Example:
+    """
+    Spot runs through different frame movements.
+
+    Spot will move its end effector, walk forward, rotate, and walk in a circle.
+
+    Use the following command to run the example:
+    `python example_different_frame_movements.py <robot_name>`
+    """
+
+    def __init__(self, args: argparse.Namespace) -> None:
+        robot_name: str = args.robot_name
+        self._logger = logging.getLogger(fqn(self.__class__))
+        self._robot = SpotBasic(robot_name=robot_name)
+
+    def start(self) -> int:
+        with self._robot.leash():
+            self._logger.info("Attempting to stand robot up")
+            self._robot.stand.synchronously()
+            self._logger.info("Robot is standing up")
+            self._logger.info("Attempting to move end effector upwards")
+            frame_t_goal = SE3.Rt(SO3.Rx(np.pi / 6), t=[1.0, 0.0, 0.5])
+
+            self._robot.move_end_effector_cartesian.synchronously(
+                frame_t_goal=frame_t_goal, duration_sec=2.0, body_follow=True, base_frame=self._robot.FrameHint.BODY
+            )
+
+            self._logger.info("Moved end effector upwards")
+            self._logger.info("Attempting to move end effector downwards")
+            self._robot.stow_arm.synchronously()
+            self._logger.info("Moved end effector downards")
+            self._logger.info("Attempting to make robot body gaze at the origin of the odometry frame")
+
+            frame_t_body = self._robot.lookup_a_tform_b(
+                frame_a=self._robot.odom_frame_name, frame_b=self._robot.body_frame_name
+            )
+
+            self._robot.body_gaze_at(
+                body_t_target=frame_t_body.inv(), frame_t_body=frame_t_body, base_frame=self._robot.FrameHint.ODOM
+            )
+
+            self._logger.info("Body gazed at the origin of the odometry frame")
+            self._logger.info("Attempting to walk forward 1 meter as specified in the odometry frame")
+
+            odom_t_body = self._robot.lookup_a_tform_b(
+                frame_a=self._robot.odom_frame_name, frame_b=self._robot.body_frame_name
+            ).yaw_SE2()
+
+            body_t_goal = SE2(1.0, 0.0, 0.0)
+            frame_t_goal = odom_t_body * body_t_goal
+            self._robot.walk.synchronously(frame_t_goal=frame_t_goal, base_frame=self._robot.FrameHint.ODOM)
+            self._logger.info("Walked forward 1 meter as specified in the odometry frame")
+            self._logger.info("Attempting to walk forward 1.5 meters and then turn around")
+
+            odom_t_body = self._robot.lookup_a_tform_b(
+                frame_a=self._robot.odom_frame_name, frame_b=self._robot.body_frame_name
+            )
+
+            body_t_goal = SE3.Rt(SO3.Rz(np.pi), t=[1.5, 0.0, 0.0])
+            frame_t_goal = odom_t_body * body_t_goal
+            self._robot.walk_and_orient.synchronously(frame_t_goal=frame_t_goal, base_frame=self._robot.FrameHint.ODOM)
+            self._logger.info("Walked forward 1.5 meters and then turned around")
+            self._logger.info("Attempting to walk in a circle with a radius of 1.25 meters")
+
+            odom_t_body = self._robot.lookup_a_tform_b(
+                frame_a=self._robot.odom_frame_name, frame_b=self._robot.body_frame_name
+            ).yaw_SE2()
+
+            body_t_traj = SE2Trajectory.from_circle(radius=1.25, forward_speed=MAX_SPEED_FORWARD)
+            frame_t_trajectory = odom_t_body * body_t_traj
+
+            self._robot.walk_trajectory.synchronously(
+                frame_t_trajectory=frame_t_trajectory, base_frame=self._robot.FrameHint.ODOM
+            )
+
+            self._logger.info("Walked in a circle with a radius of 1.25 meters")
+
+        return 0
 
 
 def cli() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Command spot body")
-    parser.add_argument("robot", type=str, help="name of the robot")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("robot_name", help="Name of the robot if the ROS driver is inside that namespace")
+
     return parser
 
 
-@ros_process.main(cli())
-def main(args: argparse.Namespace) -> None:
-    robot = SpotBasic(args.robot)
-    robot.initialize_robot()
-    robot.stand()
+@ros_process.main(cli(), uses_tf=True)
+def main(args: argparse.Namespace) -> int:
+    example = Example(args)
 
-    tf_listener = TFListenerWrapper()
-    tf_listener.wait_for_a_tform_b(robot.body_frame_name, robot.odom_frame_name)
-    robot.set_tf_listener(tf_listener)
-    robot.stow_arm()
-
-    try:
-        # Move the end effector forward and upwards
-        end_goal = SE3.Rt(SO3.Rx(np.pi / 6), t=[1.0, 0.0, 0.5])
-        robot.move_end_effector_cartesian(frame_t_goal=end_goal, body_follow=True, base_frame=robot.FrameHint.BODY)
-        robot.stow_arm()
-        time.sleep(1.0)
-
-        # Turn to look at origin of the odometry frame
-        odom_t_body = tf_listener.lookup_a_tform_b(robot.odom_frame_name, robot.body_frame_name)
-        robot.body_gaze_at(odom_t_body.inv(), frame_t_body=odom_t_body, base_frame=robot.FrameHint.ODOM)
-        time.sleep(1.0)
-
-        # Walks 1 meter forward as specified in the odometry frame
-        odom_t_body = tf_listener.lookup_a_tform_b_se2(robot.odom_frame_name, robot.body_frame_name)
-        body_t_goal = SE2(1.0, 0.0, 0.0)
-        odom_t_goal = odom_t_body * body_t_goal
-        robot.walk_to(odom_t_goal, base_frame=robot.FrameHint.ODOM)
-        time.sleep(1.0)
-
-        # Walks 1.5 meters and then turns around
-        odom_t_body = tf_listener.lookup_a_tform_b(robot.odom_frame_name, robot.body_frame_name)
-        body_t_goal = SE3.Rt(SO3.Rz(np.pi), t=[1.5, 0.0, 0.0])
-        odom_t_goal = odom_t_body * body_t_goal
-        robot.walk_and_orient(odom_t_goal, base_frame=robot.FrameHint.ODOM)
-        time.sleep(1.0)
-
-        # Walks in a circle with radius 1.25 meters
-        odom_t_body = tf_listener.lookup_a_tform_b_se2(robot.odom_frame_name, robot.body_frame_name)
-        body_t_traj = SE2Trajectory.from_circle(radius=1.25, forward_speed=MAX_SPEED_FORWARD)
-        odom_t_traj = odom_t_body * body_t_traj
-        robot.walk_trajectory(odom_t_traj, base_frame=robot.FrameHint.ODOM, timestep_sec=0.2)
-        time.sleep(1.0)
-
-    except Exception as e:
-        # If something happens, have the robot stop
-        main.node.get_logger().error(str(e))
-        robot.stop()
-    finally:
-        robot.stow_arm()
+    return example.start()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
