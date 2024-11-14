@@ -1046,18 +1046,31 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
             self.walk_to_async,
             frame_t_goal.yaw_SE2(),
             base_frame=base_frame,
-            height=frame_t_goal.z,
+            body_height=frame_t_goal.z,
             feedback_callback=feedback_callback,
             on_failure_callback=on_failure_callback,
         )
         stand_partial = functools.partial(
             self.stand_with_orientation_async,
             SO3(frame_t_goal),
-            height=frame_t_goal.z,
+            body_height=frame_t_goal.z,
             feedback_callback=feedback_callback,
             on_failure_callback=on_failure_callback,
         )
         return RobotComposeCommandHandle([walk_partial, stand_partial], result_callback)
+
+    def walk_to_fiducial(self, fiducial_id: int, fiducial_t_body: SE3) -> None:
+        """Send the command to walk to a fiducial
+
+        Args:
+            fiducial_id: the fiducial to walk to
+            fiducial_t_body: pose of fiducial w.r.t. the vision frame
+        """
+        vision_t_fiducial = self.lookup_a_tform_b(
+            FrameHint.VISION.value, f"filtered_fiducial_{fiducial_id}", wait_for_frames=True
+        )
+        vision_t_body = vision_t_fiducial * fiducial_t_body
+        self.walk_and_orient(frame_t_goal=vision_t_body, base_frame=FrameHint.VISION)
 
     @generalized_method(spec=GeneralizedMethodLike[SpotMobilityCommandProtocol.BodyGazeProtocol])
     def body_gaze(self, target: R3, frame: Optional[FrameHint] = None, **kwargs: Any) -> Any:
