@@ -14,6 +14,7 @@ from bosdyn.client.frame_helpers import (
     ODOM_FRAME_NAME,
     VISION_FRAME_NAME,
 )
+from geometry_msgs.msg import Vector3Stamped
 from rclpy.time import Time
 from sensor_msgs.msg import JointState
 from spatialmath import SE3
@@ -202,6 +203,13 @@ class SpotStateMixin(SpotBaseProtocol):
     def joint_states(self) -> Subscription[JointState]:
         """Get joint states feed."""
         return Subscription(JointState, spot_namespaced(self.robot_name, "joint_states"), node=self.node)
+
+    @cached_property
+    def end_effector_force(self) -> Subscription[Vector3Stamped]:
+        """Get end effector force feed."""
+        return Subscription(
+            Vector3Stamped, spot_namespaced(self.robot_name, "status/end_effector_force"), node=self.node
+        )
 
     @property
     def arm_joint_positions(self) -> Optional[ArmJointMap]:
