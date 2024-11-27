@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # Copyright (c) 2023-2024 Boston Dynamics AI Institute LLC. All rights reserved.
 import argparse
 import logging
@@ -7,28 +8,21 @@ from spatialmath import SE2
 from spot_utilities.spot_basic import SpotBasic
 
 import bdai_ros2_wrappers.process as ros_process
-from bdai_ros2_wrappers.utilities import fqn
 
 
-class Example:
+class WalkForwardExample:
     """
-    Spot walks forward synchronously
+    Have Spot walk forward synchronously.
 
-    Use the following command to run the example:
-    `python example_walk_forward.py <robot_name>`
+    The Spot driver must be running before attempting to use this example.
     """
 
     def __init__(self, args: argparse.Namespace) -> None:
-        robot_name: str = args.robot_name
-        self._logger = logging.getLogger(fqn(self.__class__))
-        self._robot = SpotBasic(robot_name=robot_name)
+        self._logger = logging.getLogger()
+        self._robot = SpotBasic(args.robot_name)
 
     def start(self) -> int:
         with self._robot.leash():
-            self._logger.info("Attempting to stand robot up")
-            self._robot.stand.synchronously()
-            self._logger.info("Robot is standing up")
-
             world_t_robot = self._robot.lookup_a_tform_b(
                 self._robot.vision_frame_name, self._robot.body_frame_name
             ).yaw_SE2()
@@ -38,21 +32,19 @@ class Example:
             self._logger.info("Attempting to walk robot forward")
             self._robot.walk.synchronously(world_t_goal)
             self._logger.info("Robot walked forward")
-
         return 0
 
 
 def cli() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("robot_name", help="Name of the robot if the ROS driver is inside that namespace")
-
+    """Command-line interface."""
+    parser = argparse.ArgumentParser(description=WalkForwardExample.__doc__)
+    parser.add_argument("robot_name", help="Name of the robot")
     return parser
 
 
-@ros_process.main(cli(), uses_tf=True)
+@ros_process.main(cli(), interruptible=True, uses_tf=True)
 def main(args: argparse.Namespace) -> int:
-    example = Example(args)
-
+    example = WalkForwardExample(args)
     return example.start()
 
 

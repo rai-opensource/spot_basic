@@ -1,4 +1,5 @@
-#  Copyright (c) 2023-2024 Boston Dynamics AI Institute LLC. All rights reserved.
+#!/usr/bin/env python
+# Copyright (c) 2023-2024 Boston Dynamics AI Institute LLC. All rights reserved.
 import argparse
 import logging
 import sys
@@ -6,24 +7,22 @@ import sys
 from spot_utilities.spot_basic import SpotBasic
 
 import bdai_ros2_wrappers.process as ros_process
-from bdai_ros2_wrappers.utilities import fqn
 
 
-class Example:
+class SpotBasicExample:
     """
-    Uses utility in `spot_basic_util`
+    Show basic SpotBasic use.
 
-    Use the following command to run the example:
-    `python example_spot_basic_util.py <robot_name>`
+    In this example, Spot will stand up, ready its arm, then stow it, then sit.
+    The Spot driver must be running before running this example.
     """
 
     def __init__(self, args: argparse.Namespace) -> None:
-        robot_name: str = args.robot_name
-        self._logger = logging.getLogger(fqn(self.__class__))
-        self._robot = SpotBasic(robot_name=robot_name)
+        self._logger = logging.getLogger()
+        self._robot = SpotBasic(args.robot_name)
 
     def start(self) -> int:
-        with self._robot.leash():
+        with self._robot.leash(weak=True):
             self._logger.info("Attempting to stand robot up")
             self._robot.stand.synchronously()
             self._logger.info("Robot is standing up")
@@ -33,21 +32,22 @@ class Example:
             self._logger.info("Attempting to stow arm")
             self._robot.stow_arm.synchronously()
             self._logger.info("Arm is stowed")
-
-        return 0
+            self._logger.info("Attempting to sit robot down")
+            self._robot.sit.synchronously()
+            self._logger.info("Robot is sitting")
+            return 0
 
 
 def cli() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("robot_name", help="Name of the robot if the ROS driver is inside that namespace")
-
+    """Command-line interface."""
+    parser = argparse.ArgumentParser(description=SpotBasicExample.__doc__)
+    parser.add_argument("robot_name", help="Name of the robot")
     return parser
 
 
-@ros_process.main(cli(), uses_tf=True)
+@ros_process.main(cli(), interruptible=True, uses_tf=True)
 def main(args: argparse.Namespace) -> int:
-    example = Example(args)
-
+    example = SpotBasicExample(args)
     return example.start()
 
 

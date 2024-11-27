@@ -75,18 +75,34 @@ class SpotBasic(
         assert not rviz, "Aid visuals are deprecated"
 
     @contextlib.contextmanager
-    def leash(self, timeout_sec: Optional[float] = None) -> Generator:
+    def leash(self, weak: bool = False, drop_on_exit: bool = False, timeout_sec: Optional[float] = None) -> Generator:
         """Leash the robot for immediate use.
 
-        This amounts to taking the robot body lease, powering the robot,
-        and ensuring relevant ROS 2 interfaces are up and ready to be used.
+        This amounts to taking the robot body lease, powering the robot, and getting it ready for action.
+        It will also ensure relevant ROS 2 interfaces are up and ready to be used.
 
         Args:
+            weak: if weak, the leash will not have the robot stand up.
+            drop_on_exit: if dropped on exit, the robot will be left powered on and up on exit.
             timeout_sec: optional timeout, in seconds. May block indefinitely if none is provided.
         """
-        with self.lease(timeout_sec=timeout_sec), self.power(timeout_sec=timeout_sec):
+        with self.lease(timeout_sec=timeout_sec):
             if not self.execute.wait_for_server(timeout_sec):
                 self.node.get_logger().warn(f"No robot command interface found for {self.robot_name}.")
             if self.has_arm() and not self.perform.wait_for_server(timeout_sec):
                 self.node.get_logger().warn(f"No manipulation command interface found for {self.robot_name}.")
-            yield
+            self.power_on.synchronously(timeout_sec=timeout_sec)
+            try:
+                if not weak:
+                    self.stand.synchronously(timeout_sec=timeout_sec)
+                try:
+                    yield
+                finally:
+                    if not drop_on_exit and not weak:
+                        self.stop.synchronously(timeout_sec=timeout_sec)
+                        if self.has_arm():
+                            self.stow_arm.synchronously(timeout_sec=timeout_sec)
+                        self.sit.synchronously(timeout_sec=timeout_sec)
+            finally:
+                if not drop_on_exit:
+                    self.power_off.synchronously(timeout_sec=timeout_sec)

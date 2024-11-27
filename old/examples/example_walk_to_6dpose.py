@@ -3,75 +3,67 @@
 
 import argparse
 import logging
-import typing
+import sys
 
-from bosdyn_msgs.msg import RobotCommandFeedback
 from spatialmath import SE3, UnitQuaternion
-from spot_utilities.spot_basic import SpotBasic
+from spot_utilities.spot_basic import FrameHint, SpotBasic
 
 import bdai_ros2_wrappers.process as ros_process
-from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
-from bdai_ros2_wrappers.utilities import fqn
+from bdai_ros2_wrappers.utilities import ensure
 
 
-class Test6DPoseCommand:
-    """A helper that tests Spot 6D walk to pose commands"""
+class WalkTo6DPoseExample:
+    """
+    Have Spot walk to a specific pose.
 
-    def __init__(self, robot_name: str) -> None:
-        self._logger = logging.getLogger(fqn(self.__class__))
-        self._robot_name = robot_name
+    The Spot driver must be running before attempting to use this example.
+    """
 
-        self._spot = SpotBasic(self._robot_name)
-        self._spot.initialize_robot()
+    def __init__(self, args: argparse.Namespace) -> None:
+        self._logger = logging.getLogger()
+        self._robot = SpotBasic(args.robot_name)
+        self._relative = args.relative
+        self._goal = args.goal
 
-        self._tf = TFListenerWrapper(cache_time_s=30)
-        self._tf.wait_for_a_tform_b(self._spot.body_frame_name, self._spot.vision_frame_name)
-        self._spot.set_tf_listener(self._tf)
+    def start(self) -> int:
+        with self._robot.leash(timeout_sec=10.0):
+            if self._relative:
+                vision_t_body = self._robot.lookup_a_tform_b(
+                    FrameHint.VISION, FrameHint.BODY, wait_for_frames=True, timeout=5.0
+                )
+                vision_t_goal = vision_t_body * self._goal
+            else:
+                vision_t_goal = self._goal
 
-    def test_walk_6d(self, goal: typing.List[float], relative: bool) -> None:
-        if len(goal) == 3:
-            x, y, z = goal
-            quaternion = UnitQuaternion(s=1.0, v=[0.0, 0.0, 0.0])
-        elif len(goal) == 6:
-            x, y, z, thx, thy, thz = goal
-            quaternion = UnitQuaternion.RPY([thx, thy, thz], unit="deg")
-        elif len(goal) == 7:
-            x, y, z, qx, qy, qz, qw = goal
-            quaternion = UnitQuaternion(s=qw, v=[qx, qy, qz])
-        else:
-            raise ValueError(f"invalid goal: {goal}")
+            x, y, z = vision_t_goal.t
+            rx, ry, rz = vision_t_goal.rpy()
+            self._logger.info(
+                "\n".join(
+                    [
+                        "Moving to 6D pose:" f"- x: {x}",
+                        f"- y: {y}",
+                        f"- z: {z}",
+                        f"- rx: {rx}",
+                        f"- ry: {ry}",
+                        f"- rz: {rz}",
+                    ]
+                )
+            )
 
-        thx, thy, thz = quaternion.SO3().rpy()
-        self._logger.info(
-            f"\n Goal:\n- x: {x}\n- y: {y}\n- z: {z}\n- thx (roll): {thx}\n- thy (pitch): {thy}\n- thz (yaw): {thz}"
-        )
+            self._robot.walk_and_orient.synchronously(vision_t_goal, timeout_sec=10.0)
 
-        if relative:
-            body_t_goal = SE3.Rt(R=quaternion.SO3(), t=[x, y, z])
-            self._logger.info(f"body_t_goal z: {str(body_t_goal.z)}")
-            vision_t_body = self._tf.lookup_a_tform_b(self._spot.vision_frame_name, self._spot.body_frame_name)
-            vision_t_goal = vision_t_body * body_t_goal
-        else:
-            vision_t_goal = SE3.Rt(R=quaternion.SO3(), t=[x, y, z])
+            self._logger.info("Done moving!")
 
-        try:
-            # uncomment lines below to test synchronous walk_and_orient()
-            self._spot.walk_and_orient(frame_t_goal=vision_t_goal)
-            self._logger.info("Move to 6D pose test done.")
-            # self._spot.walk_and_orient_async(
-            #     frame_t_goal=vision_t_goal, result_callback=Test6DPoseCommand.test_result_callback
-            # )
-        except KeyboardInterrupt:
-            self._spot.stop()
-
-    @staticmethod
-    def test_result_callback(feedback: RobotCommandFeedback) -> None:
-        print("Test result_callback: Move to 6D pose test done.")
+            return 0
 
 
 def cli() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Command spot body")
-    parser.add_argument("robot", type=str, help="name of the robot")
+    """Command-line interface."""
+    parser = argparse.ArgumentParser(description=WalkTo6DPoseExample.__doc__)
+    parser.add_argument(
+        "-r", "--relative", action="store_true", help="goal will be in body frame; Otherwise, goal is in vision frame"
+    )
+    parser.add_argument("robot_name", type=str, help="name of the robot")
     parser.add_argument(
         "goal",
         type=float,
@@ -82,17 +74,28 @@ def cli() -> argparse.ArgumentParser:
             "Note that roll, pitch, yaw are in degrees."
         ),
     )
-    parser.add_argument(
-        "--relative", action="store_true", help="goal will be in body frame; Otherwise, goal is in vision frame"
-    )
     return parser
 
 
-@ros_process.main(cli())
-def test(args: argparse.Namespace) -> None:
-    tester = Test6DPoseCommand(args.robot)
-    tester.test_walk_6d(args.goal, args.relative)
+@ros_process.main(cli(), interruptible=True, uses_tf=True)
+def main(args: argparse.Namespace) -> int:
+    if len(args.goal) == 3:
+        x, y, z = args.goal
+        quaternion = UnitQuaternion(s=1.0, v=[0.0, 0.0, 0.0])
+    elif len(args.goal) == 6:
+        x, y, z, thx, thy, thz = args.goal
+        quaternion = UnitQuaternion.RPY([thx, thy, thz], unit="deg")
+    elif len(args.goal) == 7:
+        x, y, z, qx, qy, qz, qw = args.goal
+        quaternion = UnitQuaternion(s=qw, v=[qx, qy, qz])
+    else:
+        ensure(main.cli).error(f"invalid goal: {args.goal}")
+    args.goal = SE3.Rt(R=quaternion.SO3(), t=[x, y, z])
+
+    example = WalkTo6DPoseExample(args)
+
+    return example.start()
 
 
 if __name__ == "__main__":
-    test()
+    sys.exit(main())

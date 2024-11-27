@@ -9,7 +9,9 @@ from sensor_msgs.msg import CameraInfo, Image
 from spot_utilities.spot_basic.image import CameraSubscription
 
 
-def prompt_for_click(name: str, camera: CameraSubscription) -> Tuple[Tuple[int, int], Image, CameraInfo]:
+def prompt_for_click(
+    name: str, camera: CameraSubscription, rate_ms: int = 10
+) -> Optional[Tuple[Tuple[int, int], Image, CameraInfo]]:
     """Prompt the user to click on a camera view.
 
     Returns:
@@ -54,11 +56,15 @@ def prompt_for_click(name: str, camera: CameraSubscription) -> Tuple[Tuple[int, 
                     rendered_image = image
                 cv2.imshow(name, rendered_image)
 
-                cv2.waitKey(50)
+                key = cv2.waitKey(rate_ms) & 0xFF
+                if key == ord("q") or key == ord("Q"):
+                    break
 
                 if image_click_xy is not None:
                     return image_click_xy, image_message, camera_info_message
-            raise RuntimeError("user never clicked")
+            else:
+                raise RuntimeError("Image stream stopped")
+            return None
     finally:
         cv2.destroyWindow(name)
 

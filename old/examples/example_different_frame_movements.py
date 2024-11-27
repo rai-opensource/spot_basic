@@ -1,4 +1,5 @@
-#  Copyright (c) 2023-2024 Boston Dynamics AI Institute LLC. All rights reserved.
+#!/usr/bin/env python
+# Copyright (c) 2023-2024 Boston Dynamics AI Institute LLC. All rights reserved.
 import argparse
 import logging
 import sys
@@ -10,29 +11,25 @@ from spot_utilities.spot_basic import SpotBasic
 import bdai_ros2_wrappers.process as ros_process
 from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai.trajectory.spot_se2_properties import MAX_SPEED_FORWARD
-from bdai_ros2_wrappers.utilities import fqn
 
 
-class Example:
+class FrameMovementsExample:
     """
     Spot runs through different frame movements.
 
-    Spot will move its end effector, walk forward, rotate, and walk in a circle.
-
-    Use the following command to run the example:
-    `python example_different_frame_movements.py <robot_name>`
+    In this example, Spot will move its end effector, walk forward, rotate,
+    and walk in a circle. The Spot driver must be started before executing
+    this example too.
     """
 
     def __init__(self, args: argparse.Namespace) -> None:
-        robot_name: str = args.robot_name
-        self._logger = logging.getLogger(fqn(self.__class__))
-        self._robot = SpotBasic(robot_name=robot_name)
+        self._logger = logging.getLogger()
+        self._robot = SpotBasic(args.robot_name)
 
     def start(self) -> int:
         with self._robot.leash():
-            self._logger.info("Attempting to stand robot up")
-            self._robot.stand.synchronously()
-            self._logger.info("Robot is standing up")
+            self._robot.ready_arm.synchronously()
+
             self._logger.info("Attempting to move end effector upwards")
             frame_t_goal = SE3.Rt(SO3.Rx(np.pi / 6), t=[1.0, 0.0, 0.5])
 
@@ -90,20 +87,19 @@ class Example:
 
             self._logger.info("Walked in a circle with a radius of 1.25 meters")
 
-        return 0
+            return 0
 
 
 def cli() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("robot_name", help="Name of the robot if the ROS driver is inside that namespace")
-
+    """Command-line interface."""
+    parser = argparse.ArgumentParser(description=FrameMovementsExample.__doc__)
+    parser.add_argument("robot_name", help="Name of the robot")
     return parser
 
 
-@ros_process.main(cli(), uses_tf=True)
+@ros_process.main(cli(), interruptible=True, uses_tf=True)
 def main(args: argparse.Namespace) -> int:
-    example = Example(args)
-
+    example = FrameMovementsExample(args)
     return example.start()
 
 

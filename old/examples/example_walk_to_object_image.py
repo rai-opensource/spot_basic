@@ -1,146 +1,77 @@
 #!/usr/bin/env python
-#  Copyright (c) 2023 Boston Dynamics AI Institute, Inc. All rights reserved.
+# Copyright (c) 2023 Boston Dynamics AI Institute, Inc. All rights reserved.
 import argparse
 import logging
 import sys
-from typing import Any
 
-import cv2
-import numpy as np
-from bosdyn.client.frame_helpers import BODY_FRAME_NAME, VISION_FRAME_NAME
-from cv_bridge import CvBridge
-from sensor_msgs.msg import CameraInfo, Image
 from spot_utilities.spot_basic import SpotBasic
-from tf2_ros import ExtrapolationException
+from spot_utilities.spot_basic.image import SpotCameraSubscription
+from spot_utilities.spot_basic.viz import prompt_for_click
 
 import bdai_ros2_wrappers.process as ros_process
-from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
-from bdai_ros2_wrappers.subscription import wait_for_message
-from bdai_ros2_wrappers.utilities import fqn, namespace_with
-
-""" This is a test script to demo using the manipulation api.
-
-Use:
-    0) Have a spot with an object in the field of view of a spot camera
-    1) start spot driver
-    2) run "python example_walk_to_object_image.py <robot_name> [-c frontleft]"
-    3) a GUI will pop up, click the target object, spot will walk to it (distance determined by offset)
-"""
-
-# Assumes the robot with an arm is sitting or standing in an open environment, with an desired object to grasp in the
-# field of view of the given camera.
-AVAILABLE_CAMERA_NAMES = ["frontleft", "frontright", "left", "right", "back", "hand"]
-DISTANCE_OFFSET = None  # None to use default offset
-
-g_image_click, g_image_display = None, np.zeros((460, 640, 3))
 
 
-def cv_mouse_callback(event: Any, x: float, y: float, flags: Any, param: Any) -> None:
-    global g_image_click
-    clone = g_image_display.copy()
-    if event == cv2.EVENT_LBUTTONUP:
-        g_image_click = (x, y)
-    else:
-        # Draw some lines on the image.
-        color = (30, 30, 30)
-        thickness = 2
-        image_title = "Movement target"
-        height = clone.shape[0]
-        width = clone.shape[1]
-        cv2.line(clone, (0, y), (width, y), color, thickness)
-        cv2.line(clone, (x, 0), (x, height), color, thickness)
-        cv2.imshow(image_title, clone)
+class WalkToObjectExample:
+    """
+    Have Spot walk to an object.
 
+    When running this example, a GUI will pop up showing the chosen Spot camera feed
+    for you to click the object that Spot will walk towards.
 
-class ObjectWalk:
-    def __init__(self, robot_name: str, camera_name: str) -> None:
-        self._logger = logging.getLogger(fqn(self.__class__))
+    Use:
+      1) Have a spot with an object in the field of view of a spot camera
+      2) start spot driver
+      3) run "python example_walk_to_object_image.py <robot_name> [-c frontleft]"
+      4) a GUI will pop up, click the target object, spot will walk to it (distance determined by offset)
+    """
 
-        self.cv_bridge: CvBridge = CvBridge()
-        self._camera_image_topic = namespace_with(robot_name, "camera", camera_name, "image")
-        self._camera_image_info_topic = namespace_with(robot_name, "camera", camera_name, "camera_info")
-        self._body_frame_name = namespace_with(robot_name, BODY_FRAME_NAME)
-        self._vision_frame_name = namespace_with(robot_name, VISION_FRAME_NAME)
-        self._tf_listener = TFListenerWrapper(cache_time_s=30)
-        self._tf_listener.wait_for_a_tform_b(self._body_frame_name, self._vision_frame_name)
-        self._robot = SpotBasic(robot_name)
-        self._robot.set_tf_listener(self._tf_listener)
+    def __init__(self, args: argparse.Namespace) -> None:
+        self._logger = logging.getLogger()
+        self._robot = SpotBasic(args.robot_name)
+        self._camera = getattr(self._robot.cameras, args.camera_name)
 
-    def initialize_robot(self) -> bool:
-        return self._robot.initialize_robot() and self._robot.stow_arm() and self._robot.stand()
-
-    def take_image_and_walk(self) -> None:
+    def start(self) -> int:
         """Takes an image and attempts to grasp an object based on what the user selected."""
-        self._logger.info("Waiting for images...")
+        with self._robot.leash(timeout_sec=10.0):
+            self._logger.info("Waiting for user input...")
+            if self._camera.location == SpotCameraSubscription.Location.HAND:
+                self._robot.claw_gripper_open.synchronously(timeout_sec=10.0)
 
-        # Get image.
-        image_message = wait_for_message(Image, self._camera_image_topic)
+            result = prompt_for_click("Click to grasp", self._camera.rgb)
+            if result is None:
+                self._logger.info("User aborted the demonstration.")
+                return 1
+            image_click_xy, image_message, camera_info_message = result
 
-        if image_message is not None:
-            self._logger.info("Got image.")
-        else:
-            self._logger.error(f"Failed to get message on topic {self._camera_image_topic}")
-            return
-
-        # Get camera info.
-        cam_info_msg = wait_for_message(CameraInfo, self._camera_image_info_topic)
-
-        if cam_info_msg is not None:
-            self._logger.info("Got camera info.")
-        else:
-            self._logger.error(f"Failed to get message on topic {self._camera_image_topic}")
-            return
-
-        image = self.cv_bridge.imgmsg_to_cv2(image_message, "passthrough")
-
-        # Launch a window to let the user select an object.
-        image_title = "Click to set object target"
-        cv2.namedWindow(image_title)
-        cv2.setMouseCallback(image_title, cv_mouse_callback)
-
-        global g_image_display
-        g_image_display = image
-        cv2.imshow(image_title, g_image_display)
-        while g_image_click is None:
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("q") or key == ord("Q"):
-                # Quit
-                self._logger.info("'q' pressed, exiting GUI.")
-                cv2.destroyAllWindows()
-                return
-        cv2.destroyAllWindows()
-        # Walk to the object in the image.
-        try:
-            self._robot.walk_to_object_image(
-                pixel_xy=g_image_click,
+            self._logger.info("Walking to object...")
+            self._robot.walk_to_object_image.synchronously(
+                image_pixel_xy=image_click_xy,
                 image_timestamp=image_message.header.stamp,
-                camera_data=cam_info_msg,
-                offset=DISTANCE_OFFSET,
+                camera_info=camera_info_message,
+                timeout_sec=30.0,
             )
-        except ExtrapolationException:
-            self._logger.info("Camera image expired. You waited to long to click on the image.")
+            self._logger.info("Done walking")
+            return 0
 
 
 def cli() -> argparse.ArgumentParser:
     """Command-line interface."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument("robot", help="Name of the robot if the ROS driver is inside that namespace.")
+    parser = argparse.ArgumentParser(description=WalkToObjectExample.__doc__)
     parser.add_argument(
         "-c",
         "--camera-name",
-        choices=AVAILABLE_CAMERA_NAMES,
-        help=f"Choose a camera to get the image {AVAILABLE_CAMERA_NAMES}.",
-        default="frontleft",
+        choices=SpotBasic.CameraConfiguration._fields,
+        help="Camera to use get the images from",
+        default="front_left",
     )
+    parser.add_argument("robot_name", help="Name of the robot")
     return parser
 
 
-@ros_process.main(cli())
+@ros_process.main(cli(), interruptible=True, uses_tf=True)
 def main(args: argparse.Namespace) -> int:
-    objw = ObjectWalk(args.robot, args.camera_name)
-    if objw.initialize_robot():
-        objw.take_image_and_walk()
-    return 0
+    example = WalkToObjectExample(args)
+    return example.start()
 
 
 if __name__ == "__main__":

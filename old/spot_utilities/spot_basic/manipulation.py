@@ -808,7 +808,7 @@ class SpotManipulationMixin(SpotStateProtocol):
         command = command_builder.pick_object_in_image_command(
             image_pixel_xy=pixel_xy, image_timestamp=image_timestamp, camera_info=camera_data
         )
-        command.pick_object_in_image.grasp_params.palm_placement_ratio = palm_placement_ratio
+        command.pick_object_in_image.grasp_params.grasp_palm_to_fingertip = palm_placement_ratio
         if apply_grasp_params_func is not None:
             apply_grasp_params_func(command.pick_object_in_image)
         convert(command, goal.command)

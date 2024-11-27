@@ -1,116 +1,68 @@
 #!/usr/bin/python3
-
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
-
-# We disable Pylint warnings for all Protobuf files which contain objects with
-# dynamically added member attributes.
-# pylint: disable=no-member
-
-"""
-This example shows how to query and set the camera parameters for the gripper.
-"""
 
 import argparse
 import logging
+import sys
 
-from bosdyn_msgs.msg import GripperCameraParams
+from bosdyn.api.gripper_camera_param_pb2 import GripperCameraParamRequest
 from spot_utilities.spot_basic import SpotBasic
 
 import bdai_ros2_wrappers.process as ros_process
-from bdai_ros2_wrappers.utilities import fqn
 
 
-class SpotGripperCameraParameters:
+class GripperCameraParametersExample:
     """
-    This example shows how to query and set the camera parameters for the gripper.
+    Query and set Spot gripper camera parameters.
+
+    This example shows how to configure Spot's gripper camera.
+    You need a Spot with an arm. The Spot driver must be running
+    too before executing this example.
     """
 
     def __init__(self, args: argparse.Namespace):
-        self._robot_name: str = args.robot
-        self._logger = logging.getLogger(fqn(self.__class__))
-        self._robot = SpotBasic(self._robot_name)
+        self._logger = logging.getLogger()
+        self._robot = SpotBasic(args.robot_name)
 
-    def test_params(self) -> bool:
-        """
-        Query the current gripper camera parameters, change the gamma value, then reset the gamma value using
-        get_gripper_camera_params and set_gripper_camera_params functions in SpotBasic.
+    def start(self) -> int:
+        with self._robot.leash(timeout_sec=10.0):
+            self._logger.info("Reading gamma value...")
+            response = self._robot.get_gripper_camera_parameters.synchronously(timeout_sec=10.0)
+            self._logger.info(f"Initial gamma value is: {response.response.params.gamma.data}")
 
-        Returns:
-            True the process runs without errors, False otherwise.
-        """
+            initial_gamma = response.response.params.gamma.data
 
-        # Claim and power on robot.
-        if not self._robot.initialize_robot():
-            self._logger.error("Robot could not be initialized")
-            return False
+            request = GripperCameraParamRequest()
+            request.params.gamma.value = 0.8
+            self._logger.info("Setting gamma value...")
+            self._robot.set_gripper_camera_parameters.synchronously(request, timeout_sec=10.0)
 
-        # get gripper camera parameters
-        success, msg, response = self._robot.get_gripper_camera_parameters()
-        if not success:
-            self._logger.error("Failed to get gripper camera parameters")
-            return False
-        gamma_init = response.gamma.data
-        print("Initially gamma value is: {}".format(gamma_init))
+            response = self._robot.get_gripper_camera_parameters.synchronously(timeout_sec=10.0)
+            self._logger.info(f"Updated gamma value is: {response.response.params.gamma.data}")
 
-        gripper_params = GripperCameraParams()
-        # set gripper camera parameters with a new gamma value, leaving all others unchanged
-        new_gamma = 0.8
-        self._logger.info("Setting a new gamma in the gripper camera")
+            request = GripperCameraParamRequest()
+            request.params.gamma.value = initial_gamma
+            self._logger.info("Resetting gamma value...")
+            self._robot.set_gripper_camera_parameters.synchronously(request, timeout_sec=10.0)
 
-        gripper_params.gamma.data = new_gamma
-        gripper_params.has_field = GripperCameraParams.GAMMA_FIELD_SET
-        success = self._robot.set_gripper_camera_parameters(gripper_params)
-        if not success:
-            self._logger.error("Failed to set gripper camera parameters")
-            return False
+            response = self._robot.get_gripper_camera_parameters.synchronously(timeout_sec=10.0)
+            self._logger.info(f"Final gamma value is: {response.response.params.gamma.data}")
 
-        # get gripper camera parameters
-        self._logger.info("Reading updated camera parameters")
-        success, msg, response = self._robot.get_gripper_camera_parameters()
-        if not success:
-            self._logger.error("Failed to get gripper camera parameters")
-            return False
-        print("Updated gamma value: {}".format(response.gamma.data))
-
-        # reset camera parameters
-        self._logger.info("Resetting gripper camera parameters")
-        gripper_params.gamma.data = gamma_init
-        success = self._robot.set_gripper_camera_parameters(gripper_params)
-        if not success:
-            self._logger.error("Failed to set gripper camera parameters")
-            return False
-        self._logger.info("Set new parameter")
-
-        # read camera parameters one more time to make sure it has reset
-        self._logger.info("Reading gripper camera parameters, ensure they are the same as the start!")
-        success, msg, response = self._robot.get_gripper_camera_parameters()
-        if not success:
-            self._logger.error("Failed to get gripper camera parameters")
-            return False
-        print("Final gamma value: {}".format(response.gamma.data))
-
-        return True
+        return 0
 
 
 def cli() -> argparse.ArgumentParser:
-    """
-    Parse all arguments.
-    --robot [string]
-        The robot name e.g. Opal.
-    """
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--robot", type=str, required=True, help="The robot name.")
+    """Command-line interface."""
+    parser = argparse.ArgumentParser(description=GripperCameraParametersExample.__doc__)
+    parser.add_argument("robot_name", help="Name of the robot")
     return parser
 
 
-@ros_process.main(cli())
-def main(args: argparse.Namespace) -> None:
-    """
-    Execute the example.
-    """
-    test_gripper_camera_params = SpotGripperCameraParameters(args)
-    test_gripper_camera_params.test_params()
+@ros_process.main(cli(), interruptible=True, uses_tf=True)
+def main(args: argparse.Namespace) -> int:
+    example = GripperCameraParametersExample(args)
+    return example.start()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

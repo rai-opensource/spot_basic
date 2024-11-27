@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 #  Copyright (c) 2023-2024 Boston Dynamics AI Institute LLC. All rights reserved.
 import argparse
 import logging
@@ -11,28 +12,22 @@ from spot_utilities.spot_basic.image import SpotCameraSubscription
 
 import bdai_ros2_wrappers.process as ros_process
 from bdai_ros2_wrappers.futures import unwrap_future
-from bdai_ros2_wrappers.utilities import fqn
 
 
-class Example:
+class SpotImageVizExample:
     """
-    Spot recieves image and camera data. It then visualizes rgb, depth, and pointcloud images from a camera
+    Visualize RGB frame, depth map, and pointcloud from a Spot camera.
 
-    Use the following command to run the example:
-    `python example_spot_image_viz.py <robot_name>`
+    The Spot driver must be running before attempting to use this example.
     """
 
     def __init__(self, args: argparse.Namespace) -> None:
-        robot_name: str = args.robot_name
         self._camera_location: SpotCameraSubscription.Location = args.camera_location
-        self._logger = logging.getLogger(fqn(self.__class__))
-        self._robot = SpotBasic(robot_name=robot_name)
+        self._logger = logging.getLogger()
+        self._robot = SpotBasic(args.robot_name)
 
     def start(self) -> int:
         with self._robot.leash():
-            self._logger.info("Attempting to stand robot up")
-            self._robot.stand.synchronously()
-            self._logger.info("Robot is standing up")
             cv_bridge = CvBridge()
 
             camera = next(
@@ -54,24 +49,26 @@ class Example:
 
             for sensor in (camera.rgb, camera.depth):
                 image_message = unwrap_future(sensor.image.update)
-                raw_image = cv_bridge.imgmsg_to_cv2(image_message)
+                encoding = image_message.encoding
+                if encoding.startswith("bgr"):
+                    encoding = encoding.replace("bgr", "rgb")
+                raw_image = cv_bridge.imgmsg_to_cv2(image_message, encoding)
                 rotated_image = ndimage.rotate(raw_image, offset_rotation_angle)
                 image = open3d.geometry.Image(rotated_image)
                 open3d.visualization.draw_geometries([image], window_name=f"Image with {sensor.name}")
                 self._logger.info(f"Drew image with {sensor.name}")
 
-            pointcloud = self._robot.scan_in_place().voxel_down_sample(voxel_size=0.02)
+            pointcloud = self._robot.scan_in_place([camera]).voxel_down_sample(voxel_size=0.02)
             self._logger.info("Attempting to draw pointcloud")
             open3d.visualization.draw_geometries([pointcloud], window_name="Pointcloud")
             self._logger.info("Drew pointcloud")
 
-        return 0
+            return 0
 
 
 def cli() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("robot_name", help="Name of the robot if the ROS driver is inside that namespace")
-
+    """Command-line interface."""
+    parser = argparse.ArgumentParser(description=SpotImageVizExample.__doc__)
     parser.add_argument(
         "-c",
         "--camera-location",
@@ -79,14 +76,13 @@ def cli() -> argparse.ArgumentParser:
         choices=list(SpotCameraSubscription.Location),
         default=SpotCameraSubscription.Location.FRONT_LEFT,
     )
-
+    parser.add_argument("robot_name", help="Name of the robot")
     return parser
 
 
-@ros_process.main(cli(), uses_tf=True)
+@ros_process.main(cli(), interruptible=True, uses_tf=True)
 def main(args: argparse.Namespace) -> int:
-    example = Example(args)
-
+    example = SpotImageVizExample(args)
     return example.start()
 
 
