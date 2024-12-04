@@ -303,7 +303,8 @@ class SpotArmCommandBuilder(SpotCommandBuilder):
             Defaults to the robot clock epoch.
             positional_interpolation: optional positional interpolation method. Defaults to cubic.
             rotational_interpolation: optional rotational interpolation method. Defaults to cubic.
-            body_follow_arm: have the body follow the arm when it moves.
+            body_follow_arm: have the body follow the arm when it moves.  If this is not set, the robot will go into
+                stand mode (so it will stand up if it's sitting down).
 
         See https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html#armcartesiancommand-request
         and https://github.com/bdaiinstitute/spatialmath-python/blob/master/spatialmath/pose3d.py for further
@@ -344,9 +345,11 @@ class SpotArmCommandBuilder(SpotCommandBuilder):
             )
             arm_cartesian_command.wrench_trajectory_in_task.CopyFrom(wrench_trajectory)
 
+        mobility_command = robot_command.synchronized_command.mobility_command
         if body_follow_arm:
-            mobility_command = robot_command.synchronized_command.mobility_command
             mobility_command.follow_arm_request.CopyFrom(basic_command_pb2.FollowArmCommand.Request())
+        else:
+            mobility_command.stand_request.CopyFrom(basic_command_pb2.StandCommand.Request())
 
         arm_cartesian_command.x_axis = axis_mode_map.x
         arm_cartesian_command.y_axis = axis_mode_map.y
@@ -1608,7 +1611,8 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         Args:
             frame_t_goal: A pose for the end effector to move to relative to the base frame
             move_duration_sec: The duration of the move
-            body_follow: If True, the robot's body would automatically follow the arm to achieve the goal
+            body_follow: If True, the robot's body would automatically follow the arm to achieve the goal.  If this is
+                not set, the robot will go into stand mode, which means it will stand if it was sitting down.
             body_hip_assist: Whether or not to have the robot hips move to assist the end effector movements
             body_yaw_assist: Whether or not to have the robot yaw to assist the end effector movements
             timeout_sec: A timeout for waiting on a response/result from the action server. Setting to None creates no
@@ -1661,7 +1665,8 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         Args:
             frame_t_goal: A pose for the end effector to move to relative to the base frame
             move_duration_sec: The duration of the move
-            body_follow: If True, the robot's body would automatically follow the arm to achieve the goal
+            body_follow: If True, the robot's body would automatically follow the arm to achieve the goal.  If this is
+                not set the robot will go into stand mode, which means it will stand if it was sitting down.
             body_hip_assist: Whether or not to have the robot hips move to assist the end effector movements
             body_yaw_assist: Whether or not to have the robot yaw to assist the end effector movements
             result_callback: A callback to process/handle the resulting feedback from executing the command
@@ -1782,7 +1787,8 @@ class SpotArmCommandMixin(SpotCommandProtocol):
             reference_time: time with respect to the robot clock of when to reference when trajectories start and end
             pose_interpolation: positional interpolation method. Defaults to cubic.
             ang_interpolation: angular interpolation method. Defaults to cubic.
-            body_follow_arm: have the body follow the arm when it moves
+            body_follow_arm: have the body follow the arm when it moves.  If this is not set, the robot will go into
+                stand mode, which means it will stand if it was sitting down.
             timeout_sec: seconds it will attempt to run the command before timing out and returning
 
         Returns:
@@ -1880,7 +1886,8 @@ class SpotArmCommandMixin(SpotCommandProtocol):
             reference_time: time with respect to the robot clock of when to reference when trajectories start and end
             pose_interpolation: positional interpolation method. Defaults to cubic.
             ang_interpolation: angular interpolation method. Defaults to cubic.
-            body_follow_arm: have the body follow the arm when it moves
+            body_follow_arm: have the body follow the arm when it moves.  If this is not set the robot will go into
+                stand mode, which means it will stand if it was sitting down.
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
             on_failure_callback: A callback to process/handle when the action fails for various reasons

@@ -38,6 +38,35 @@ class ArmCartesianTrajectoryExample:
         self._logger = logging.getLogger()
         self._robot = SpotBasic(args.robot_name)
 
+    def _move_cosine_optional_body_follow(self, body_follow: bool) -> None:
+        # Generate the cosine wave and follow it using the arm
+        self._logger.info(f"Using hand to follow a wave body_follow is: {body_follow}...")
+        world_t_body = self._robot.lookup_a_tform_b(FrameHint.ODOM, FrameHint.BODY)
+        body_t_start_pose = self._robot.lookup_a_tform_b(FrameHint.BODY, FrameHint.HAND, timeout=5.0)
+        body_t_end_pose = body_t_start_pose * SE3.Trans([0.3, 0.0, 0.0])
+
+        num_points = 5
+        pose_trajectory = []
+        timestamps = np.linspace(0.0, 1.5, num_points)
+        for alpha in np.linspace(0.0, 1.0, num_points):
+            # formula is Asin(x/(2*pi)) + b
+            x = body_t_end_pose.x * alpha + body_t_start_pose.x * (1.0 - alpha)
+            z = 0.1 * np.sin(2.0 * np.pi * alpha) + body_t_start_pose.z
+            pose_trajectory.append(world_t_body * SE3.Trans([x, body_t_start_pose.y, z]))
+
+        self._robot.move_end_effector_along_trajectory.synchronously(
+            pose_vecs=pose_trajectory,
+            timestamps_between_poses=timestamps,
+            axis_mode_map=AxisModeMap.position_mode(),
+            root_frame=FrameHint.ODOM,
+            max_acceleration=10.0,  # meters/sec^2
+            max_linear_velocity=2.0,  # meters/sec
+            max_angular_velocity=np.pi / 2,  # radians/sec
+            max_pos_tracking_error=0.5,  # meters
+            max_rot_tracking_error=np.pi / 3,  # radians
+            body_follow_arm=body_follow,
+        )
+
     def start(self) -> int:
         if not self._robot.has_arm():
             self._logger.error("Robot has no arm.")
@@ -131,30 +160,8 @@ class ArmCartesianTrajectoryExample:
             self._robot.stow_arm.synchronously(timeout_sec=5.0)
             self._robot.move_end_effector.synchronously(cobra_pose, duration_sec=0.5, base_frame=FrameHint.BODY)
 
-            # Generate the cosine wave and follow it using the arm
-            self._logger.info("Using hand to follow a wave...")
-            start_pose = self._robot.lookup_a_tform_b(FrameHint.BODY, FrameHint.HAND, timeout=5.0)
-            end_pose = start_pose * SE3.Trans([0.3, 0.0, 0.0])
-
-            pose_trajectory = []
-            timestamps = np.linspace(0.0, 1.5, num_points)
-            for alpha in np.linspace(0.0, 1.0, num_points):
-                # formula is Asin(x/(2*pi)) + b
-                x = end_pose.x * alpha + start_pose.x * (1.0 - alpha)
-                z = 0.1 * np.sin(2.0 * np.pi * alpha) + start_pose.z
-                pose_trajectory.append(SE3.Trans([x, start_pose.y, z]))
-
-            self._robot.move_end_effector_along_trajectory.synchronously(
-                pose_vecs=pose_trajectory,
-                timestamps_between_poses=timestamps,
-                axis_mode_map=AxisModeMap.position_mode(),
-                root_frame=FrameHint.BODY,
-                max_acceleration=10.0,  # meters/sec^2
-                max_linear_velocity=2.0,  # meters/sec
-                max_angular_velocity=np.pi / 2,  # radians/sec
-                max_pos_tracking_error=0.5,  # meters
-                max_rot_tracking_error=np.pi / 3,  # radians
-            )
+            self._move_cosine_optional_body_follow(True)
+            self._move_cosine_optional_body_follow(False)
 
             # Go back to cobra
             self._logger.info("Going back to cobra pose...")
