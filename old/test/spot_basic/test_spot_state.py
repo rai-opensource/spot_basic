@@ -1,12 +1,16 @@
 # Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
 
+
 import math
 from dataclasses import asdict
 
 import pytest
+from numpy import allclose, array
 from numpy.testing import assert_equal
 from spatialmath import SO3
-from spot_utilities.spot_basic import FrameHint, SpotBasic
+from spot_utilities.spot_basic import SpotBasic
+from spot_utilities.spot_basic.state import FrameHint
+from spot_utilities.spot_util import compute_arm_jacobian
 from spot_wrapper.testing.fixtures import SpotFixture
 
 from bdai_ros2_wrappers.futures import wait_for_future
@@ -29,6 +33,18 @@ def test_spot_arm_joint_positions(simple_spot: SpotFixture, ros: ROSAwareScope) 
 
     arm_joint_positions = asdict(spot_interface.arm_joint_positions)
     assert arm_joint_positions == expected_arm_joint_positions
+    arm_jacobian = compute_arm_jacobian("arm_wr1", spot_interface.arm_joint_positions.to_list())
+    expected_arm_jacobian = array(
+        [
+            [0.0, 0.04120639, 0.075, 0.0, 0.0, 0.0, 0.0],
+            [0.74010891, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, -0.74010891, -0.4033, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0, 0.0, 0.98006658, 0.0],
+            [0.0, 1.0, 1.0, 0.0, 0.98006658, -0.0394695, 0.0],
+            [1.0, 0.0, 0.0, 0.0, 0.19866933, 0.19470917, 0.0],
+        ]
+    )
+    assert allclose(expected_arm_jacobian, arm_jacobian)
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
