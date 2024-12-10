@@ -17,11 +17,11 @@ from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandProtoc
 from spot_utilities.spot_basic.state import FrameHint
 from spot_utilities.spot_util import spot_namespaced
 
-from bdai_ros.perception.camera_subscription import CameraSubscription, RgbdFrameWithInfo
 from bdai_ros.utilities.manual_conversions import open3d_pointcloud_to_ros_pointcloud2, to_se3
 from bdai_ros2_wrappers.feeds import AdaptedMessageFeed, FramedMessageFeed, MessageFeed, SynchronizedMessageFeed
 from bdai_ros2_wrappers.futures import unwrap_future
 from bdai_ros2_wrappers.utilities import namespace_with
+from bdai_ros_perception.camera_subscription import CameraSubscription, RgbdFrameWithInfo
 
 
 def reconstruct_pointcloud(
