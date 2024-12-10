@@ -8,6 +8,7 @@ from bosdyn.api.graph_nav.graph_nav_pb2 import (
     ClearGraphResponse,
     DownloadGraphResponse,
     GetLocalizationStateResponse,
+    NavigateToResponse,
     SetLocalizationRequest,
     SetLocalizationResponse,
     UploadGraphResponse,
@@ -150,3 +151,23 @@ def test_list_graph(tmp_path: pathlib.Path, simple_spot: SpotFixture, ros: ROSAw
         response = spot_interface.list_graph.synchronously(str(graph_filepath))
         assert len(response.waypoint_ids) == 1
         assert response.waypoint_ids[0] == "wp-0"
+
+
+@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
+def test_navigate_to(tmp_path: pathlib.Path, simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
+    spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+
+    with spot_interface.lease():
+        action = spot_interface.navigate_to_waypoint.asynchronously("wp-0")
+
+        call_response = NavigateToResponse(status=NavigateToResponse.Status.STATUS_OK)
+
+        while simple_spot.api.NavigateTo.pending:
+            call = simple_spot.api.NavigateTo.serve(timeout=2.0)
+            assert call is not None
+            call.returns(call_response)
+
+            assert wait_for_future(action.finalization, timeout_sec=5.0)
+            assert action.succeeded
+
+            assert action.result.success

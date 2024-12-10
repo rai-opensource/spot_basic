@@ -5,6 +5,7 @@ from functools import cached_property
 from typing import Any, List, Optional, Protocol, TypeAlias, Union, overload
 
 from geometry_msgs.msg import Pose, PoseStamped
+from spot_msgs.action import NavigateTo  # type: ignore
 from spot_msgs.srv import (
     GraphNavClearGraph,
     GraphNavGetLocalizationPose,
@@ -13,9 +14,15 @@ from spot_msgs.srv import (
     ListGraph,
 )
 from spot_utilities.spot_basic.base import SpotBaseProtocol
-from spot_utilities.spot_basic.utilities import SpotServiced, SpotServicedProtocol
+from spot_utilities.spot_basic.utilities import (
+    SpotActionable,
+    SpotActionableProtocol,
+    SpotServiced,
+    SpotServicedProtocol,
+)
 from spot_utilities.spot_util import spot_namespaced
 
+from bdai_ros2_wrappers.action import ActionFuture
 from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
 from bdai_ros2_wrappers.futures import FutureLike
 from bdai_ros2_wrappers.subscription import Subscription
@@ -289,6 +296,52 @@ class SpotGraphNavProtocol(SpotBaseProtocol, Protocol):
                 a future response to the graph listing request.
             """
 
+    class NavigateToWaypointProtocol(
+        SpotActionableProtocol[NavigateTo.Goal, NavigateTo.Result, NavigateTo.Feedback], Protocol
+    ):
+        """GraphNav graph navigate to a waypoint protocol."""
+
+        @overload
+        def synchronously(self, waypoint_id: str, *, timeout_sec: Optional[float] = None) -> NavigateTo.Result:
+            """Navigate to a given waypoint
+
+            Args:
+                waypoint_id: id of the waypoint to navigate to
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
+                expires, graph listing will be cancelled and the call will raise. Note this timeout
+                is local to the caller (and it may take a while for the robot to react).
+
+            Returns:
+                the result to the navigate to request
+            """
+
+        @overload
+        def synchronously(
+            self, waypoint_id: str, *, timeout_sec: Optional[float] = None, nothrow: bool = False
+        ) -> Optional[NavigateTo.Result]:
+            """Navigate to a given waypoint synchronously.
+
+            Args:
+                waypoint_id: id of the waypoint to navigate to
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
+                expires, graph listing will be cancelled and the call will raise. Note this timeout
+                is local to the caller (and it may take a while for the robot to react).
+                nothrow: when set, errors do not raise exceptions.
+
+            Returns:
+                the result to the navigate to request or None on timeout or failure.
+            """
+
+        def asynchronously(self, waypoint_id: str) -> ActionFuture[NavigateTo.Result, NavigateTo.Feedback]:
+            """Navigate to a given waypoint asynchronously.
+
+            Args:
+                waypoint_id: id of the waypoint to navigate to
+
+            Returns:
+                a future result to the navigate to request
+            """
+
     @property
     def localization(self) -> Subscription[PoseStamped]: ...
 
@@ -301,6 +354,8 @@ class SpotGraphNavProtocol(SpotBaseProtocol, Protocol):
     upload_graph: GeneralizedMethodLike[UploadLocalizationGraphProtocol]
     clear_graph: GeneralizedMethodLike[ClearLocalizationGraphProtocol]
     list_graph: GeneralizedMethodLike[ListLocalizationGraphProtocol]
+
+    navigate_to_waypoint: GeneralizedMethodLike[NavigateToWaypointProtocol]
 
 
 class SpotGraphNavMixin(SpotBaseProtocol):
@@ -336,6 +391,10 @@ class SpotGraphNavMixin(SpotBaseProtocol):
         SpotGraphNavMixin.clear_graph.rebind(
             self,
             SpotServiced(GraphNavClearGraph, spot_namespaced(self.robot_name, "graph_nav_clear_graph"), node=self.node),
+        )
+        SpotGraphNavMixin.navigate_to_waypoint.rebind(
+            self,
+            SpotActionable(NavigateTo, spot_namespaced(self.robot_name, "navigate_to_waypoint"), node=self.node),
         )
 
     @cached_property
@@ -464,3 +523,10 @@ class SpotGraphNavMixin(SpotBaseProtocol):
         if response is None:
             return []
         return response.waypoint_ids
+
+    @generalized_method(spec=GeneralizedMethodLike[SpotGraphNavProtocol.NavigateToWaypointProtocol])
+    def navigate_to_waypoint(self, waypoint_id: str, **kwargs: Any) -> NavigateTo.Result:
+        """Navigate to the given waypoint
+
+        See `SpotGraphNavProtocol.NavigateToWaypointProtocol` for further reference.
+        """
