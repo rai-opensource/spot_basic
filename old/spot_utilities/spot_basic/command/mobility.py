@@ -22,6 +22,7 @@ from spot_utilities.spot_basic.state import FrameHint
 from spot_utilities.spot_basic.utilities import RobotComposeCommandHandle, SpotActionableProtocol, SpotActionHandle
 from spot_utilities.spot_util import spot_namespaced
 
+from bdai.deprecation import deprecated
 from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai_ros.utilities.manual_conversions import se3_to_se3pose
 from bdai_ros2_wrappers.action import ActionFuture
@@ -674,6 +675,10 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
         """
 
     @sit.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.sit.synchronously",
+    )
     def _legacy_sit(self, timeout_sec: float = 5.0) -> Optional[RobotCommandFeedback]:
         """Make the robot sit.
 
@@ -717,6 +722,10 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
         """
 
     @stand.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.stand.synchronously",
+    )
     def _legacy_stand(self, timeout_sec: float = 5.0) -> Optional[RobotCommandFeedback]:
         """Make the robot stand.
 
@@ -762,6 +771,10 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
         """
 
     @stand_with_orientation.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.stand_with_orientation.synchronously",
+    )
     def _legacy_stand_with_orientation(
         self, gravbody_r_goal: SO3, body_height: float = 0.0, timeout_sec: Optional[float] = None
     ) -> Optional[RobotCommandFeedback]:
@@ -826,6 +839,10 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
         """
 
     @walk.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.walk.synchronously",
+    )
     def _legacy_walk(
         self,
         frame_t_goal: SE2,
@@ -905,6 +922,10 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
         """
 
     @walk_trajectory.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.walk_trajectory.synchronously",
+    )
     def _legacy_walk_trajectory(
         self,
         frame_t_trajectory: SE2Trajectory,
@@ -994,6 +1015,10 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
         """
 
     @walk_and_orient.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.walk_and_orient.synchronously",
+    )
     def _legacy_walk_and_orient(
         self,
         frame_t_goal: SE3,

@@ -22,6 +22,7 @@ from spot_utilities.spot_basic.utilities import (
 )
 from spot_utilities.spot_util import spot_namespaced
 
+from bdai.deprecation import deprecated
 from bdai_ros2_wrappers.action import ActionFuture
 from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
 from bdai_ros2_wrappers.futures import FutureLike
@@ -416,6 +417,10 @@ class SpotGraphNavMixin(SpotBaseProtocol):
         """
 
     @reset_localization.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.reset_localization.synchronously",
+    )
     def _legacy_reset_localization(
         self, method: Union[LocalizationMethod, str], waypoint_id: Optional[str] = None
     ) -> bool:
@@ -445,6 +450,10 @@ class SpotGraphNavMixin(SpotBaseProtocol):
         """
 
     @get_localization_pose.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.get_localization_pose.synchronously",
+    )
     def _legacy_get_localization_pose(self) -> Optional[Pose]:
         """Get the estimated pose.
 
@@ -473,6 +482,10 @@ class SpotGraphNavMixin(SpotBaseProtocol):
         """
 
     @upload_graph.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.upload_graph.synchronously",
+    )
     def _legacy_upload_graph(self, upload_filepath: str) -> bool:
         """Upload graph structure (waypoints and topology).
 
@@ -492,6 +505,10 @@ class SpotGraphNavMixin(SpotBaseProtocol):
         """
 
     @clear_graph.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.clear_graph.synchronously",
+    )
     def _legacy_clear_graph(self) -> bool:
         """Clear graph structure (and localization).
 
@@ -511,6 +528,10 @@ class SpotGraphNavMixin(SpotBaseProtocol):
         """
 
     @list_graph.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.list_graph.synchronously",
+    )
     def _legacy_list_graph(self, upload_filepath: str) -> List[str]:
         """List waypoint IDs in a given graph structure.
 

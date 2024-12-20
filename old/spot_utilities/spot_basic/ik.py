@@ -10,6 +10,7 @@ from spot_utilities.spot_basic.base import SpotBaseProtocol
 from spot_utilities.spot_basic.utilities import SpotServiced, SpotServicedProtocol
 from spot_utilities.spot_util import spot_namespaced
 
+from bdai.deprecation import deprecated
 from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
 from bdai_ros2_wrappers.futures import FutureLike
 
@@ -122,6 +123,10 @@ class SpotIKMixin(SpotBaseProtocol):
         """
 
     @get_inverse_kinematic_solutions.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.get_inverse_kinematic_solutions.synchronously",
+    )
     def _legacy_get_inverse_kinematic_solutions(
         self, ik_request: inverse_kinematics_pb2.InverseKinematicsRequest
     ) -> Optional[inverse_kinematics_pb2.InverseKinematicsResponse]:

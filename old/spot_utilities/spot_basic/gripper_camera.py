@@ -12,6 +12,7 @@ from spot_utilities.spot_basic.base import SpotBaseProtocol
 from spot_utilities.spot_basic.utilities import SpotServiced, SpotServicedProtocol
 from spot_utilities.spot_util import spot_namespaced
 
+from bdai.deprecation import deprecated
 from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
 from bdai_ros2_wrappers.futures import FutureLike
 
@@ -170,6 +171,10 @@ class SpotGripperCameraMixin(SpotBaseProtocol):
         """
 
     @get_gripper_camera_parameters.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.get_gripper_camera_parameters.synchronously",
+    )
     def _legacy_get_gripper_camera_parameters(self) -> tuple[bool, str, bosdyn_api_msgs.msg.GripperCameraParams]:
         """Get the gripper camera parameters on the SpotDriver
 
@@ -207,6 +212,10 @@ class SpotGripperCameraMixin(SpotBaseProtocol):
         """
 
     @set_gripper_camera_parameters.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.set_gripper_camera_parameters.synchronously",
+    )
     def _legacy_set_gripper_camera_parameters(
         self, gripper_camera_params: bosdyn_api_msgs.msg.GripperCameraParams
     ) -> bool:

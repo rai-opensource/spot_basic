@@ -9,6 +9,7 @@ from spot_utilities.spot_basic.base import SpotBaseProtocol
 from spot_utilities.spot_basic.utilities import SpotServiced, SpotServicedProtocol
 from spot_utilities.spot_util import spot_namespaced
 
+from bdai.deprecation import deprecated
 from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
 from bdai_ros2_wrappers.futures import FutureLike
 
@@ -107,6 +108,10 @@ class SpotWorldMixin(SpotBaseProtocol):
         """
 
     @list_world_objects.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.list_world_objects.synchronously",
+    )
     def _legacy_list_world_objects(
         self, request: bosdyn_api_msgs.msg.ListWorldObjectRequest
     ) -> Optional[bosdyn_api_msgs.msg.ListWorldObjectResponse]:

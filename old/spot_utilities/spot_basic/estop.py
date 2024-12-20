@@ -8,6 +8,7 @@ from spot_utilities.spot_basic.utilities import SpotServiced, SpotServicedProtoc
 from spot_utilities.spot_util import spot_namespaced
 from std_srvs.srv import Trigger
 
+from bdai.deprecation import deprecated
 from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
 from bdai_ros2_wrappers.futures import FutureLike
 
@@ -135,6 +136,10 @@ class SpotEStopMixin(SpotBaseProtocol):
         """
 
     @estop_hard.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.estop_hard.synchronously",
+    )
     def _legacy_estop_hard(
         self,
         *,
@@ -179,6 +184,10 @@ class SpotEStopMixin(SpotBaseProtocol):
         """
 
     @estop_gentle.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.stop_gentle.synchronously",
+    )
     def _legacy_estop_gentle(
         self,
         *,
@@ -223,6 +232,10 @@ class SpotEStopMixin(SpotBaseProtocol):
         """
 
     @estop_release.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.estop_release.synchronously",
+    )
     def _legacy_estop_release(
         self,
         *,

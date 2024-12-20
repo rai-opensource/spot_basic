@@ -28,6 +28,7 @@ from spot_utilities.spot_basic.command.helpers import (
 from spot_utilities.spot_basic.state import ArmJointMap, FrameHint
 from spot_utilities.spot_basic.utilities import SpotActionableProtocol, SpotActionHandle
 
+from bdai.deprecation import deprecated
 from bdai_ros.utilities.manual_conversions import se3_to_se3pose_proto
 from bdai_ros2_wrappers.action import ActionFuture
 from bdai_ros2_wrappers.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
@@ -1087,6 +1088,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         """
 
     @stow_arm.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.stow_arm.synchronously",
+    )
     def _legacy_stow_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
         """Stow the robot arm.
 
@@ -1099,6 +1104,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         convert(command_builder.arm_stow_command(), goal.command)
         return self.command("stow_arm", goal, timeout_sec)
 
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.stow_arm.asynchronously",
+    )
     def stow_arm_async(
         self,
         *,
@@ -1140,6 +1149,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         """
 
     @ready_arm.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.ready_arm.synchronously",
+    )
     def _legacy_ready_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
         """Ready (ie. unstow) the robot arm.
 
@@ -1155,6 +1168,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
     # Alias
     unstow_arm = ready_arm
 
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.ready_arm.asynchronously",
+    )
     def ready_arm_async(
         self,
         *,
@@ -1199,6 +1216,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         """
 
     @carry_arm.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.carry_arm.synchronously",
+    )
     def _legacy_carry_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
         """Carry the robot arm.
 
@@ -1211,6 +1232,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         convert(command_builder.arm_carry_command(), goal.command)
         return self.command("carry_arm", goal, timeout_sec)
 
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.carry_arm.asynchronously",
+    )
     def carry_arm_async(
         self,
         *,
@@ -1252,6 +1277,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         """
 
     @lock_arm.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.lock_arm.synchronously",
+    )
     def _legacy_lock_arm(self, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
         """Lock the robot arm joints in place.
 
@@ -1264,6 +1293,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         convert(command_builder.arm_lock_command(), goal.command)
         return self.command("lock_arm", goal, timeout_sec)
 
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.lock_arm.asynchronously",
+    )
     def lock_arm_async(
         self,
         *,
@@ -1305,6 +1338,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         """
 
     @arm_gaze.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.arm_gaze.synchronously",
+    )
     def _legacy_arm_gaze(
         self, point: R3, frame: FrameHint, timeout_sec: Optional[float] = None
     ) -> Optional[RobotCommandFeedback]:
@@ -1325,6 +1362,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
 
     arm_gaze_at = arm_gaze
 
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.arm_gaze.asynchronously",
+    )
     def arm_gaze_at_async(
         self,
         point: R3,
@@ -1377,6 +1418,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         """
 
     @move_arm_along_trajectory.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.move_arm_along_trajectory.synchronously",
+    )
     def _legacy_move_arm_along_trajectory(
         self,
         joint_angles: Sequence[ArmJointMap],
@@ -1418,6 +1463,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
 
     move_arm_joint_trajectory = move_arm_along_trajectory
 
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.move_arm_along_trajectory.asynchronously",
+    )
     def move_arm_joint_trajectory_async(
         self,
         joint_angles: Sequence[ArmJointMap],
@@ -1492,6 +1541,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         """
 
     @move_arm.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.move_arm.synchronously",
+    )
     def _legacy_move_arm(
         self,
         joint_angles: Optional[ArmJointMap],
@@ -1528,6 +1581,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
 
     move_arm_to_joint_angles = move_arm
 
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.move_arm.asynchronously",
+    )
     def move_arm_to_joint_angles_async(
         self,
         joint_angles: Optional[ArmJointMap],
@@ -1590,6 +1647,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         """
 
     @move_end_effector.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.move_end_effector.synchronously",
+    )
     def _legacy_move_end_effector(
         self,
         frame_t_goal: SE3,
@@ -1642,6 +1703,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
 
     move_end_effector_cartesian = move_end_effector
 
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.move_end_effector.asynchronously",
+    )
     def move_end_effector_cartesian_async(
         self,
         frame_t_goal: SE3,
@@ -1731,6 +1796,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         """
 
     @move_end_effector_along_trajectory.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.move_end_effector_along_trajectory.synchronously",
+    )
     def _legacy_move_end_effector_along_trajectory(
         self,
         root_frame_name: str,
@@ -1827,6 +1896,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
 
     move_end_effector_cartesian_trajectory = move_end_effector_along_trajectory
 
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.move_end_effector_along_trajectory.asynchronously",
+    )
     def move_end_effector_cartesian_trajectory_async(
         self,
         root_frame_name: str,
@@ -1951,6 +2024,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         """
 
     @move_end_effector_with_controlled_impedance.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.move_end_effector_with_controlled_impedance.synchronously",
+    )
     def _legacy_move_end_effector_with_controlled_impedance(
         self,
         root_frame_name: FrameHint,
@@ -2002,6 +2079,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
 
     move_end_effector_impedance = move_end_effector_with_controlled_impedance
 
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.move_end_effector_with_controlled_impedance.asynchronously",
+    )
     def move_end_effector_impedance_async(
         self,
         root_frame_name: FrameHint,
@@ -2099,6 +2180,10 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         """
 
     @arm_zero_g.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.arm_zero_g.synchronously",
+    )
     def _legacy_arm_zero_g(self) -> Optional[RobotCommandFeedback]:
         """Sets spot arm into gravity compensated mode such that the arm 'renders'
         no apparent gravitational acceleration and low damping.

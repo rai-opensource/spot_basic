@@ -10,6 +10,7 @@ from spot_msgs.action import RobotCommand as RobotCommandAction
 from spot_utilities.spot_basic.command import SpotCommandBuilder, SpotCommandProtocol
 from spot_utilities.spot_basic.utilities import SpotActionableProtocol, SpotActionHandle
 
+from bdai.deprecation import deprecated
 from bdai_ros2_wrappers.action import ActionFuture
 from bdai_ros2_wrappers.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
 
@@ -161,6 +162,10 @@ class SpotGripperCommandMixin(SpotCommandProtocol):
         """
 
     @claw_gripper_open.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.claw_gripper_open.synchronously",
+    )
     def _legacy_claw_gripper_open(
         self, *, theta_rad: Optional[float] = None, timeout_sec: Optional[float] = None
     ) -> Optional[RobotCommandFeedback]:
@@ -218,6 +223,10 @@ class SpotGripperCommandMixin(SpotCommandProtocol):
         """
 
     @claw_gripper_close.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.claw_gripper_close.synchronously",
+    )
     def _legacy_claw_gripper_close(
         self, timeout_sec: Optional[float] = None, max_torque: Optional[float] = None
     ) -> Optional[RobotCommandFeedback]:

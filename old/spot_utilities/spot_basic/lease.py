@@ -9,6 +9,7 @@ from spot_utilities.spot_basic.utilities import SpotServiced, SpotServicedProtoc
 from spot_utilities.spot_util import spot_namespaced
 from std_srvs.srv import Trigger
 
+from bdai.deprecation import deprecated
 from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
 from bdai_ros2_wrappers.futures import FutureLike
 
@@ -108,6 +109,10 @@ class SpotLeaseMixin(SpotBaseProtocol):
         """
 
     @claim.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.claim.synchronously",
+    )
     def _legacy_claim(
         self,
         *,
@@ -152,6 +157,10 @@ class SpotLeaseMixin(SpotBaseProtocol):
         """
 
     @release.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.release.synchronously",
+    )
     def _legacy_release(
         self,
         *,

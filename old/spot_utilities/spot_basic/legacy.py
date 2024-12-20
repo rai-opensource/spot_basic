@@ -24,7 +24,13 @@ from spot_utilities.spot_basic.power import SpotPowerProtocol
 from spot_utilities.spot_basic.state import FrameHint
 from spot_utilities.spot_basic.utilities import SpotActionHandle
 
+from bdai.deprecation import deprecated
 
+
+@deprecated(
+    reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+    alternative="spot_utilities.spot_basic.SpotBasic",
+)
 class SpotLegacyMixin(
     SpotCommandProtocol,
     SpotManipulationProtocol,

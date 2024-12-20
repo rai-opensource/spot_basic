@@ -8,6 +8,7 @@ from spot_utilities.spot_basic.utilities import SpotServiced, SpotServicedProtoc
 from spot_utilities.spot_util import spot_namespaced
 from std_srvs.srv import Trigger
 
+from bdai.deprecation import deprecated
 from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
 from bdai_ros2_wrappers.futures import FutureLike
 
@@ -98,6 +99,10 @@ class SpotDockingMixin(SpotBaseProtocol):
         """
 
     @dock.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.dock.synchronously",
+    )
     def _legacy_dock(
         self,
         dock_id: int,
@@ -145,6 +150,10 @@ class SpotDockingMixin(SpotBaseProtocol):
         """
 
     @undock.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.undock.synchronously",
+    )
     def _legacy_undock(
         self,
         *,

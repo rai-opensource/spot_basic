@@ -28,6 +28,7 @@ from spot_utilities.spot_util import spot_namespaced
 from std_srvs.srv import Trigger
 
 import bdai.interactive_choreo.choreo_builders.serialization_utils as serialization_utils
+from bdai.deprecation import deprecated
 from bdai_ros2_wrappers.action import ActionFuture
 from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
 from bdai_ros2_wrappers.futures import FutureLike
@@ -614,6 +615,10 @@ class SpotChoreographyMixin(SpotBaseProtocol):
         """
 
     @execute_dance.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.execute_dance.synchronously",
+    )
     def _legacy_execute_dance(self, path: str, timeout_sec: float = 10) -> tuple[bool, str]:
         """Upload and execute a dance on the robot."""
         self.node.get_logger().info(f"Uploading dance at '{path}' to {self.robot_name}")
@@ -655,6 +660,10 @@ class SpotChoreographyMixin(SpotBaseProtocol):
         """
 
     @stop_dance.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.stop_dance.synchronously",
+    )
     def _legacy_stop_dance(self) -> SpotServiceHandle:
         """Stop an ongoing robot dance."""
         return SpotServiceHandle.call(
@@ -685,6 +694,10 @@ class SpotChoreographyMixin(SpotBaseProtocol):
         """
 
     @upload_animation.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.upload_animation.synchronously",
+    )
     def _legacy_upload_animation(self, move_name: str, path: str, timeout_sec: float = 10.0) -> tuple[bool, str]:
         """Upload an animation to the robot."""
         self.node.get_logger().info(f"Uploading animation at '{path}' to {self.robot_name}")
@@ -725,6 +738,10 @@ class SpotChoreographyMixin(SpotBaseProtocol):
         """
 
     @list_all_dances.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.list_all_dances.synchronously",
+    )
     def _legacy_list_all_dances(self, timeout_sec: float = 10.0) -> tuple[bool, str, list[str]]:
         """List all the dances uploaded to the robot."""
         self.node.get_logger().info(f"Sending list dances request to {self.robot_name}")
@@ -746,6 +763,10 @@ class SpotChoreographyMixin(SpotBaseProtocol):
         """
 
     @list_all_moves.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.list_all_moves.synchronously",
+    )
     def _legacy_list_all_moves(self, timeout_sec: float = 10.0) -> tuple[bool, str, list[str]]:
         """List all the moves uploaded to the robot."""
         self.node.get_logger().info(f"Sending list moves request to {self.robot_name}")
@@ -767,6 +788,10 @@ class SpotChoreographyMixin(SpotBaseProtocol):
         """
 
     @get_choreography_status.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.get_choreography_status.synchronously",
+    )
     def _legacy_get_choreography_status(self, timeout_sec: float = 10.0) -> tuple[bool, str, int]:
         """Get robot choregraphy status, if any."""
         response = self.get_choreo_status.synchronously(timeout_sec=timeout_sec, nothrow=True)
@@ -790,6 +815,10 @@ class SpotChoreographyMixin(SpotBaseProtocol):
         """
 
     @start_recording_state.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.start_recording_state.synchronously",
+    )
     def _legacy_start_recording_state(self, duration: float, timeout_sec: float = 10.0) -> tuple[bool, str]:
         """Start recording robot state."""
         response = self.start_recording_state.synchronously(
@@ -810,6 +839,10 @@ class SpotChoreographyMixin(SpotBaseProtocol):
         """
 
     @stop_recording_state.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.stop_recording_state.synchronously",
+    )
     def _legacy_stop_recording_state(self, timeout_sec: float = 10.0) -> tuple[bool, str]:
         """Stop recording robot state."""
         response = self.stop_recording_state.synchronously(timeout_sec=timeout_sec, nothrow=True)
@@ -835,6 +868,10 @@ class SpotChoreographyMixin(SpotBaseProtocol):
     recorded_state_to_animation = build_animation_from_recorded_state
 
     @recorded_state_to_animation.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.recorded_state_to_animation.synchronously",
+    )
     def _legacy_recorded_state_to_animation(
         self, has_arm: bool, timeout_sec: float = 10.0
     ) -> tuple[bool, str, Animation]:

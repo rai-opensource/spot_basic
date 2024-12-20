@@ -18,6 +18,7 @@ from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandBuilde
 from spot_utilities.spot_basic.state import ArmJointMap
 from spot_utilities.spot_basic.utilities import SpotActionableProtocol, SpotActionHandle
 
+from bdai.deprecation import deprecated
 from bdai_ros2_wrappers.action import ActionFuture
 from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
 
@@ -226,6 +227,10 @@ class SpotFullBodyCommandMixin(SpotCommandProtocol):
         """
 
     @self_right.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.self_right.synchronously",
+    )
     def _legacy_self_right(self, timeout_sec: float = 5.0) -> bool:
         """Make the robot self right."""
         response = self.self_right.synchronously(timeout_sec=timeout_sec, nothrow=True)
@@ -273,6 +278,10 @@ class SpotFullBodyCommandMixin(SpotCommandProtocol):
         """
 
     @roll_to_battery_change_pose.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.roll_to_battery_change_pose.synchronously",
+    )
     def _legacy_roll_to_battery_change_pose(
         self, dir_hint: BatteryChangeDirHint = BatteryChangeDirHint.RIGHT, timeout_sec: Optional[float] = None
     ) -> Optional[RobotCommandFeedback]:

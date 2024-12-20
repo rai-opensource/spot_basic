@@ -26,6 +26,7 @@ from spot_utilities.spot_basic.utilities import (
 )
 from spot_utilities.spot_util import spot_namespaced
 
+from bdai.deprecation import deprecated
 from bdai_ros2_wrappers.action import ActionFuture
 from bdai_ros2_wrappers.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
 from bdai_ros2_wrappers.futures import FutureLike
@@ -606,6 +607,10 @@ class SpotManipulationMixin(SpotStateProtocol):
         See `SpotManipulationProtocol.PerformProtocol` for further reference.
         """
 
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.manipulation.synchronously",
+    )
     def manipulation(
         self, command_name: str, goal: Manipulation.Goal, timeout_sec: Optional[float] = None
     ) -> Optional[ManipulationApiFeedbackResponse]:
@@ -681,6 +686,10 @@ class SpotManipulationMixin(SpotStateProtocol):
         """
 
     @walk_to_object_in_image.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.walk_to_object_in_image.synchronously",
+    )
     def _legacy_walk_to_object_in_image(
         self,
         pixel_xy: Sequence[float],
@@ -715,6 +724,10 @@ class SpotManipulationMixin(SpotStateProtocol):
 
     walk_to_object_image = walk_to_object_in_image
 
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.walk_to_object_in_image.asynchronously",
+    )
     def walk_to_object_image_async(
         self,
         pixel_xy: Sequence[float],
@@ -773,6 +786,10 @@ class SpotManipulationMixin(SpotStateProtocol):
         """
 
     @pick_object_in_image.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.pick_object_in_image.synchronously",
+    )
     def _legacy_pick_object_in_image(
         self,
         pixel_xy: Sequence[float],
@@ -816,6 +833,10 @@ class SpotManipulationMixin(SpotStateProtocol):
 
     grasp_in_image = pick_object_in_image
 
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.walk_to_object_in_image.asynchronously",
+    )
     def grasp_in_image_async(
         self,
         pixel_xy: Sequence[float],
@@ -885,6 +906,10 @@ class SpotManipulationMixin(SpotStateProtocol):
         """
 
     @walk_to_object_ray_in_world.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.walk_to_object_ray_in_world.synchronously",
+    )
     def _legacy_walk_to_object_ray_in_world(
         self,
         ray_start_rt_frame: R3,
@@ -909,6 +934,10 @@ class SpotManipulationMixin(SpotStateProtocol):
         convert(command, goal.command)
         return self.manipulation("walk_to_object_ray_in_world", goal, timeout_sec)
 
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.walk_to_object_ray_in_world.asynchronously",
+    )
     def walk_to_object_ray_in_world_async(
         self,
         ray_start_rt_frame: R3,
@@ -950,6 +979,10 @@ class SpotManipulationMixin(SpotStateProtocol):
         """
 
     @pick_object_ray_in_world.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.pick_object_ray_in_world.synchronously",
+    )
     def _legacy_pick_object_ray_in_world(
         self,
         ray_start_rt_frame: R3,
@@ -978,6 +1011,10 @@ class SpotManipulationMixin(SpotStateProtocol):
         convert(command, goal.command)
         return self.manipulation("grasp_along_ray", goal, timeout_sec)
 
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.pick_object_ray_in_world.asynchronously",
+    )
     def pick_object_ray_in_world_async(
         self,
         ray_start_rt_frame: R3,
@@ -1023,6 +1060,10 @@ class SpotManipulationMixin(SpotStateProtocol):
         """
 
     @override_grasp_or_carry.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.override_grasp_or_carry.synchronously",
+    )
     def _legacy_override_grasp_or_carry(
         self,
         grasp_override: ApiGraspOverride.Override = ApiGraspOverride.Override.OVERRIDE_UNKNOWN,

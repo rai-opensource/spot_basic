@@ -10,6 +10,7 @@ from spot_utilities.spot_basic.utilities import SpotServiced, SpotServicedProtoc
 from spot_utilities.spot_util import spot_namespaced
 from std_srvs.srv import Trigger
 
+from bdai.deprecation import deprecated
 from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
 from bdai_ros2_wrappers.futures import FutureLike
 from bdai_ros2_wrappers.subscription import Subscription
@@ -114,6 +115,10 @@ class SpotPowerMixin(SpotBaseProtocol):
         """
 
     @power_on.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.power_on.synchronously",
+    )
     def _legacy_power_on(
         self,
         *,
@@ -160,6 +165,10 @@ class SpotPowerMixin(SpotBaseProtocol):
         """
 
     @power_off.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.power_off.synchronously",
+    )
     def _legacy_power_off(
         self,
         *,

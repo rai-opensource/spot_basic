@@ -10,6 +10,7 @@ from rclpy.action.client import ActionClient
 from rclpy.client import Client
 from rclpy.context import Context
 
+from bdai.deprecation import deprecated
 from bdai_ros2_wrappers.action import Actionable, ActionableProtocol, ActionFuture
 from bdai_ros2_wrappers.action_handle import ActionHandle
 from bdai_ros2_wrappers.futures import FutureLike
@@ -133,6 +134,10 @@ class SpotActionable(Actionable[ActionGoalT, ActionResultT, ActionFeedbackT]):
         return super().asynchronous(goal, track_feedback=track_feedback)
 
 
+@deprecated(
+    reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+    alternative="spot_utilities.spot_basic.utilities.SpotServiced",
+)
 class SpotServiceHandle(ServiceHandle):
     """Extends legacy ServiceHandle for spot specific services"""
 
@@ -178,6 +183,10 @@ class SpotServiceHandle(ServiceHandle):
         super().__init__(f"{robot_name}.{service_name}", *args, **kwargs)
 
 
+@deprecated(
+    reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+    alternative="spot_utilities.spot_basic.utilities.SpotActionable",
+)
 class SpotActionHandle(ActionHandle):
     """Extends legacy ActionHandle for spot specific actions"""
 

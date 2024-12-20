@@ -27,6 +27,7 @@ from spot_utilities.spot_basic.utilities import (
 from spot_utilities.spot_util import spot_namespaced
 from std_srvs.srv import SetBool, Trigger
 
+from bdai.deprecation import deprecated
 from bdai_ros2_wrappers.action import ActionFuture
 from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
 from bdai_ros2_wrappers.futures import FutureLike
@@ -525,6 +526,10 @@ class SpotCommandMixin(SpotCommandProtocol):
         """
 
     @set_locomotion_mode.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.set_locomotion_mode.synchronously",
+    )
     def _legacy_set_locomotion_mode(self, locomotion_hint: LocomotionHint) -> bool:
         """Set the locomotion mode for the robot.
 
@@ -553,6 +558,10 @@ class SpotCommandMixin(SpotCommandProtocol):
         """
 
     @set_stair_mode.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.set_stair_mode.synchronously",
+    )
     def _legacy_set_stair_mode(self, value: bool) -> bool:
         """Enable (or disable) the stair mode for the robot.
 
@@ -580,6 +589,10 @@ class SpotCommandMixin(SpotCommandProtocol):
         """
 
     @set_max_velocity.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.set_max_velocity.synchronously",
+    )
     def _legacy_set_max_velocity(self, velocity_limit: Twist) -> bool:
         """Set the maximum velocity for the robot.
 
@@ -607,6 +620,10 @@ class SpotCommandMixin(SpotCommandProtocol):
         """
 
     @clear_behavior_fault.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.clear_behavior.synchronously",
+    )
     def _legacy_clear_behavior_fault(self, bid: int) -> bool:
         """Clear a behavior fault on the robot.
 
@@ -640,6 +657,10 @@ class SpotCommandMixin(SpotCommandProtocol):
         """
 
     @start_executing.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.start_executing.synchronously",
+    )
     def _legacy_start_executing(
         self,
         command: robot_command_pb2.RobotCommand,
@@ -690,6 +711,10 @@ class SpotCommandMixin(SpotCommandProtocol):
         """
 
     @execute.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.execute.synchronously",
+    )
     def _legacy_execute(
         self, command: robot_command_pb2.RobotCommand, *, timeout_sec: Optional[float] = None
     ) -> Optional[RobotCommandFeedback]:
@@ -714,6 +739,10 @@ class SpotCommandMixin(SpotCommandProtocol):
         """
 
     @stop.legacy
+    @deprecated(
+        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
+        alternative="spot_utilities.spot_basic.SpotBasic.stop.synchronously",
+    )
     def _legacy_stop(
         self,
         *,
