@@ -6,9 +6,8 @@ import sys
 from typing import Optional
 
 import open3d
+import synchros2.process as ros_process
 from spot_utilities.spot_basic import SpotBasic
-
-import bdai_ros2_wrappers.process as ros_process
 
 
 class PointCloudInPlaceExample:

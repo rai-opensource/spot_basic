@@ -8,10 +8,9 @@ import logging
 import sys
 
 import numpy as np
+import synchros2.process as ros_process
 from spot_utilities.spot_basic import SpotBasic
 from spot_utilities.spot_basic.state import ArmJointMap
-
-import bdai_ros2_wrappers.process as ros_process
 
 
 class ArmJointTrajectoryExample:

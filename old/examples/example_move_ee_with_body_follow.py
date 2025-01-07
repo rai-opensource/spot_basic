@@ -3,14 +3,13 @@
 import argparse
 import logging
 
+import synchros2.process as ros_process
 from bosdyn.client.frame_helpers import VISION_FRAME_NAME
 from bosdyn.client.robot_command import RobotCommandBuilder
 from spatialmath import SE3, UnitQuaternion
 from spot_utilities.spot_basic import FrameHint, SpotBasic
-
-import bdai_ros2_wrappers.process as ros_process
-from bdai_ros2_wrappers.futures import wait_for_future
-from bdai_ros2_wrappers.utilities import ensure
+from synchros2.futures import wait_for_future
+from synchros2.utilities import ensure
 
 
 class MoveEEWithBodyFollowExample:

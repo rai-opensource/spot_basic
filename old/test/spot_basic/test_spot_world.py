@@ -10,8 +10,7 @@ from bosdyn.api.world_object_pb2 import (
 )
 from spot_utilities.spot_basic import SpotBasic
 from spot_wrapper.testing.fixtures import SpotFixture
-
-from bdai_ros2_wrappers.scope import ROSAwareScope
+from synchros2.scope import ROSAwareScope
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)

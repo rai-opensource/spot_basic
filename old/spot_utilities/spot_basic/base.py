@@ -2,12 +2,11 @@
 
 from typing import Any, Optional, Protocol
 
+import synchros2.scope as ros_scope
 from rcl_interfaces.srv import GetParameters
 from rclpy.node import Node
 from spot_utilities.spot_util import spot_namespaced
-
-import bdai_ros2_wrappers.scope as ros_scope
-from bdai_ros2_wrappers.service import Serviced
+from synchros2.service import Serviced
 
 
 class SpotBaseProtocol(Protocol):
@@ -38,7 +37,7 @@ class SpotBase(SpotBaseProtocol):
         self._robot_name = robot_name
         node = node or ros_scope.node()
         if node is None:
-            raise ValueError("no process-wide ROS 2 node available (did you use bdai_ros2_wrapper.process.main?)")
+            raise ValueError("no process-wide ROS 2 node available (did you use synchros2.process.main?)")
         self._node = node
         self._get_spot_parameters: Serviced[GetParameters.Request, GetParameters.Response] = Serviced(
             GetParameters, spot_namespaced(self.robot_name, "spot_ros2/get_parameters"), node=self.node

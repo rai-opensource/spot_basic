@@ -7,14 +7,14 @@ import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
+import synchros2.process as ros_process
 from spatialmath import SE2
 from spot_utilities.spot_basic import FrameHint, SpotBasic
+from synchros2.futures import wait_for_future
 
-import bdai_ros2_wrappers.process as ros_process
 from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai.trajectory.se2_trajectory_plotting import draw_shape
 from bdai.trajectory.spot_se2_properties import BODY_SHAPE, MAX_SPEED_FORWARD, MAX_SPEED_VEC
-from bdai_ros2_wrappers.futures import wait_for_future
 
 
 class TrajectoryCommandExample:

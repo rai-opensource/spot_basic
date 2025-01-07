@@ -4,10 +4,9 @@ import argparse
 import logging
 import sys
 
+import synchros2.process as ros_process
 from spatialmath import SE3, SO3
 from spot_utilities.spot_basic import SpotBasic
-
-import bdai_ros2_wrappers.process as ros_process
 
 
 class StandWithOrientationExample:

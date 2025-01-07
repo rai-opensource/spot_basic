@@ -8,9 +8,9 @@ from spot_utilities.spot_basic import FrameHint, SpotBasic
 from spot_utilities.spot_basic.command.arm import ArmJointMap, AxisModeMap
 from spot_utilities.spot_basic.image import SpotCameraSubscription
 from spot_utilities.spot_basic.viz import prompt_for_click, visual_aid
+from synchros2.utilities import ensure
 
 from bdai.test_utilities.testing_prompt_session import TestingPromptSession
-from bdai_ros2_wrappers.utilities import ensure
 
 
 @pytest.mark.manual

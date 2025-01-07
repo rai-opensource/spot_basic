@@ -21,13 +21,13 @@ from spot_utilities.spot_basic.command.helpers import timestamped_se2_vecs_to_ro
 from spot_utilities.spot_basic.state import FrameHint
 from spot_utilities.spot_basic.utilities import RobotComposeCommandHandle, SpotActionableProtocol, SpotActionHandle
 from spot_utilities.spot_util import spot_namespaced
+from synchros2.action import ActionFuture
+from synchros2.callables import GeneralizedMethodLike, generalized_method
+from synchros2.futures import FutureLike
 
 from bdai.deprecation import deprecated
 from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai_ros.utilities.manual_conversions import se3_to_se3pose
-from bdai_ros2_wrappers.action import ActionFuture
-from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
-from bdai_ros2_wrappers.futures import FutureLike
 
 
 class SpotMobilityCommandBuilder(SpotCommandBuilder):

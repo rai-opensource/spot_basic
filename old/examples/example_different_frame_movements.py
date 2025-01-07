@@ -5,10 +5,10 @@ import logging
 import sys
 
 import numpy as np
+import synchros2.process as ros_process
 from spatialmath import SE2, SE3, SO3
 from spot_utilities.spot_basic import SpotBasic
 
-import bdai_ros2_wrappers.process as ros_process
 from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai.trajectory.spot_se2_properties import MAX_SPEED_FORWARD
 

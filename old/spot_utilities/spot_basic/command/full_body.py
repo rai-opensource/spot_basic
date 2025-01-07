@@ -17,10 +17,10 @@ from spot_utilities.spot_basic.command.gripper import SpotGripperCommandBuilder
 from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandBuilder
 from spot_utilities.spot_basic.state import ArmJointMap
 from spot_utilities.spot_basic.utilities import SpotActionableProtocol, SpotActionHandle
+from synchros2.action import ActionFuture
+from synchros2.callables import GeneralizedMethodLike, generalized_method
 
 from bdai.deprecation import deprecated
-from bdai_ros2_wrappers.action import ActionFuture
-from bdai_ros2_wrappers.callables import GeneralizedMethodLike, generalized_method
 
 
 class BatteryChangeDirHint(IntEnum):

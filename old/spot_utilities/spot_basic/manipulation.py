@@ -25,11 +25,11 @@ from spot_utilities.spot_basic.utilities import (
     SpotServicedProtocol,
 )
 from spot_utilities.spot_util import spot_namespaced
+from synchros2.action import ActionFuture
+from synchros2.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
+from synchros2.futures import FutureLike
 
 from bdai.deprecation import deprecated
-from bdai_ros2_wrappers.action import ActionFuture
-from bdai_ros2_wrappers.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
-from bdai_ros2_wrappers.futures import FutureLike
 
 
 class SpotManipulationCommandBuilder:

@@ -9,13 +9,13 @@ from bosdyn_api_msgs.msg import RobotCommandFeedback
 from rclpy.action.client import ActionClient
 from rclpy.client import Client
 from rclpy.context import Context
+from synchros2.action import Actionable, ActionableProtocol, ActionFuture
+from synchros2.action_handle import ActionHandle
+from synchros2.futures import FutureLike
+from synchros2.service import Serviced, ServicedProtocol
+from synchros2.service_handle import ServiceHandle
 
 from bdai.deprecation import deprecated
-from bdai_ros2_wrappers.action import Actionable, ActionableProtocol, ActionFuture
-from bdai_ros2_wrappers.action_handle import ActionHandle
-from bdai_ros2_wrappers.futures import FutureLike
-from bdai_ros2_wrappers.service import Serviced, ServicedProtocol
-from bdai_ros2_wrappers.service_handle import ServiceHandle
 
 
 class MessageProtocol(Protocol):

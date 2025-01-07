@@ -5,11 +5,10 @@ import logging
 import sys
 
 import numpy as np
+import synchros2.process as ros_process
 from spatialmath import SE3, SpatialForce
 from spatialmath.spatialvector import SpatialVector
 from spot_utilities.spot_basic import SpotBasic
-
-import bdai_ros2_wrappers.process as ros_process
 
 
 class ImpedanceControlExample:

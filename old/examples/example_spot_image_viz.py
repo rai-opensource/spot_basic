@@ -5,13 +5,12 @@ import logging
 import sys
 
 import open3d
+import synchros2.process as ros_process
 from cv_bridge import CvBridge
 from scipy import ndimage
 from spot_utilities.spot_basic import SpotBasic
 from spot_utilities.spot_basic.image import SpotCameraSubscription
-
-import bdai_ros2_wrappers.process as ros_process
-from bdai_ros2_wrappers.futures import unwrap_future
+from synchros2.futures import unwrap_future
 
 
 class SpotImageVizExample:

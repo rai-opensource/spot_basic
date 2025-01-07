@@ -5,6 +5,7 @@ from enum import Enum
 from functools import cached_property
 from typing import Any, Optional, Protocol, Sequence, TypeAlias, Union
 
+import synchros2.scope as ros_scope
 from bosdyn.api.geometry_pb2 import FrameTreeSnapshot
 from bosdyn.client.frame_helpers import (
     BODY_FRAME_NAME,
@@ -20,15 +21,14 @@ from sensor_msgs.msg import JointState
 from spatialmath import SE3
 from spot_utilities.spot_basic.base import SpotBaseProtocol
 from spot_utilities.spot_util import spot_namespaced
+from synchros2.subscription import Subscription
+from synchros2.utilities import namespace_with
 
-import bdai_ros2_wrappers.scope as ros_scope
 from bdai_ros.utilities.manual_conversions import (
     se3_to_se3pose_proto,
     to_se3,
 )
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
-from bdai_ros2_wrappers.subscription import Subscription
-from bdai_ros2_wrappers.utilities import namespace_with
 
 
 @dataclass(kw_only=True)

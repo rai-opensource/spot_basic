@@ -6,9 +6,8 @@ from bosdyn.api.docking.docking_pb2 import PREP_POSE_UNDOCK, DockingCommandFeedb
 from bosdyn.api.robot_command_pb2 import RobotCommandFeedbackResponse, RobotCommandResponse
 from spot_utilities.spot_basic import SpotBasic
 from spot_wrapper.testing.fixtures import SpotFixture
-
-from bdai_ros2_wrappers.futures import wait_for_future
-from bdai_ros2_wrappers.scope import ROSAwareScope
+from synchros2.futures import wait_for_future
+from synchros2.scope import ROSAwareScope
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)

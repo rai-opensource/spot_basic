@@ -27,11 +27,11 @@ from spot_utilities.spot_basic.command.helpers import (
 )
 from spot_utilities.spot_basic.state import ArmJointMap, FrameHint
 from spot_utilities.spot_basic.utilities import SpotActionableProtocol, SpotActionHandle
+from synchros2.action import ActionFuture
+from synchros2.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
 
 from bdai.deprecation import deprecated
 from bdai_ros.utilities.manual_conversions import se3_to_se3pose_proto
-from bdai_ros2_wrappers.action import ActionFuture
-from bdai_ros2_wrappers.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
 
 
 @dataclasses.dataclass(kw_only=True)

@@ -5,10 +5,9 @@ import argparse
 import logging
 import sys
 
+import synchros2.process as ros_process
 from bosdyn.api.gripper_camera_param_pb2 import GripperCameraParamRequest
 from spot_utilities.spot_basic import SpotBasic
-
-import bdai_ros2_wrappers.process as ros_process
 
 
 class GripperCameraParametersExample:

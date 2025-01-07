@@ -4,12 +4,11 @@ import argparse
 import logging
 import sys
 
+import synchros2.process as ros_process
 from bosdyn.api import manipulation_api_pb2
 from spot_utilities.spot_basic import SpotBasic
 from spot_utilities.spot_basic.image import SpotCameraSubscription
 from spot_utilities.spot_basic.viz import prompt_for_click
-
-import bdai_ros2_wrappers.process as ros_process
 
 
 class ArmGraspExample:

@@ -8,12 +8,11 @@ import sys
 from typing import List
 
 import numpy as np
+import synchros2.process as ros_process
 from spatialmath import SE3, Twist3
 from spatialmath.base import trinterp
 from spot_utilities.spot_basic import FrameHint, SpotBasic
 from spot_utilities.spot_basic.command.arm import AxisModeMap
-
-import bdai_ros2_wrappers.process as ros_process
 
 
 def se3_linspace(start: SE3, end: SE3, num_points: int) -> List[SE3]:

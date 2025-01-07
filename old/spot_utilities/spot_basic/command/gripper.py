@@ -9,10 +9,10 @@ from bosdyn_api_msgs.msg import RobotCommandFeedback
 from spot_msgs.action import RobotCommand as RobotCommandAction
 from spot_utilities.spot_basic.command import SpotCommandBuilder, SpotCommandProtocol
 from spot_utilities.spot_basic.utilities import SpotActionableProtocol, SpotActionHandle
+from synchros2.action import ActionFuture
+from synchros2.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
 
 from bdai.deprecation import deprecated
-from bdai_ros2_wrappers.action import ActionFuture
-from bdai_ros2_wrappers.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
 
 
 class SpotGripperCommandBuilder(SpotCommandBuilder):
