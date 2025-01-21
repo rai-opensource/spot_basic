@@ -33,13 +33,17 @@ class SpotGripperCommandBuilder(SpotCommandBuilder):
             raise ValueError("Invalid gripper command: theta must be within range [0, pi/2]")
         return RobotCommandBuilder.claw_gripper_open_angle_command(theta_rad)
 
-    def claw_gripper_close_command(self, max_torque: Optional[float] = None) -> robot_command_pb2.RobotCommand:
+    def claw_gripper_close_command(
+        self, max_torque: Optional[float] = None, disable_force_on_contact: bool = False
+    ) -> robot_command_pb2.RobotCommand:
         """Build a claw gripper closing command.
 
         Args:
             max_torque: The maximum allowed torque applied in Nm.
         """
-        return RobotCommandBuilder.claw_gripper_close_command(max_torque=max_torque)
+        return RobotCommandBuilder.claw_gripper_close_command(
+            max_torque=max_torque, disable_force_on_contact=disable_force_on_contact
+        )
 
 
 RobotCommandActionableProtocol: TypeAlias = SpotActionableProtocol[
@@ -216,7 +220,9 @@ class SpotGripperCommandMixin(SpotCommandProtocol):
         )
 
     @generalized_method(spec=GeneralizedMethodLike[SpotGripperCommandProtocol.ClawGripperCloseProtocol])
-    def claw_gripper_close(self, max_torque: Optional[float] = None, **kwargs: Any) -> RobotCommandAction.Result:
+    def claw_gripper_close(
+        self, max_torque: Optional[float] = None, disable_force_on_contact: bool = False, **kwargs: Any
+    ) -> RobotCommandAction.Result:
         """Close robot claw gripper.
 
         See `SpotGripperCommandProtocol.ClawGripperCloseProtocol` for further reference.
