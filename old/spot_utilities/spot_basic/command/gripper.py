@@ -18,20 +18,9 @@ from bdai.deprecation import deprecated
 class SpotGripperCommandBuilder(SpotCommandBuilder):
     """A builder for Spot gripper commands."""
 
-    def claw_gripper_open_command(self, theta_rad: Optional[float] = None) -> robot_command_pb2.RobotCommand:
-        """Build a claw gripper opening command.
-
-        Args:
-            theta_rad: opening angle for the claw gripper, in radians. Must lie in the [0, pi / 2] interval,
-            where pi / 2 is the fully open angle. Defaults to a fully open claw if none is given.
-        """
-        if theta_rad is None:
-            return RobotCommandBuilder.claw_gripper_open_command()
-
-        theta_rad = -theta_rad  # negating to match gripper bounds in Spot SDK
-        if theta_rad > _CLAW_GRIPPER_CLOSED_ANGLE or theta_rad < _CLAW_GRIPPER_OPEN_ANGLE:
-            raise ValueError("Invalid gripper command: theta must be within range [0, pi/2]")
-        return RobotCommandBuilder.claw_gripper_open_angle_command(theta_rad)
+    def claw_gripper_open_command(self) -> robot_command_pb2.RobotCommand:
+        """Build a claw gripper opening command."""
+        return RobotCommandBuilder.claw_gripper_open_command()
 
     def claw_gripper_close_command(
         self, max_torque: Optional[float] = None, disable_force_on_contact: bool = False
@@ -39,11 +28,25 @@ class SpotGripperCommandBuilder(SpotCommandBuilder):
         """Build a claw gripper closing command.
 
         Args:
-            max_torque: The maximum allowed torque applied in Nm.
+            max_torque: The maximum allowed torque applied in Nm. If unspecified, a default value of 5.5 will be used
         """
         return RobotCommandBuilder.claw_gripper_close_command(
             max_torque=max_torque, disable_force_on_contact=disable_force_on_contact
         )
+
+    def claw_gripper_set_angle_command(
+        self, theta_rad: float, max_torque: Optional[float] = None
+    ) -> robot_command_pb2.RobotCommand:
+        """Build a claw gripper command to set to an arbitrary angle.
+
+        Args:
+            theta_rad: opening angle for the claw gripper, in radians. Must lie in the [-pi/2, 0] interval,
+            where -pi/2 is the fully open angle and 0 is closed. (This matches the joint angle in joint_states).
+            max_torque: maximum allowed torque applied in Nm. If unspecified, a default value of 5.5 will be used.
+        """
+        if theta_rad > _CLAW_GRIPPER_CLOSED_ANGLE or theta_rad < _CLAW_GRIPPER_OPEN_ANGLE:
+            raise ValueError("Invalid gripper command: theta must be within range [-pi/2, 0]")
+        return RobotCommandBuilder.claw_gripper_open_angle_command(gripper_q=theta_rad, max_torque=max_torque)
 
 
 RobotCommandActionableProtocol: TypeAlias = SpotActionableProtocol[
@@ -62,7 +65,6 @@ class SpotGripperCommandProtocol(SpotCommandProtocol, Protocol):
 
         def synchronously(
             self,
-            theta_rad: Optional[float] = None,
             *,
             feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
             timeout_sec: Optional[float] = None,
@@ -79,7 +81,6 @@ class SpotGripperCommandProtocol(SpotCommandProtocol, Protocol):
 
         def asynchronously(
             self,
-            theta_rad: Optional[float] = None,
             *,
             track_feedback: Union[int, bool] = False,
         ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
@@ -129,6 +130,44 @@ class SpotGripperCommandProtocol(SpotCommandProtocol, Protocol):
                 RuntimeError: if the robot has no arm.
             """
 
+    class ClawGripperSetAngleProtocol(RobotCommandActionableProtocol, Protocol):
+        """Protocol to set the robot claw gripper to a given joint angle."""
+
+        def synchronously(
+            self,
+            theta_rad: float,
+            max_torque: Optional[float] = None,
+            *,
+            feedback_callback: Optional[Callable[[RobotCommandAction.Feedback], None]] = None,
+            timeout_sec: Optional[float] = None,
+        ) -> RobotCommandAction.Result:
+            """Set the claw gripper joint angle synchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.claw_gripper_set_angle_command` synchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
+        def asynchronously(
+            self,
+            theta_rad: float,
+            max_torque: Optional[float] = None,
+            *,
+            track_feedback: Union[int, bool] = False,
+        ) -> ActionFuture[RobotCommandAction.Result, RobotCommandAction.Feedback]:
+            """Set the claw gripper joint angle asynchronously.
+
+            This is typically implemented by `SpotCommandProtocol.execute`ing a
+            `SpotMobilityCommandBuilder.claw_gripper_set_angle_command` asynchronously.
+            See documentation for both for further reference on arguments taken.
+
+            Raises:
+                RuntimeError: if the robot has no arm.
+            """
+
 
 class SpotGripperCommandMixin(SpotCommandProtocol):
     """Mixin that enables basic Spot gripper command execution.
@@ -158,8 +197,17 @@ class SpotGripperCommandMixin(SpotCommandProtocol):
             ),
         )
 
+        SpotGripperCommandMixin.claw_gripper_set_angle.rebind(
+            self,
+            GeneralizedGuard(
+                self.has_arm,
+                self.execute.compose(command_builder.claw_gripper_set_angle_command),
+                f"{self.robot_name} has no arm, no gripper to set the angle of",
+            ),
+        )
+
     @generalized_method(spec=GeneralizedMethodLike[SpotGripperCommandProtocol.ClawGripperOpenProtocol])
-    def claw_gripper_open(self, theta_rad: Optional[float] = None, **kwargs: Any) -> RobotCommandAction.Result:
+    def claw_gripper_open(self, **kwargs: Any) -> RobotCommandAction.Result:
         """Open robot claw gripper.
 
         See `SpotGripperCommandProtocol.ClawGripperOpenProtocol` for further reference.
@@ -170,36 +218,27 @@ class SpotGripperCommandMixin(SpotCommandProtocol):
         reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
         alternative="spot_utilities.spot_basic.SpotBasic.claw_gripper_open.synchronously",
     )
-    def _legacy_claw_gripper_open(
-        self, *, theta_rad: Optional[float] = None, timeout_sec: Optional[float] = None
-    ) -> Optional[RobotCommandFeedback]:
-        """Open the robot claw gripper.
-
-        Args:
-            theta_rad: opening angle for the claw gripper, in radians. Must lie in the [0, pi / 2] interval,
-            where pi / 2 is the fully open angle. Defaults to a fully open claw if none is given.
+    def _legacy_claw_gripper_open(self, *, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
+        """Fully open the robot claw gripper.
 
         Returns:
             outcome as command feedback.
         """
         goal = RobotCommandAction.Goal()
         command_builder = SpotGripperCommandBuilder(self)
-        convert(command_builder.claw_gripper_open_command(theta_rad), goal.command)
+        convert(command_builder.claw_gripper_open_command(), goal.command)
         return self.command("claw_gripper_open", goal, timeout_sec)
 
     def claw_gripper_open_async(
         self,
         *,
-        theta_rad: Optional[float] = None,
         result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
         on_failure_callback: Optional[Callable[[], None]] = None,
     ) -> Optional[SpotActionHandle]:
-        """Send a command to open the gripper asynchronously
+        """Send a command to fully open the gripper asynchronously
 
         Args:
-            theta: Angle in radians (between 0 and pi/2) to open the gripper. Not passing a value defaults
-                the gripper to open completely.
             result_callback: A callback to process/handle the resulting feedback from executing the command
             feedback_callback: A callback to process/handle the feedback received during the execution of the command
             on_failure_callback: A callback to process/handle when the action fails for various reasons
@@ -210,7 +249,7 @@ class SpotGripperCommandMixin(SpotCommandProtocol):
         """
         goal = RobotCommandAction.Goal()
         command_builder = SpotGripperCommandBuilder(self)
-        convert(command_builder.claw_gripper_open_command(theta_rad), goal.command)
+        convert(command_builder.claw_gripper_open_command(), goal.command)
         return self.command_async(
             "claw_gripper_open",
             goal,
@@ -274,3 +313,12 @@ class SpotGripperCommandMixin(SpotCommandProtocol):
             feedback_callback=feedback_callback,
             on_failure_callback=on_failure_callback,
         )
+
+    @generalized_method(spec=GeneralizedMethodLike[SpotGripperCommandProtocol.ClawGripperSetAngleProtocol])
+    def claw_gripper_set_angle(
+        self, theta_rad: float, max_torque: Optional[float] = None, **kwargs: Any
+    ) -> RobotCommandAction.Result:
+        """Set the joint angle of the robot claw gripper.
+
+        See `SpotGripperCommandProtocol.ClawGripperSetAngleProtocol` for further reference.
+        """
