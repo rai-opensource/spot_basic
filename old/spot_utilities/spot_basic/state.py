@@ -255,6 +255,15 @@ class SpotStateMixin(SpotBaseProtocol):
             rear_right_knee=joint_positions[namespace_with(self.robot_name, "rear_right_knee")],
         )
 
+    @property
+    def gripper_position(self) -> Optional[float]:
+        """Get current gripper position, or None if no joint states have been received yet."""
+        joint_states = self.joint_states.latest
+        if joint_states is None:
+            return None
+        joint_positions = dict(zip(joint_states.name, joint_states.position, strict=True))
+        return joint_positions[namespace_with(self.robot_name, "arm_f1x")]
+
     def wait_for_a_tform_b(
         self,
         frame_a: Union[FrameHint, str],

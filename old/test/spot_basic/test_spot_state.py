@@ -78,6 +78,24 @@ def test_spot_leg_joint_positions(simple_spot: SpotFixture, ros: ROSAwareScope) 
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
+def test_spot_gripper_positions(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
+    spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    kinematic_state = simple_spot.api.robot_state.kinematic_state
+
+    expected_gripper_position = -0.5
+    joint_state = kinematic_state.joint_states.add()
+    joint_state.name = "arm0.f1x"
+    joint_state.position.value = expected_gripper_position
+
+    assert spot_interface.initialize_robot()
+
+    assert wait_for_future(spot_interface.joint_states.update, timeout_sec=10.0)
+
+    gripper_position = spot_interface.gripper_position
+    assert gripper_position == expected_gripper_position
+
+
+@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_basic_transform_lookup(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
     kinematic_state = simple_spot.api.robot_state.kinematic_state
