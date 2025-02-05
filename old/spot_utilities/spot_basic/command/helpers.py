@@ -15,7 +15,7 @@ from bosdyn.api import (
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.api.trajectory_pb2 import POS_INTERP_CUBIC, PositionalInterpolation
 from bosdyn.client.frame_helpers import BODY_FRAME_NAME
-from google.protobuf import any_pb2, duration_pb2
+from google.protobuf import any_pb2, duration_pb2, timestamp_pb2
 from spatialmath import SE2, SE3, SpatialForce, Twist3
 
 from bdai_ros.utilities.manual_conversions import (
@@ -43,12 +43,12 @@ def timestamped_se2_vecs_to_se2_trajectory_command_proto(
 
     points = []
     for t, se2 in zip(timestamps_sec, se2_poses, strict=True):
-        seconds = int(t)
-        nanos = int((t - seconds) * 1e9)
+        time_since_reference = duration_pb2.Duration()
+        time_since_reference.FromNanoseconds(int(t * 1e9))
         points.append(
             trajectory_pb2.SE2TrajectoryPoint(
                 pose=se2_to_se2pose_proto(se2),
-                time_since_reference=duration_pb2.Duration(seconds=seconds, nanos=nanos),
+                time_since_reference=time_since_reference,
             )
         )
 
@@ -107,12 +107,9 @@ def timestamped_se3_poses_to_se3_trajectory(
         raise IndexError("Number of timestamps and positions must be equal.")
 
     for pt in range(num_points_in_trajectory):
-        pose = pose_vecs[pt]
-        ts = timestamps_between_points[pt]
-        # Create the SE3 Pose from the broken up sections above
-        pose_proto = se3_to_se3pose_proto(pose)
-        secs = int(np.floor(ts))
-        time_since_ref = {"seconds": secs, "nanos": int((ts - secs) * 1e9)}
+        pose_proto = se3_to_se3pose_proto(pose_vecs[pt])
+        time_since_ref = duration_pb2.Duration()
+        time_since_ref.FromNanoseconds(int(timestamps_between_points[pt] * 1e9))
         trajectory_point = trajectory_pb2.SE3TrajectoryPoint(pose=pose_proto, time_since_reference=time_since_ref)
         # if we are supplying velocity as well, we need to add it in
         if vel_vecs is not None:
@@ -126,7 +123,8 @@ def timestamped_se3_poses_to_se3_trajectory(
         trajectory.append(trajectory_point)
 
     if reference_time is not None:
-        ref_time = {"seconds": int(np.floor(reference_time)), "nanos": int(reference_time * 1e9)}
+        ref_time = timestamp_pb2.Timestamp()
+        ref_time.FromNanoseconds(int(reference_time * 1e9))
         trajectory_proto = trajectory_pb2.SE3Trajectory(
             points=trajectory,
             pos_interpolation=pose_interpolation,
@@ -165,18 +163,17 @@ def timestamped_spatialforces_to_wrench_protos(
         raise IndexError("Number of timestamps and positions must be equal.")
 
     for pt in range(num_points_in_trajectory):
-        spatialforce_wrench = wrench_vecs[pt]
-        # Create the SE3 Pose from the broken up sections above
-        wrench_proto = spatialforce_to_wrench_proto(spatialforce_wrench)
-        ts = timestamps_between_wrenches[pt]
-        time_since_ref = {"seconds": int(np.floor(ts)), "nanos": int(ts * 1e9)}
+        wrench_proto = spatialforce_to_wrench_proto(wrench_vecs[pt])
+        time_since_ref = duration_pb2.Duration()
+        time_since_ref.FromNanoseconds(int(timestamps_between_wrenches[pt] * 1e9))
         trajectory_point = trajectory_pb2.WrenchTrajectoryPoint(
             wrench=wrench_proto, time_since_reference=time_since_ref
         )
         trajectory.append(trajectory_point)
 
     if reference_time is not None:
-        ref_time = {"seconds": int(np.floor(reference_time)), "nanos": int(reference_time * 1e9)}
+        ref_time = timestamp_pb2.Timestamp()
+        ref_time.FromNanoseconds(int(reference_time * 1e9))
         trajectory_proto = trajectory_pb2.WrenchTrajectory(
             points=trajectory,
             reference_time=ref_time,

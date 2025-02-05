@@ -298,7 +298,7 @@ def test_arm_strength(hardware_spot_interface: SpotBasic, prompt_session: Testin
 
     response = hardware_spot_interface.move_end_effector_along_trajectory.synchronously(
         wrench_vecs=wrench_trajectory,
-        timestamps_between_poses=timestamps,
+        timestamps_between_wrenches=timestamps,
         axis_mode_map=AxisModeMap.force_mode(),
         root_frame=FrameHint.GRAV_ALIGNED_BODY,
         timeout_sec=20.0,
