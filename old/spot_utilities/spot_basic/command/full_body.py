@@ -74,26 +74,25 @@ class SpotFullBodyCommandBuilder(SpotCommandBuilder):
         duration: Optional[float] = None,
         max_velocity: Optional[float] = None,
         max_acceleration: Optional[float] = None,
-        gripper_open: Optional[bool] = None,
+        gripper_angle: Optional[bool] = None,
         gripper_max_torque: Optional[float] = None,
     ) -> robot_command_pb2.RobotCommand:
         """Creates a robot command that takes the torso, arm, and gripper to the desired state without moving the
         feet. (If the SE3 pose is out of range, this will get as close as possible without taking a step).
 
-        See arm_joint_command(), torso_pose_command(), and claw_gripper_open/close_command() documentation for
+        See arm_joint_command(), torso_pose_command(), and claw_gripper_set_angle_command() documentation for
         further reference.
         """
         arm_builder = SpotArmCommandBuilder(self.target)
         mobility_builder = SpotMobilityCommandBuilder(self.target)
         torso_command = mobility_builder.torso_pose_command(torso_pose, duration)
         arm_command = arm_builder.arm_joint_command(joint_angles, duration, max_velocity, max_acceleration)
-        if gripper_open is None:
+        if gripper_angle is None:
             return RobotCommandBuilder.build_synchro_command(torso_command, arm_command)
         gripper_builder = SpotGripperCommandBuilder(self.target)
-        if gripper_open:
-            gripper_command = gripper_builder.claw_gripper_open_command()
-        else:
-            gripper_command = gripper_builder.claw_gripper_close_command(gripper_max_torque)
+        gripper_command = gripper_builder.claw_gripper_set_angle_command(
+            theta_rad=gripper_angle, max_torque=gripper_max_torque
+        )
         return RobotCommandBuilder.build_synchro_command(torso_command, arm_command, gripper_command)
 
 

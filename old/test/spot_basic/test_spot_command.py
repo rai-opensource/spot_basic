@@ -19,7 +19,7 @@ from bosdyn.api.robot_command_pb2 import (
     RobotCommandResponse,
 )
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
-from bosdyn.client.robot_command import _CLAW_GRIPPER_CLOSED_ANGLE, _CLAW_GRIPPER_OPEN_ANGLE, RobotCommandBuilder
+from bosdyn.client.robot_command import RobotCommandBuilder
 from bosdyn_api_msgs.msg import (
     SE2TrajectoryCommandFeedbackStatus,
     SitCommandFeedbackStatus,
@@ -902,7 +902,8 @@ def test_whole_body_including_gripper_command_builder() -> None:
     quaternion = UnitQuaternion(s=0, v=[0, 0, 1])
     pose = SE3.Rt(R=quaternion.SO3(), t=[1.0, 2.0, 3.0])
     arm_joint_angles = [4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
-    command = fb_command_builder.whole_body_command(pose, arm_joint_angles, gripper_open=True)
+    gripper_angle = -0.5
+    command = fb_command_builder.whole_body_command(pose, arm_joint_angles, gripper_angle=gripper_angle)
     arm_trajectory = command.synchronized_command.arm_command.arm_joint_move_command.trajectory
     assert len(arm_trajectory.points) == 1
     arm_trajectory_point = arm_trajectory.points[0]
@@ -928,13 +929,4 @@ def test_whole_body_including_gripper_command_builder() -> None:
     # Ensure gripper trajectory matches desired input
     gripper_trajectory = command.synchronized_command.gripper_command.claw_gripper_command.trajectory
     assert len(gripper_trajectory.points) == 1
-    assert gripper_trajectory.points[0].point == _CLAW_GRIPPER_OPEN_ANGLE
-    # Create a new command where the gripper is closed, and check that the gripper trajectory matches.
-    gripper_max_torque = 10.0
-    command = fb_command_builder.whole_body_command(
-        pose, arm_joint_angles, gripper_open=False, gripper_max_torque=gripper_max_torque
-    )
-    gripper_command = command.synchronized_command.gripper_command.claw_gripper_command
-    assert len(gripper_command.trajectory.points) == 1
-    assert gripper_command.trajectory.points[0].point == _CLAW_GRIPPER_CLOSED_ANGLE
-    assert gripper_command.maximum_torque.value == gripper_max_torque
+    assert gripper_trajectory.points[0].point == gripper_angle
