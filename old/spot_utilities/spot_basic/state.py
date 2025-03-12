@@ -183,10 +183,11 @@ class SpotStateMixin(SpotBaseProtocol):
         # A tf listener instance can be connected to the robot.
         self.tf_listener = tf_listener or ros_scope.tf_listener()
         # TODO: are there other frame names to grab?
-        self.body_frame_name = namespace_with(self.robot_name, BODY_FRAME_NAME)
-        self.hand_frame_name = namespace_with(self.robot_name, HAND_FRAME_NAME)
-        self.vision_frame_name = namespace_with(self.robot_name, VISION_FRAME_NAME)
-        self.odom_frame_name = namespace_with(self.robot_name, ODOM_FRAME_NAME)
+        self.body_frame_name = namespace_with(self.robot_name, FrameHint.BODY.value)
+        self.hand_frame_name = namespace_with(self.robot_name, FrameHint.HAND.value)
+        self.wrist_frame_name = namespace_with(self.robot_name, FrameHint.WRIST.value)
+        self.vision_frame_name = namespace_with(self.robot_name, FrameHint.VISION.value)
+        self.odom_frame_name = namespace_with(self.robot_name, FrameHint.ODOM.value)
 
     def set_tf_listener(self, tf_listener: TFListenerWrapper) -> None:
         """Attach a TFListenerWrapper instance to the robot.
