@@ -45,6 +45,7 @@ def zero_robot_state_stream_response() -> RobotStateStreamResponse:
     zero_response.joint_states.velocity.extend([0.0] * NUM_JOINTS)
     zero_response.joint_states.load.extend([0.0] * NUM_JOINTS)
     zero_response.inertial_state.packets.add()  # hardware interface expects at least a packet
+    zero_response.contact_states.extend([0] * 4)  # hardware interface expects all 4 feet to have a contact state
     return zero_response
 
 
@@ -153,6 +154,7 @@ def test_spot_full_state_control_feedback(simple_spot: SpotFixture, ros: ROSAwar
     expected_response.joint_states.velocity.extend(range(1, NUM_JOINTS + 1))
     expected_response.joint_states.load.extend(range(1, NUM_JOINTS + 1))
     expected_response.inertial_state.packets.add()  # hardware interface expects at least a packet
+    expected_response.contact_states.extend([0] * 4)  # hardware interface expects all 4 feet to have a contact state
     simple_spot.api.GetRobotStateStream.future.returns(itertools.repeat(expected_response))
 
     response = RobotCommandResponse()
