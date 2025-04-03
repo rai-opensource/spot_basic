@@ -1,17 +1,21 @@
 # Copyright (c) 2025 Boston Dynamics AI Institute LLC. All rights reserved.
 
-import contextlib
 import itertools
+from typing import Iterable
 
 import pytest
-from bosdyn.api.robot_command_pb2 import JointControlStreamResponse, RobotCommandResponse
+from bosdyn.api.robot_command_pb2 import JointControlStreamRequest, JointControlStreamResponse, RobotCommandResponse
 from bosdyn.api.robot_state_pb2 import RobotStateStreamResponse
+from rclpy.executors import Executor
+from rclpy.task import Future
+from sensor_msgs.msg import JointState
 from spot_utilities.spot_basic import SpotBasic
 from spot_utilities.spot_basic.control import (
     SpotForwardPositionControllerInterface,
     SpotForwardStateControllerInterface,
 )
 from spot_wrapper.testing.fixtures import SpotFixture
+from synchros2.futures import unwrap_future
 from synchros2.scope import ROSAwareScope
 
 ORDERED_JOINTS = [
@@ -47,6 +51,17 @@ def zero_robot_state_stream_response() -> RobotStateStreamResponse:
     zero_response.inertial_state.packets.add()  # hardware interface expects at least a packet
     zero_response.contact_states.extend([0] * 4)  # hardware interface expects all 4 feet to have a contact state
     return zero_response
+
+
+def nonzero_joint_command_update(stream: Iterable[JointControlStreamRequest], executor: Executor) -> Future:
+    def blocking_poll() -> JointControlStreamRequest:
+        for request in stream:
+            position = request.joint_command.position
+            if any(value != 0.0 for value in position):
+                return request
+        return None
+
+    return executor.create_task(blocking_poll)
 
 
 @pytest.mark.launch(fixture=pytest.simple_controllable_spot_graph_description)
@@ -97,16 +112,14 @@ def test_spot_full_state_control(simple_spot: SpotFixture, ros: ROSAwareScope) -
             }
         )
 
-        requests = list(itertools.islice(call.request, 300))
+        request = unwrap_future(nonzero_joint_command_update(call.request, ros.executor), timeout_sec=5.0)
+        assert request.joint_command.position == expected_command[:NUM_JOINTS]
+        assert request.joint_command.velocity == expected_command[NUM_JOINTS : NUM_JOINTS * 2]
+        assert request.joint_command.load == expected_command[NUM_JOINTS * 2 :]
 
-    response = JointControlStreamResponse()
-    response.status = JointControlStreamResponse.Status.STATUS_OK
-    call.returns(response)
-
-    assert len(requests) > 0
-    assert requests[-1].joint_command.position == expected_command[:NUM_JOINTS]
-    assert requests[-1].joint_command.velocity == expected_command[NUM_JOINTS : NUM_JOINTS * 2]
-    assert requests[-1].joint_command.load == expected_command[NUM_JOINTS * 2 :]
+        response = JointControlStreamResponse()
+        response.status = JointControlStreamResponse.Status.STATUS_OK
+        call.returns(response)
 
 
 @pytest.mark.launch(fixture=pytest.simple_controllable_spot_graph_description)
@@ -135,14 +148,12 @@ def test_spot_joint_position_control(simple_spot: SpotFixture, ros: ROSAwareScop
 
         ifc.update_joint_position_command(**{name: expected_command[i] for i, name in enumerate(ORDERED_JOINTS)})
 
-        requests = list(itertools.islice(call.request, 300))
+        request = unwrap_future(nonzero_joint_command_update(call.request, ros.executor), timeout_sec=5.0)
+        assert request.joint_command.position == expected_command
 
-    response = JointControlStreamResponse()
-    response.status = JointControlStreamResponse.Status.STATUS_OK
-    call.returns(response)
-
-    assert len(requests) > 0
-    assert requests[-1].joint_command.position == expected_command
+        response = JointControlStreamResponse()
+        response.status = JointControlStreamResponse.Status.STATUS_OK
+        call.returns(response)
 
 
 @pytest.mark.launch(fixture=pytest.simple_controllable_spot_graph_description)
@@ -165,16 +176,18 @@ def test_spot_full_state_control_feedback(simple_spot: SpotFixture, ros: ROSAwar
         call = simple_spot.api.JointControlStream.serve(timeout=2.0)
         assert call is not None
 
-        with contextlib.closing(ifc.joint_states_feedback.stream()) as joint_states_stream:
-            joint_states_batch = list(itertools.islice(joint_states_stream, 300))
+        def nonzero_joint_states(message: JointState) -> bool:
+            values = [*message.position, *message.velocity, *message.effort]
+            return any(value != 0.0 for value in values)
 
-        assert len(joint_states_batch) > 0
-        for i, joint_name in enumerate(joint_states_batch[-1].name):
+        joint_states = unwrap_future(ifc.joint_states_feedback.matching_update(nonzero_joint_states), timeout_sec=5.0)
+
+        for i, joint_name in enumerate(joint_states.name):
             j = ORDERED_JOINTS.index(joint_name.removeprefix(simple_spot.api.name).strip("/"))
-            assert joint_states_batch[-1].position[i] == expected_response.joint_states.position[j]
-            assert joint_states_batch[-1].velocity[i] == expected_response.joint_states.velocity[j]
-            assert joint_states_batch[-1].effort[i] == expected_response.joint_states.load[j]
+            assert joint_states.position[i] == expected_response.joint_states.position[j]
+            assert joint_states.velocity[i] == expected_response.joint_states.velocity[j]
+            assert joint_states.effort[i] == expected_response.joint_states.load[j]
 
-    response = JointControlStreamResponse()
-    response.status = JointControlStreamResponse.Status.STATUS_OK
-    call.returns(response)
+        response = JointControlStreamResponse()
+        response.status = JointControlStreamResponse.Status.STATUS_OK
+        call.returns(response)
