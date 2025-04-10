@@ -9,10 +9,12 @@ from bosdyn.api.robot_state_pb2 import RobotStateStreamResponse
 from rclpy.executors import Executor
 from rclpy.task import Future
 from sensor_msgs.msg import JointState
+from spot_msgs.msg import JointCommand
 from spot_utilities.spot_basic import SpotBasic
 from spot_utilities.spot_basic.control import (
     SpotForwardPositionControllerInterface,
     SpotForwardStateControllerInterface,
+    SpotJointControllerInterface,
 )
 from spot_wrapper.testing.fixtures import SpotFixture
 from synchros2.futures import unwrap_future
@@ -187,6 +189,33 @@ def test_spot_full_state_control_feedback(simple_spot: SpotFixture, ros: ROSAwar
             assert joint_states.position[i] == expected_response.joint_states.position[j]
             assert joint_states.velocity[i] == expected_response.joint_states.velocity[j]
             assert joint_states.effort[i] == expected_response.joint_states.load[j]
+
+        response = JointControlStreamResponse()
+        response.status = JointControlStreamResponse.Status.STATUS_OK
+        call.returns(response)
+
+
+@pytest.mark.launch(fixture=pytest.simple_controllable_spot_graph_description)
+def test_spot_joint_controller(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
+    spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+
+    simple_spot.api.GetRobotStateStream.future.returns(itertools.repeat(zero_robot_state_stream_response()))
+
+    response = RobotCommandResponse()
+    response.status = RobotCommandResponse.Status.STATUS_OK
+    simple_spot.api.RobotCommand.future.returns(response)
+
+    with SpotJointControllerInterface(spot_interface) as ifc:
+        call = simple_spot.api.JointControlStream.serve(timeout=2.0)
+        assert call is not None
+
+        with pytest.raises(ValueError):
+            ifc.update_joints_command()
+
+        expected_command = JointCommand()
+        expected_command.name = [f"{simple_spot.api.name}/arm_sh0"]
+        expected_command.position = [0.0]
+        ifc.update_joints_command(expected_command)
 
         response = JointControlStreamResponse()
         response.status = JointControlStreamResponse.Status.STATUS_OK
