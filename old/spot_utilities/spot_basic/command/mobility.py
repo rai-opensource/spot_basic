@@ -1,6 +1,7 @@
-# Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
+# Copyright (c) 2024-2025 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import functools
+from copy import deepcopy
 from typing import Any, Callable, Iterable, List, Optional, Protocol, TypeAlias, Union, overload
 
 import numpy as np
@@ -82,6 +83,7 @@ class SpotMobilityCommandBuilder(SpotCommandBuilder):
         *,
         base_frame: Optional[FrameHint] = None,
         mobility_params: Optional[spot_command_pb2.MobilityParams] = None,
+        disable_obstacle_avoidance: Optional[bool] = False,
     ) -> robot_command_pb2.RobotCommand:
         """Build a walk to SE(2) pose command.
 
@@ -92,6 +94,11 @@ class SpotMobilityCommandBuilder(SpotCommandBuilder):
         """
         if base_frame is None:
             base_frame = FrameHint.VISION
+        if mobility_params is None:
+            mobility_params = deepcopy(self.target.mobility_params)
+        if disable_obstacle_avoidance:
+            self._logger.warning("Caution: attempting to send mobility trajectory without obstacle avoidance")
+            mobility_params.obstacle_params.disable_vision_body_obstacle_avoidance = (disable_obstacle_avoidance,)
         return RobotCommandBuilder.synchro_se2_trajectory_point_command(
             goal_x=frame_t_goal.x,
             goal_y=frame_t_goal.y,
