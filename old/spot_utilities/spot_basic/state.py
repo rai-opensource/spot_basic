@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024 Boston Dynamics AI Institute LLC. All rights reserved.
+# Copyright (c) 2023-2025 Boston Dynamics AI Institute LLC. All rights reserved.
 
 from dataclasses import dataclass
 from enum import Enum
@@ -151,6 +151,7 @@ class FrameHint(str, Enum):
     RIGHT_CAMERA = "right_fisheye"
     HAND_CAMERA = "hand_color_image_sensor"
     HAND_DEPTH_CAMERA = "hand_depth_sensor"
+    FEET_CENTER = "feet_center"
 
 
 class SpotStateProtocol(SpotBaseProtocol, Protocol):
