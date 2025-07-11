@@ -1,5 +1,5 @@
-#!/usr/bin/python3
-# Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
+#! /usr/bin/env python3
+# Copyright (c) 2024-2025 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import argparse
 import logging
