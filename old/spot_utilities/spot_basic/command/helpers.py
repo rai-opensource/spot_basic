@@ -1,3 +1,5 @@
+# Copyright (c) 2025 Boston Dynamics AI Institute LLC. All rights reserved.
+
 # Copyright (c) 2023 Boston Dynamics AI Institute, LLC. All rights reserved.
 from __future__ import annotations
 
@@ -18,6 +20,7 @@ from bosdyn.client.frame_helpers import BODY_FRAME_NAME
 from google.protobuf import any_pb2, duration_pb2, timestamp_pb2
 from spatialmath import SE2, SE3, SpatialForce, Twist3
 
+from bdai.trajectory.se3_trajectory import SE3Trajectory
 from bdai_ros.utilities.manual_conversions import (
     se2_to_se2pose_proto,
     se3_to_se3pose_proto,
@@ -90,7 +93,7 @@ def timestamped_se3_poses_to_se3_trajectory(
     """Returns SE3Trajectory proto given a trajectory of spatialmath SE3 points.
 
     Args:
-        timestamps_between points: array of times of when each point is traversed (seconds)
+        timestamps_between points: Time from start for each point (this argument is mis-named - #SW-2894).
         pose_vecs: array of values representing the SE3 pose trajectory,
         vel_vecs: array of values representing the SE3 velocity trajectory.
         pose_interpolation: positional interpolation method. Defaults to cubic.
@@ -139,6 +142,31 @@ def timestamped_se3_poses_to_se3_trajectory(
         )
 
     return trajectory_proto
+
+
+def se3_trajectory_to_proto(
+    trajectory: SE3Trajectory,
+    pos_interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
+    ang_interpolation: trajectory_pb2.AngularInterpolation = trajectory_pb2.ANG_INTERP_CUBIC_EULER,
+    reference_time: Optional[float] = None,
+) -> trajectory_pb2.SE3Trajectory:
+    """Converts an SE3Trajectory object to a SE3Trajectory protobuf message.
+
+    Args:
+        trajectory: input trajectory consisting of timestamped SE(3) waypoints.
+        pos_interpolation: interpolation approach for position. Defaults to cubic interpolation.
+        ang_interpolation: interpolation approach for orientation. Defaults to cubic interpolation of Euler angles.
+        reference_time: optional reference time to use as the base for the timestamps. Defaults to None.
+    Returns:
+        trajectory_pb2.SE3Trajectory: A protobuf message representing the trajectory.
+    """
+    return timestamped_se3_poses_to_se3_trajectory(
+        timestamps_between_points=[pt.time_from_start for pt in trajectory.waypoints],
+        pose_vecs=[pt.task_t_waypoint for pt in trajectory.waypoints],
+        pose_interpolation=pos_interpolation,
+        ang_interpolation=ang_interpolation,
+        reference_time=reference_time,
+    )
 
 
 def timestamped_spatialforces_to_wrench_protos(

@@ -1,9 +1,10 @@
-# Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
+# Copyright (c) 2024-2025 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import contextlib
 from typing import Generator, Optional
 
 from rclpy.node import Node
+from spot_utilities.spot_basic.arm_surface_contact import SpotArmSurfaceContactMixin
 from spot_utilities.spot_basic.base import SpotBase
 from spot_utilities.spot_basic.cam.audio import SpotCAMAudioMixin
 from spot_utilities.spot_basic.choreography import SpotChoreographyMixin
@@ -49,6 +50,7 @@ class SpotBasic(
     SpotChoreographyMixin,
     SpotManipulationMixin,
     SpotCommandMixin,
+    SpotArmSurfaceContactMixin,
     SpotImageMixin,
 ):
     """Basic interface to Spot robots over ROS 2."""
