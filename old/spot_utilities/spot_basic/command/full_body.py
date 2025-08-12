@@ -1,4 +1,4 @@
-# Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
+# Copyright (c) 2024-2025 Boston Dynamics AI Institute LLC. All rights reserved.
 
 from enum import IntEnum
 from typing import Any, Callable, Optional, Protocol, TypeAlias, Union, overload
