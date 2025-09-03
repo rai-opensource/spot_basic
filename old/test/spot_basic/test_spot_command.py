@@ -1,4 +1,4 @@
-# Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
+# Copyright (c) 2024-2025 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import math
 from unittest.mock import Mock
@@ -139,7 +139,7 @@ def test_spot_execute(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     sit_feedback.status = SitCommand.Feedback.Status.STATUS_IS_SITTING
     call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
 
 
@@ -161,7 +161,7 @@ def test_spot_start_execution(simple_spot: SpotFixture, ros: ROSAwareScope) -> N
     command_response.status = RobotCommandResponse.Status.STATUS_OK
     call.returns(command_response)
 
-    assert wait_for_future(future, timeout_sec=2.0)
+    assert wait_for_future(future, timeout_sec=pytest.DEFAULT_TIMEOUT)
     result = future.result()
     assert result.success, result.message
     assert result.robot_command_id == command_response.robot_command_id
@@ -196,7 +196,7 @@ def test_spot_sit_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     sit_feedback.status = SitCommand.Feedback.Status.STATUS_IS_SITTING
     call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
     assert action.result.success, action.result.message
 
@@ -223,7 +223,7 @@ def test_spot_legacy_sit_command(simple_spot: SpotFixture, ros: ROSAwareScope) -
     sit_feedback.status = SitCommand.Feedback.Status.STATUS_IS_SITTING
     simple_spot.api.RobotCommandFeedback.future.returns(feedback_response)
 
-    result = spot_interface.sit(timeout_sec=2.0)
+    result = spot_interface.sit(timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert result is not None
 
     synchro_feedback = result.command.synchronized_feedback
@@ -260,7 +260,7 @@ def test_spot_stand_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> Non
     stand_feedback.status = StandCommand.Feedback.Status.STATUS_IS_STANDING
     call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
     assert action.result.success, action.result.message
 
@@ -287,7 +287,7 @@ def test_spot_legacy_stand_command(simple_spot: SpotFixture, ros: ROSAwareScope)
     stand_feedback.status = StandCommand.Feedback.Status.STATUS_IS_STANDING
     simple_spot.api.RobotCommandFeedback.future.returns(feedback_response)
 
-    result = spot_interface.stand(timeout_sec=2.0)
+    result = spot_interface.stand(timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert result is not None
 
     synchro_feedback = result.command.synchronized_feedback
@@ -330,7 +330,7 @@ def test_spot_stand_with_orientation_command(simple_spot: SpotFixture, ros: ROSA
     stand_feedback.status = StandCommand.Feedback.Status.STATUS_IS_STANDING
     call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
     assert action.result.success, action.result.message
 
@@ -358,7 +358,7 @@ def test_spot_legacy_stand_with_orientation_command(simple_spot: SpotFixture, ro
     simple_spot.api.RobotCommandFeedback.future.returns(feedback_response)
 
     result = spot_interface.stand_with_orientation(
-        gravbody_r_goal=SO3.Rz(45, unit="deg"), body_height=0.5, timeout_sec=2.0
+        gravbody_r_goal=SO3.Rz(45, unit="deg"), body_height=0.5, timeout_sec=pytest.DEFAULT_TIMEOUT
     )
     assert result is not None
 
@@ -402,7 +402,7 @@ def test_spot_walk_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None
     se2_trajectory_feedback.status = SE2TrajectoryCommand.Feedback.Status.STATUS_AT_GOAL
     call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
     assert action.result.success, action.result.message
 
@@ -430,7 +430,7 @@ def test_spot_legacy_walk_command(simple_spot: SpotFixture, ros: ROSAwareScope) 
     simple_spot.api.RobotCommandFeedback.future.returns(feedback_response)
 
     goal = SE2(1.0, -1.0, math.pi / 4.0)
-    result = spot_interface.walk(goal, timeout_sec=2.0)
+    result = spot_interface.walk(goal, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert result is not None
 
     mobility_command_feedback = result.command.synchronized_feedback.mobility_command_feedback
@@ -476,7 +476,7 @@ def test_spot_walk_trajectory_command(simple_spot: SpotFixture, ros: ROSAwareSco
     se2_trajectory_feedback.status = SE2TrajectoryCommand.Feedback.Status.STATUS_AT_GOAL
     call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
     assert action.result.success, action.result.message
 
@@ -504,7 +504,7 @@ def test_spot_legacy_walk_trajectory_command(simple_spot: SpotFixture, ros: ROSA
     simple_spot.api.RobotCommandFeedback.future.returns(feedback_response)
 
     trajectory = SE2Trajectory(poses=[SE2(), SE2(1.0, -1.0, math.pi / 4.0)], duration_sec=1.0)
-    result = spot_interface.walk_trajectory(trajectory, timeout_sec=2.0)
+    result = spot_interface.walk_trajectory(trajectory, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert result is not None
 
     mobility_command_feedback = result.command.synchronized_feedback.mobility_command_feedback
@@ -577,7 +577,7 @@ def test_spot_walk_and_orient_maneuver(simple_spot: SpotFixture, ros: ROSAwareSc
     stand_feedback.status = StandCommand.Feedback.Status.STATUS_IS_STANDING
     call.returns(feedback_response)
 
-    assert wait_for_future(future, timeout_sec=2.0)
+    assert wait_for_future(future, timeout_sec=pytest.DEFAULT_TIMEOUT)
     walk_result, orient_result = future.result()
 
     mobility_command_feedback = walk_result.result.command.synchronized_feedback.mobility_command_feedback
@@ -621,7 +621,7 @@ def test_spot_legacy_walk_and_orient_maneuver(simple_spot: SpotFixture, ros: ROS
     simple_spot.api.RobotCommandFeedback.future.returns(feedback_response)
 
     goal = SE3.Rt(SO3.Ry(math.pi / 6.0), [1.0, -1.0, 0.0])
-    result = spot_interface.walk_and_orient(goal, timeout_sec=2.0)
+    result = spot_interface.walk_and_orient(goal, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert result is not None
 
     synchro_feedback = result.command.synchronized_feedback
@@ -655,7 +655,7 @@ def test_spot_self_right_command(simple_spot: SpotFixture, ros: ROSAwareScope) -
     full_body_feedback.status = RobotCommandFeedbackStatus.Status.STATUS_PROCESSING
     call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
     assert action.result.success, action.result.message
 
@@ -689,7 +689,7 @@ def test_spot_roll_to_battery_change_pose_command(simple_spot: SpotFixture, ros:
     full_body_feedback.status = RobotCommandFeedbackStatus.Status.STATUS_PROCESSING
     call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
     assert action.result.success, action.result.message
 
@@ -741,7 +741,7 @@ def test_spot_body_gaze_command(simple_spot: SpotFixture, ros: ROSAwareScope) ->
     stand_feedback.status = StandCommand.Feedback.Status.STATUS_IS_STANDING
     call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
     assert action.result.success, action.result.message
 

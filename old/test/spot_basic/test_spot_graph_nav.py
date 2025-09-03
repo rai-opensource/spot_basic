@@ -1,4 +1,4 @@
-# Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
+# Copyright (c) 2024-2025 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import pathlib
 
@@ -33,7 +33,7 @@ def test_clear_graph(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
         response = ClearGraphResponse()
         response.status = ClearGraphResponse.Status.STATUS_OK
         call.returns(response)
-        assert wait_for_future(future, timeout_sec=2.0)
+        assert wait_for_future(future, timeout_sec=pytest.DEFAULT_TIMEOUT)
         result = future.result()
         assert result.success, result.message
 
@@ -66,7 +66,7 @@ def test_upload_graph(tmp_path: pathlib.Path, simple_spot: SpotFixture, ros: ROS
             assert call is not None
             call.returns(response)
 
-        assert wait_for_future(future, timeout_sec=2.0)
+        assert wait_for_future(future, timeout_sec=pytest.DEFAULT_TIMEOUT)
         result = future.result()
         assert result.success, result.message
 
@@ -90,12 +90,12 @@ def test_get_localization(tmp_path: pathlib.Path, simple_spot: SpotFixture, ros:
             assert call is not None
             call.returns(response)
 
-        response = spot_interface.get_localization.synchronously(timeout_sec=2.0)
+        response = spot_interface.get_localization.synchronously(timeout_sec=pytest.DEFAULT_TIMEOUT)
         assert response.success, response.message
         assert response.pose.pose.position.x == 1.0
         assert response.pose.pose.orientation.w == 1.0
 
-        assert wait_for_future(spot_interface.localization.update, timeout_sec=2.0)
+        assert wait_for_future(spot_interface.localization.update, timeout_sec=pytest.DEFAULT_TIMEOUT)
         pose: geometry_msgs.msg.PoseStamped = ensure(spot_interface.localization.latest)
         assert pose.pose.position.x == 1.0
 
@@ -111,7 +111,7 @@ def test_set_localization(tmp_path: pathlib.Path, simple_spot: SpotFixture, ros:
         assert call.request.initial_guess.waypoint_id == ""
         assert call.request.fiducial_init == SetLocalizationRequest.FiducialInit.FIDUCIAL_INIT_NEAREST
         call.returns(SetLocalizationResponse(status=SetLocalizationResponse.Status.STATUS_OK))
-        assert wait_for_future(future, timeout_sec=2.0)
+        assert wait_for_future(future, timeout_sec=pytest.DEFAULT_TIMEOUT)
         result = future.result()
         assert result.success, result.message
 

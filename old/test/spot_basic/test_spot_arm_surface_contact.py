@@ -51,7 +51,7 @@ def test_arm_surface_contact(simple_spot: SpotFixture, ros: ROSAwareScope) -> No
     action = spot_interface.arm_surface_contact.asynchronously(*_create_dummy_args())
     # Serve the response
     simple_spot.api.ArmSurfaceContact.future.returns(command_response)
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
 
     # Test synchronously

@@ -1,4 +1,4 @@
-# Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
+# Copyright (c) 2024-2025 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import numpy as np
 import pytest
@@ -40,7 +40,7 @@ def test_generic_manipulation(simple_spot: SpotFixture, ros: ROSAwareScope) -> N
     feedback_response.current_state = manipulation_api_pb2.ManipulationFeedbackState.MANIP_STATE_DONE
     feedback_call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
 
     assert action.result.success, action.result.message
@@ -97,7 +97,7 @@ def test_pick_object_in_image(simple_spot: SpotFixture, ros: ROSAwareScope) -> N
     feedback_response.current_state = manipulation_api_pb2.ManipulationFeedbackState.MANIP_STATE_GRASP_SUCCEEDED
     feedback_call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
 
     assert action.result.success, action.result.message
@@ -148,7 +148,7 @@ def test_walk_to_object_in_image(simple_spot: SpotFixture, ros: ROSAwareScope) -
     feedback_response.current_state = manipulation_api_pb2.ManipulationFeedbackState.MANIP_STATE_DONE
     feedback_call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
 
     assert action.result.success, action.result.message
@@ -197,7 +197,7 @@ def test_pick_object_ray_in_world(simple_spot: SpotFixture, ros: ROSAwareScope) 
     feedback_response.current_state = manipulation_api_pb2.ManipulationFeedbackState.MANIP_STATE_GRASP_SUCCEEDED
     feedback_call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
 
     assert action.result.success, action.result.message
@@ -242,7 +242,7 @@ def test_walk_to_object_ray_in_world(simple_spot: SpotFixture, ros: ROSAwareScop
     feedback_response.current_state = manipulation_api_pb2.ManipulationFeedbackState.MANIP_STATE_DONE
     feedback_call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
 
     assert action.result.success, action.result.message
@@ -264,7 +264,7 @@ def test_override_grasp_or_carry(simple_spot: SpotFixture, ros: ROSAwareScope) -
     assert call.request.carry_state_override.override_request == (ManipulatorState.CarryState.CARRY_STATE_CARRIABLE)
     call.returns(manipulation_api_pb2.ApiGraspOverrideResponse())
 
-    assert wait_for_future(future, timeout_sec=2.0)
+    assert wait_for_future(future, timeout_sec=pytest.DEFAULT_TIMEOUT)
     result = future.result()
 
     assert result.success, result.message

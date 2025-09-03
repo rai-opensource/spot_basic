@@ -1,4 +1,4 @@
-# Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
+# Copyright (c) 2024-2025 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import math
 
@@ -61,7 +61,7 @@ def test_arm_deployment(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
         )
         call.returns(feedback_response)
 
-        assert wait_for_future(action.finalization, timeout_sec=2.0)
+        assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
         assert action.succeeded
 
         assert action.result.success, action.result.message
@@ -96,7 +96,7 @@ def test_arm_locking(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     arm_command_feedback.arm_joint_move_feedback.status = ArmJointMoveCommand.Feedback.Status.STATUS_COMPLETE
     call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
 
     assert action.result.success, action.result.message
@@ -137,7 +137,7 @@ def test_arm_gazing(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     arm_command_feedback.arm_gaze_feedback.status = GazeCommand.Feedback.Status.STATUS_TRAJECTORY_COMPLETE
     call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
 
     assert action.result.success, action.result.message
@@ -183,7 +183,7 @@ def test_arm_motion(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     arm_command_feedback.arm_joint_move_feedback.status = ArmJointMoveCommand.Feedback.Status.STATUS_COMPLETE
     call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
 
     assert action.result.success, action.result.message
@@ -250,7 +250,7 @@ def test_arm_trajectory(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     arm_command_feedback.arm_joint_move_feedback.status = ArmJointMoveCommand.Feedback.Status.STATUS_COMPLETE
     call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
 
     assert action.result.success, action.result.message
@@ -302,7 +302,7 @@ def test_arm_end_effector_motion(simple_spot: SpotFixture, ros: ROSAwareScope) -
     arm_command_feedback.arm_cartesian_feedback.status = ArmCartesianCommand.Feedback.Status.STATUS_TRAJECTORY_COMPLETE
     call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
 
     assert action.result.success, action.result.message
@@ -348,7 +348,7 @@ def test_arm_end_effector_and_body_motion(simple_spot: SpotFixture, ros: ROSAwar
     arm_command_feedback.arm_cartesian_feedback.status = ArmCartesianCommand.Feedback.Status.STATUS_TRAJECTORY_COMPLETE
     call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
 
     assert action.result.success, action.result.message
@@ -406,7 +406,7 @@ def test_arm_end_effector_and_body_hip_motion(simple_spot: SpotFixture, ros: ROS
     arm_command_feedback.arm_cartesian_feedback.status = ArmCartesianCommand.Feedback.Status.STATUS_TRAJECTORY_COMPLETE
     call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
 
     assert action.result.success, action.result.message
@@ -474,7 +474,7 @@ def test_arm_end_effector_trajectory(simple_spot: SpotFixture, ros: ROSAwareScop
     arm_command_feedback.arm_cartesian_feedback.status = ArmCartesianCommand.Feedback.Status.STATUS_TRAJECTORY_COMPLETE
     call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
 
     assert action.result.success, action.result.message
@@ -534,7 +534,7 @@ def test_arm_end_effector_impedance_controlled_trajectory(simple_spot: SpotFixtu
     arm_command_feedback.arm_impedance_feedback.status = ArmImpedanceCommand.Feedback.Status.STATUS_TRAJECTORY_COMPLETE
     call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
 
     assert action.result.success, action.result.message

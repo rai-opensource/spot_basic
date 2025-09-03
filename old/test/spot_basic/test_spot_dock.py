@@ -1,4 +1,4 @@
-# Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
+# Copyright (c) 2024-2025 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import pytest
 from bosdyn.api.basic_command_pb2 import RobotCommandFeedbackStatus, StandCommand
@@ -15,7 +15,7 @@ def test_spot_docking(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
 
     with spot_interface.lease():
-        assert spot_interface.dock.wait_for_service(timeout_sec=2.0)
+        assert spot_interface.dock.wait_for_service(timeout_sec=pytest.DEFAULT_TIMEOUT)
         future = spot_interface.dock.asynchronously(dock_id=23)
 
         call = simple_spot.api.RobotCommand.serve(timeout=2.0)
@@ -53,7 +53,7 @@ def test_spot_docking(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
         response.status = DockingCommandFeedbackResponse.Status.STATUS_DOCKED
         call.returns(response)
 
-        assert wait_for_future(future, timeout_sec=2.0)
+        assert wait_for_future(future, timeout_sec=pytest.DEFAULT_TIMEOUT)
         response = future.result()
         assert response.success, response.message
 
@@ -63,7 +63,7 @@ def test_spot_undocking(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
 
     with spot_interface.lease():
-        assert spot_interface.undock.wait_for_service(timeout_sec=2.0)
+        assert spot_interface.undock.wait_for_service(timeout_sec=pytest.DEFAULT_TIMEOUT)
         future = spot_interface.undock.asynchronously()
 
         call = simple_spot.api.DockingCommand.serve(timeout=2.0)
@@ -82,6 +82,6 @@ def test_spot_undocking(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
         response.status = DockingCommandFeedbackResponse.Status.STATUS_AT_PREP_POSE
         call.returns(response)
 
-        assert wait_for_future(future, timeout_sec=2.0)
+        assert wait_for_future(future, timeout_sec=pytest.DEFAULT_TIMEOUT)
         response = future.result()
         assert response.success, response.message

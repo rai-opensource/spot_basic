@@ -1,4 +1,4 @@
-# Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
+# Copyright (c) 2024-2025 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import math
 
@@ -57,7 +57,7 @@ def test_gripper_opening(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     gripper_command_feedback.claw_gripper_feedback.status = ClawGripperCommand.Feedback.Status.STATUS_AT_GOAL
     feedback_call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
 
     assert action.result.success, action.result.message
@@ -105,7 +105,7 @@ def test_gripper_closing(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     gripper_command_feedback.claw_gripper_feedback.status = ClawGripperCommand.Feedback.Status.STATUS_AT_GOAL
     feedback_call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
 
     assert action.result.success, action.result.message
@@ -181,7 +181,7 @@ def test_gripper_set_angle(simple_spot: SpotFixture, ros: ROSAwareScope) -> None
     gripper_command_feedback.claw_gripper_feedback.status = ClawGripperCommand.Feedback.Status.STATUS_AT_GOAL
     feedback_call.returns(feedback_response)
 
-    assert wait_for_future(action.finalization, timeout_sec=2.0)
+    assert wait_for_future(action.finalization, timeout_sec=pytest.DEFAULT_TIMEOUT)
     assert action.succeeded
 
     assert action.result.success, action.result.message
