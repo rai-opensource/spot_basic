@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024 Boston Dynamics AI Institute LLC. All rights reserved.
+# Copyright (c) 2023-2025 Boston Dynamics AI Institute LLC. All rights reserved.
 
 from enum import IntEnum
 from typing import Any, Callable, Optional, Protocol, TypeAlias, Union, overload
@@ -12,7 +12,7 @@ from bosdyn_api_msgs.msg import RobotCommandFeedback
 from geometry_msgs.msg import Twist
 from rclpy.task import Future
 from spot_msgs.action import RobotCommand as RobotCommandAction
-from spot_msgs.srv import ClearBehaviorFault, SetLocomotion, SetVelocity
+from spot_msgs.srv import ClearBehaviorFault, SetLocomotion, SetStairsMode, SetVelocity
 from spot_msgs.srv import RobotCommand as RobotCommandService
 from spot_utilities.spot_basic.base import SpotBaseProtocol
 from spot_utilities.spot_basic.state import SpotStateProtocol
@@ -51,6 +51,21 @@ class LocomotionHint(IntEnum):
     SPEED_SELECT_AMBLE = 6  # Amble which comes to a stand when not commanded to move.
     JOG = 7  # Demo gait which moves diagonal leg pairs together with an aerial phase.
     HOP = 8  # Demo gait which hops while holding some feet in the air.
+
+
+class StairsMode(IntEnum):
+    """Enumeration of the different stairs modes
+
+    See
+    https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html#mobilityparams-stairsmode
+    Note: Comments below for each enumerator come directly from the above link
+    """
+
+    UNKNOWN = 0  # Listed for completeness, but the docs say do not use.
+    OFF = 1  # Stairs mode disabled.
+    ON = 2  # Stairs mode enabled.
+    AUTO = 3  # Robot will automatically turn stairs mode on or off.
+    PROHIBITED = 4  # Stairs will be detected and avoided.
 
 
 RobotCommandActionableProtocol: TypeAlias = SpotActionableProtocol[
@@ -278,11 +293,11 @@ class SpotCommandProtocol(SpotStateProtocol, Protocol):
                 a future response to the stop request.
             """
 
-    class SetStairModeProtocol(SpotServicedProtocol[SetBool.Request, SetBool.Response], Protocol):
+    class SetStairsModeProtocol(SpotServicedProtocol[SetStairsMode.Request, SetStairsMode.Response], Protocol):
         """Protocol to toggle the robot stair mode."""
 
         @overload
-        def synchronously(self, enabled: bool, /, *, timeout_sec: Optional[float] = None) -> SetBool.Response:
+        def synchronously(self, mode: StairsMode, /, *, timeout_sec: Optional[float] = None) -> SetStairsMode.Response:
             """Toggle the robot in and out of stair mode synchronously.
 
             Args:
@@ -302,8 +317,8 @@ class SpotCommandProtocol(SpotStateProtocol, Protocol):
 
         @overload
         def synchronously(
-            self, enabled: bool, /, *, timeout_sec: Optional[float] = None, nothrow: bool = False
-        ) -> Optional[SetBool.Response]:
+            self, mode: StairsMode, /, *, timeout_sec: Optional[float] = None, nothrow: bool = False
+        ) -> Optional[SetStairsMode.Response]:
             """Toggle the robot in and out of stair mode synchronously.
 
             Args:
@@ -318,7 +333,7 @@ class SpotCommandProtocol(SpotStateProtocol, Protocol):
                 the response to the toggling request or None on timeout or failure.
             """
 
-        def asynchronously(self, enabled: bool, /) -> FutureLike[SetBool.Response]:
+        def asynchronously(self, mode: StairsMode, /) -> FutureLike[SetStairsMode.Response]:
             """Toggle the robot in and out of stair mode asynchronously.
 
             Args:
@@ -454,7 +469,7 @@ class SpotCommandProtocol(SpotStateProtocol, Protocol):
 
     set_locomotion_mode: GeneralizedMethodLike[SetLocomotionModeProtocol]
     set_max_velocity: GeneralizedMethodLike[SetMaxVelocityProtocol]
-    set_stair_mode: GeneralizedMethodLike[SetStairModeProtocol]
+    set_stairs_mode: GeneralizedMethodLike[SetStairsModeProtocol]
 
     clear_behavior_fault: GeneralizedMethodLike[ClearBehaviorFaultProtocol]
 
@@ -490,8 +505,8 @@ class SpotCommandMixin(SpotCommandProtocol):
         SpotCommandMixin.set_locomotion_mode.rebind(
             self, SpotServiced(SetLocomotion, spot_namespaced(self.robot_name, "locomotion_mode"), node=self.node)
         )
-        SpotCommandMixin.set_stair_mode.rebind(
-            self, SpotServiced(SetBool, spot_namespaced(self.robot_name, "stair_mode"), node=self.node)
+        SpotCommandMixin.set_stairs_mode.rebind(
+            self, SpotServiced(SetStairsMode, spot_namespaced(self.robot_name, "stairs_mode"), node=self.node)
         )
         SpotCommandMixin.set_max_velocity.rebind(
             self, SpotServiced(SetVelocity, spot_namespaced(self.robot_name, "max_velocity"), node=self.node)
@@ -547,8 +562,8 @@ class SpotCommandMixin(SpotCommandProtocol):
             )
         return response.success
 
-    @generalized_method(spec=GeneralizedMethodLike[SpotCommandProtocol.SetStairModeProtocol])
-    def set_stair_mode(self, enabled: bool, /, **kwargs: Any) -> SetBool.Response:
+    @generalized_method(spec=GeneralizedMethodLike[SpotCommandProtocol.SetStairsModeProtocol])
+    def set_stairs_mode(self, mode: StairsMode, /, **kwargs: Any) -> SetBool.Response:
         """Toggle the robot in and out of stair mode synchronously.
 
         Args:
@@ -557,24 +572,25 @@ class SpotCommandMixin(SpotCommandProtocol):
         See `SpotCommandProtocol.SetStairModeProtocol` for further reference.
         """
 
-    @set_stair_mode.legacy
+    @set_stairs_mode.legacy
     @deprecated(
         reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
         alternative="spot_utilities.spot_basic.SpotBasic.set_stair_mode.synchronously",
     )
-    def _legacy_set_stair_mode(self, value: bool) -> bool:
+    def _legacy_set_stairs_mode(self, value: bool) -> bool:
         """Enable (or disable) the stair mode for the robot.
 
         Returns:
            A boolean to flag its outcome and an error message on failure.
         """
         self.node.get_logger().info(f"Setting stair_mode to '{value}' for {self.robot_name}")
-        response = self.set_stair_mode.synchronously(value, nothrow=True)
+        mode = StairsMode.ON if value else StairsMode.OFF
+        response = self.set_stairs_mode.synchronously(mode, nothrow=True)
         if response is None:
             return False
         if not response.success:
             self.node.get_logger().debug(
-                f"Setting stair_mode to '{value}' for {self.robot_name} failed. Msg: {response.message}."
+                f"Setting stair_mode to '{mode}' for {self.robot_name} failed. Msg: {response.message}."
             )
         return response.success
 
@@ -605,7 +621,7 @@ class SpotCommandMixin(SpotCommandProtocol):
             return False
         if not response.success:
             self.node.get_logger().debug(
-                f"Setting stair_mode to '{velocity_limit}' for {self.robot_name} failed. Msg: {response.message}."
+                f"Setting max_velocity to '{velocity_limit}' for {self.robot_name} failed. Msg: {response.message}."
             )
         return response.success
 

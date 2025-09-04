@@ -28,7 +28,7 @@ from bosdyn_api_msgs.msg import (
 from geometry_msgs.msg import Twist, Vector3
 from spatialmath import SE2, SE3, SO3, Twist2, UnitQuaternion
 from spot_utilities.spot_basic import SpotBasic
-from spot_utilities.spot_basic.command import LocomotionHint, SpotCommandProtocol
+from spot_utilities.spot_basic.command import LocomotionHint, SpotCommandProtocol, StairsMode
 from spot_utilities.spot_basic.command.arm import SpotArmCommandBuilder
 from spot_utilities.spot_basic.command.full_body import BatteryChangeDirHint, SpotFullBodyCommandBuilder
 from spot_utilities.spot_basic.command.mobility import SpotMobilityCommandBuilder
@@ -45,7 +45,7 @@ def test_spot_mobility_params(simple_spot: SpotFixture, ros: ROSAwareScope) -> N
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
     assert spot_interface.initialize_robot()
 
-    assert spot_interface.set_stair_mode.synchronously(True, timeout_sec=5.0)
+    assert spot_interface.set_stairs_mode.synchronously(StairsMode.AUTO, timeout_sec=5.0)
     assert spot_interface.set_locomotion_mode.synchronously(LocomotionHint.TROT, timeout_sec=5.0)
     assert spot_interface.set_max_velocity.synchronously(
         Twist(linear=Vector3(x=1.0), angular=Vector3(z=1.0)), timeout_sec=5.0
@@ -59,7 +59,7 @@ def test_spot_mobility_params(simple_spot: SpotFixture, ros: ROSAwareScope) -> N
     assert synchro_command.mobility_command.WhichOneof("command") == "se2_velocity_request"
     mobility_params = spot_command_pb2.MobilityParams()
     synchro_command.mobility_command.params.Unpack(mobility_params)
-    assert mobility_params.stair_hint is True
+    assert mobility_params.stairs_mode == spot_command_pb2.MobilityParams.StairsMode.STAIRS_MODE_AUTO
     assert mobility_params.locomotion_hint == spot_command_pb2.HINT_TROT
     assert mobility_params.vel_limit.max_vel.linear.x == 1.0
     assert mobility_params.vel_limit.max_vel.linear.y == 0.0
