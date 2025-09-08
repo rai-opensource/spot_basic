@@ -1,4 +1,4 @@
-# Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
+# Copyright (c) 2024-2025 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import pathlib
 
@@ -55,7 +55,12 @@ def test_spot_cameras(hardware_spot_interface: SpotBasic, prompt_session: Testin
 
 @pytest.mark.manual
 @pytest.mark.launch(fixture=pytest.hardware_spot_graph_description)
-def test_graphnav_localization(test_data_path: pathlib.Path, hardware_spot_interface: SpotBasic) -> None:
+def test_graphnav_localization(
+    test_data_path: pathlib.Path, hardware_spot_interface: SpotBasic, hardware_spot_parameters: dict
+) -> None:
+    if not hardware_spot_parameters["publish_graph_nav_pose"]:
+        pytest.skip("Cannot test graphnav localization without graphnav enabled")
+
     graphnav_session = str(test_data_path / "graphnav_session")
 
     response = hardware_spot_interface.upload_graph.synchronously(graphnav_session, timeout_sec=5.0)
@@ -89,7 +94,12 @@ def test_graphnav_localization(test_data_path: pathlib.Path, hardware_spot_inter
 
 @pytest.mark.manual
 @pytest.mark.launch(fixture=pytest.hardware_spot_graph_description)
-def test_graphnav_introspection(test_data_path: pathlib.Path, hardware_spot_interface: SpotBasic) -> None:
+def test_graphnav_introspection(
+    test_data_path: pathlib.Path, hardware_spot_interface: SpotBasic, hardware_spot_parameters: dict
+) -> None:
+    if not hardware_spot_parameters["publish_graph_nav_pose"]:
+        pytest.skip("Cannot test graphnav localization without graphnav enabled")
+
     graphnav_session = str(test_data_path / "graphnav_session")
 
     response = hardware_spot_interface.list_graph.synchronously(graphnav_session, timeout_sec=5.0)

@@ -1,4 +1,4 @@
-# Copyright (c) 2024 Boston Dynamics AI Institute LLC. All rights reserved.
+# Copyright (c) 2024-2025 Boston Dynamics AI Institute LLC. All rights reserved.
 
 import pathlib
 from typing import Iterator
@@ -19,18 +19,19 @@ from spot_utilities.spot_basic import SpotBasic
 from synchros2.scope import ROSAwareScope
 
 from bdai.test_utilities.testing_prompt_session import TestingPromptSession
-from bdai_core.robots.load_robot_configs import (
-    get_default_spot_password,
-    get_default_spot_username,
-    get_spot_config,
-    get_spot_ip,
-)
+from bdai_core.robots.load_robot_configs import get_spot_config
 
 
 @pytest.fixture(scope="session")
 def hardware_robot_name(prompt_session: TestingPromptSession) -> str:
     spot_names = list(get_spot_config()["spots"].keys())
     return prompt_session.choose("which robot shall we use?", spot_names, who="pytest")
+
+
+@pytest.fixture(scope="session")
+def hardware_robot_ip_type(prompt_session: TestingPromptSession) -> str:
+    ip_types = ["wifi", "ethernet"]
+    return prompt_session.choose("which ip type shall we use (wifi or ethernet)?", ip_types, who="pytest")
 
 
 @pytest.fixture(scope="session")
@@ -78,6 +79,7 @@ def hardware_spot_parameters(hardware_robot_name: str, prompt_session: TestingPr
 def hardware_spot_graph_description(
     tmp_path_factory: pytest.TempPathFactory,
     hardware_robot_name: str,
+    hardware_robot_ip_type: str,
     hardware_bound_domain_id: int,
     hardware_spot_parameters: dict,
 ) -> LaunchDescription:
@@ -87,15 +89,15 @@ def hardware_spot_graph_description(
     return LaunchDescription(
         [
             SetEnvironmentVariable(name="ROS_DOMAIN_ID", value=str(hardware_bound_domain_id)),
-            SetEnvironmentVariable(name="BOSDYN_CLIENT_USERNAME", value=get_default_spot_username()),
-            SetEnvironmentVariable(name="BOSDYN_CLIENT_PASSWORD", value=get_default_spot_password()),
-            SetEnvironmentVariable(name="SPOT_NAME", value=hardware_robot_name),
-            SetEnvironmentVariable(name="SPOT_IP", value=get_spot_ip(hardware_robot_name)),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     [PathJoinSubstitution([FindPackageShare("spot_utilities"), "launch/spot_driver.launch.py"])]
                 ),
-                launch_arguments={"spot_name": hardware_robot_name, "config_file": str(config_file)}.items(),
+                launch_arguments={
+                    "spot_name": hardware_robot_name,
+                    "ip": hardware_robot_ip_type,
+                    "config_file": str(config_file),
+                }.items(),
             ),
             ReadyToTest(),
         ],
