@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025 Boston Dynamics AI Institute LLC. All rights reserved.
+# Copyright (c) 2024-2025 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
 import pytest
 from bosdyn.api.basic_command_pb2 import RobotCommandFeedbackStatus, StandCommand

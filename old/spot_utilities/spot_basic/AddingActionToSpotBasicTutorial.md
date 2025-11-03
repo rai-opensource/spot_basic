@@ -35,7 +35,7 @@ Normally the server will have been written already (usually as a part of spot ro
 
     ```python
     #!/usr/bin/env python
-    # Copyright (c) 2025 Boston Dynamics AI Institute LLC. All rights reserved.
+    # Copyright (c) 2025 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
     import argparse
     import time
@@ -99,7 +99,7 @@ Let’s first write and run the code that calls this action server from Spot Bas
 Copy the following into `$BDAI/ws/src/spot_utilities/spot_utilities/spot_basic/count.py`:
 
 ```python
-# Copyright (c) 2025 Boston Dynamics AI Institute LLC. All rights reserved.
+# Copyright (c) 2025 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
 from __future__ import annotations
 
@@ -232,7 +232,7 @@ class SpotBasic(
 Now create a script that calls these functions in `$BDAI/ws/src/spot_utilities/examples/example_count.py` :
 
 ```python
-# Copyright (c) 2024-2025 Boston Dynamics AI Institute LLC. All rights reserved.
+# Copyright (c) 2024-2025 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
 import argparse
 import time

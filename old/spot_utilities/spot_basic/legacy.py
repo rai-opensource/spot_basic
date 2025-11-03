@@ -1,4 +1,4 @@
-# Copyright (c) 2023 Boston Dynamics AI Institute LLC. All rights reserved.
+# Copyright (c) 2023-2025 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 from __future__ import annotations
 
 from typing import Any, Callable, Optional
