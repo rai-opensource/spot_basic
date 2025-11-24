@@ -8,6 +8,9 @@ from rclpy.node import Node
 from spot_utilities.spot_util import spot_namespaced
 from synchros2.service import Serviced
 
+HAS_ARM_WAIT_TIME_S = 1.0
+N_HAS_ARM_RETRIES = 5
+
 
 class SpotBaseProtocol(Protocol):
     """Spot base protocol."""
@@ -67,6 +70,17 @@ class SpotBase(SpotBaseProtocol):
             self.node.get_logger().error(f"No {self.robot_name} driver found, assuming there is no arm")
             return False
 
-        response = self._get_spot_parameters(GetParameters.Request(names=["has_arm"]), timeout_sec=5.0)
-        param = response.values[0]
-        return param.bool_value
+        for i in range(N_HAS_ARM_RETRIES):
+            try:
+                response = self._get_spot_parameters(
+                    GetParameters.Request(names=["has_arm"]), timeout_sec=HAS_ARM_WAIT_TIME_S
+                )
+                param = response.values[0]
+                return param.bool_value
+            except Exception as e:
+                self.node.get_logger().warn(
+                    f"Attempt {i + 1} / {N_HAS_ARM_RETRIES}: Failed to get has_arm parameter; will retry another "
+                    f"{N_HAS_ARM_RETRIES - 1 - i} times (exception was {e})."
+                )
+                last_exception = e
+        raise last_exception
