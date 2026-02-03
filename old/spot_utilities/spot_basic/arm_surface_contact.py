@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
+# Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
 from __future__ import annotations
 
@@ -314,10 +314,6 @@ class SpotArmSurfaceContactMixin(SpotBaseProtocol):
         implementation = SpotActionable(ArmSurfaceContactAction, action_name, node=self.node).compose(
             _build_arm_surface_contact_command
         )
-        if self.has_arm():
-            self.node.get_logger().info(f"Waiting for action server for {action_name}")
-            implementation.wait_for_server()
-            self.node.get_logger().info(f"Found action server for {action_name}")
 
         # This sets it up so the arm_surface_contact function here to first check whether the robot has an arm and if so
         # to pass the arguments on to the implementation

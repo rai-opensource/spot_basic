@@ -1,4 +1,4 @@
-# Copyright (c) 2025 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
+# Copyright (c) 2025-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
 import itertools
 from typing import Iterable
@@ -70,12 +70,13 @@ def nonzero_joint_command_update(stream: Iterable[JointControlStreamRequest], ex
 def test_spot_full_state_control(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
 
-    simple_spot.api.GetRobotStateStream.future.returns(itertools.repeat(zero_robot_state_stream_response()))
-
     response = RobotCommandResponse()
     response.status = RobotCommandResponse.Status.STATUS_OK
-    simple_spot.api.RobotCommand.future.returns(response)
+    simple_spot.api.RobotCommand.future.returns(response).forever()
 
+    expected_command = list(range(1, NUM_JOINTS * 3 + 1))
+
+    simple_spot.api.GetRobotStateStream.future.returns(itertools.repeat(zero_robot_state_stream_response()))
     with SpotForwardStateControllerInterface(spot_interface) as ifc:
         call = simple_spot.api.JointControlStream.serve(timeout=2.0)
         assert call is not None
@@ -87,8 +88,6 @@ def test_spot_full_state_control(simple_spot: SpotFixture, ros: ROSAwareScope) -
             short_command = [0.0]
             ifc.update_joint_states_command(short_command)
 
-        expected_command = list(range(1, NUM_JOINTS * 3 + 1))
-
         with pytest.raises(ValueError):
             short_position_command = [0.0]
             ifc.update_joint_states_command(expected_command, position=short_position_command)
@@ -97,11 +96,46 @@ def test_spot_full_state_control(simple_spot: SpotFixture, ros: ROSAwareScope) -
             short_arm_sh0_command = [0.0]
             ifc.update_joint_states_command(expected_command, arm_sh0=short_arm_sh0_command)
 
+        response = JointControlStreamResponse()
+        response.status = JointControlStreamResponse.Status.STATUS_OK
+        call.returns(response)
+
+    simple_spot.api.GetRobotStateStream.future.returns(itertools.repeat(zero_robot_state_stream_response()))
+    with SpotForwardStateControllerInterface(spot_interface) as ifc:
+        call = simple_spot.api.JointControlStream.serve(timeout=2.0)
+        assert call is not None
+
         ifc.update_joint_states_command(expected_command)
+        request = unwrap_future(nonzero_joint_command_update(call.request, ros.executor), timeout_sec=5.0)
+        assert request.joint_command.position == expected_command[:NUM_JOINTS]
+        assert request.joint_command.velocity == expected_command[NUM_JOINTS : NUM_JOINTS * 2]
+        assert request.joint_command.load == expected_command[NUM_JOINTS * 2 :]
+
+        response = JointControlStreamResponse()
+        response.status = JointControlStreamResponse.Status.STATUS_OK
+        call.returns(response)
+
+    simple_spot.api.GetRobotStateStream.future.returns(itertools.repeat(zero_robot_state_stream_response()))
+    with SpotForwardStateControllerInterface(spot_interface) as ifc:
+        call = simple_spot.api.JointControlStream.serve(timeout=2.0)
+        assert call is not None
 
         ifc.update_joint_states_command(
             position=expected_command[0::3], velocity=expected_command[1::3], effort=expected_command[2::3]
         )
+        request = unwrap_future(nonzero_joint_command_update(call.request, ros.executor), timeout_sec=5.0)
+        assert request.joint_command.position == expected_command[0::3]
+        assert request.joint_command.velocity == expected_command[1::3]
+        assert request.joint_command.load == expected_command[2::3]
+
+        response = JointControlStreamResponse()
+        response.status = JointControlStreamResponse.Status.STATUS_OK
+        call.returns(response)
+
+    simple_spot.api.GetRobotStateStream.future.returns(itertools.repeat(zero_robot_state_stream_response()))
+    with SpotForwardStateControllerInterface(spot_interface) as ifc:
+        call = simple_spot.api.JointControlStream.serve(timeout=2.0)
+        assert call is not None
 
         ifc.update_joint_states_command(
             **{
