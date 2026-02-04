@@ -1,12 +1,15 @@
-# Copyright (c) 2024-2025 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
+# Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
 from typing import Any, Optional, Protocol
 
 import synchros2.scope as ros_scope
-from rcl_interfaces.srv import GetParameters
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile
 from spot_utilities.spot_util import spot_namespaced
-from synchros2.service import Serviced
+from std_msgs.msg import Bool
+from synchros2.futures import wait_for_future
+from synchros2.subscription import Subscription
+from synchros2.utilities import ensure
 
 HAS_ARM_WAIT_TIME_S = 1.0
 N_HAS_ARM_RETRIES = 5
@@ -42,8 +45,11 @@ class SpotBase(SpotBaseProtocol):
         if node is None:
             raise ValueError("no process-wide ROS 2 node available (did you use synchros2.process.main?)")
         self._node = node
-        self._get_spot_parameters: Serviced[GetParameters.Request, GetParameters.Response] = Serviced(
-            GetParameters, spot_namespaced(self.robot_name, "spot_ros2/get_parameters"), node=self.node
+        self._has_arm_status: Subscription[Bool] = Subscription(
+            Bool,
+            spot_namespaced(self.robot_name, "status/has_arm"),
+            qos_profile=QoSProfile(durability=DurabilityPolicy.TRANSIENT_LOCAL, depth=1),
+            node=self.node,
         )
         # make sure robot name and node properties are initialized before constructing mixins
         super().__init__(*args, **kwargs)
@@ -62,25 +68,11 @@ class SpotBase(SpotBaseProtocol):
         """Check if the robot has an arm.
 
         Returns:
-            True if the robot has an arm, False if it does not.
+            True if the robot has an arm, False if it does not (or it cannot be verified if so).
         """
         self.node.get_logger().debug(f"Checking if {self.robot_name} has an arm")
-
-        if not self._get_spot_parameters.wait_for_service(timeout_sec=5.0):
+        if not wait_for_future(self._has_arm_status.latest_update, timeout_sec=5.0):
             self.node.get_logger().error(f"No {self.robot_name} driver found, assuming there is no arm")
             return False
-
-        for i in range(N_HAS_ARM_RETRIES):
-            try:
-                response = self._get_spot_parameters(
-                    GetParameters.Request(names=["has_arm"]), timeout_sec=HAS_ARM_WAIT_TIME_S
-                )
-                param = response.values[0]
-                return param.bool_value
-            except Exception as e:
-                self.node.get_logger().warn(
-                    f"Attempt {i + 1} / {N_HAS_ARM_RETRIES}: Failed to get has_arm parameter; will retry another "
-                    f"{N_HAS_ARM_RETRIES - 1 - i} times (exception was {e})."
-                )
-                last_exception = e
-        raise last_exception
+        message = ensure(self._has_arm_status.latest)
+        return message.data
