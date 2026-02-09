@@ -19,6 +19,7 @@ from spatialmath.base.types import R3
 from spot_basic.command import SpotCommandBuilder, SpotCommandProtocol
 from spot_basic.command.helpers import timestamped_se2_vecs_to_robot_command_proto
 from spot_basic.state import FrameHint
+from spot_basic.trajectory.se2_trajectory import SE2Trajectory
 from spot_basic.utilities import RobotComposeCommandHandle, SpotActionableProtocol, SpotActionHandle, spot_namespaced
 from spot_msgs.action import RobotCommand as RobotCommandAction
 from synchros2.action import ActionFuture
@@ -26,7 +27,6 @@ from synchros2.callables import GeneralizedMethodLike, generalized_method
 from synchros2.futures import FutureLike
 
 from bdai.deprecation import deprecated
-from bdai.trajectory.se2_trajectory import SE2Trajectory
 from bdai_ros.utilities.manual_conversions import se3_to_se3pose
 
 

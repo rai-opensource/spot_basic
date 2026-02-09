@@ -8,9 +8,8 @@ import numpy as np
 import synchros2.process as ros_process
 from spatialmath import SE2, SE3, SO3
 from spot_basic import SpotBasic
-
-from bdai.trajectory.se2_trajectory import SE2Trajectory  # FIXME
-from bdai.trajectory.spot_se2_properties import MAX_SPEED_FORWARD  # FIXME
+from spot_basic.trajectory.se2_trajectory import SE2Trajectory
+from spot_basic.trajectory.spot_se2_properties import MAX_SPEED_FORWARD
 
 
 class FrameMovementsExample:

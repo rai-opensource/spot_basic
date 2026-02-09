@@ -19,8 +19,8 @@ from bosdyn.api.trajectory_pb2 import POS_INTERP_CUBIC, PositionalInterpolation
 from bosdyn.client.frame_helpers import BODY_FRAME_NAME
 from google.protobuf import any_pb2, duration_pb2, timestamp_pb2
 from spatialmath import SE2, SE3, SpatialForce, Twist3
+from spot_basic.trajectory.se3_trajectory import SE3Trajectory
 
-from bdai.trajectory.se3_trajectory import SE3Trajectory
 from bdai_ros.utilities.manual_conversions import (
     se2_to_se2pose_proto,
     se3_to_se3pose_proto,

@@ -33,11 +33,10 @@ from spot_basic.command.arm import SpotArmCommandBuilder
 from spot_basic.command.full_body import BatteryChangeDirHint, SpotFullBodyCommandBuilder
 from spot_basic.command.mobility import SpotMobilityCommandBuilder
 from spot_basic.state import FrameHint
+from spot_basic.trajectory.se2_trajectory import SE2Trajectory
 from spot_wrapper.testing.fixtures import SpotFixture
 from synchros2.futures import wait_for_future
 from synchros2.scope import ROSAwareScope
-
-from bdai.trajectory.se2_trajectory import SE2Trajectory
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
