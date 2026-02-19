@@ -155,6 +155,3 @@ class SpotServiceHandleEmptyTest(SpotServiceHandleTest):
 
 if __name__ == "__main__":
     unittest.main()
-
-# FIXME(WUD-2731)
-pytestmark = pytest.mark.skip(reason="Temporarily disabled")
