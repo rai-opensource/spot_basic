@@ -6,6 +6,7 @@ import bosdyn_api_msgs.msg
 from bosdyn.api import world_object_pb2
 from spatialmath import SE3
 from spot_basic.base import SpotBaseProtocol
+from spot_basic.manual_conversions import se3_to_se3pose_proto
 from spot_basic.state import FrameHint
 from spot_basic.utilities import SpotServiced, SpotServicedProtocol, spot_namespaced
 from spot_msgs.srv import ListWorldObjects, MutateWorldObject
@@ -13,7 +14,6 @@ from synchros2.callables import GeneralizedMethodLike, generalized_method
 from synchros2.futures import FutureLike
 
 from bdai.deprecation import deprecated
-from bdai_ros.utilities.manual_conversions import se3_to_se3pose_proto
 
 # There isn't an "infinite lifetime" option so we just go for a year and also getting that song stuck in your head.
 INFINITE_LIFETIME_S = 525600 * 60

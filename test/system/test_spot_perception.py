@@ -9,10 +9,10 @@ from cv_bridge import CvBridge
 from numpy.testing import assert_almost_equal
 from spatialmath import SE2, SO3
 from spot_basic import FrameHint, SpotBasic
+from spot_basic.manual_conversions import to_se3
 from synchros2.futures import unwrap_future
 
 from bdai.test_utilities.testing_prompt_session import TestingPromptSession
-from bdai_ros.utilities.manual_conversions import to_se3
 
 
 @pytest.mark.manual

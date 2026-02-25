@@ -20,14 +20,14 @@ from rclpy.time import Time
 from sensor_msgs.msg import JointState
 from spatialmath import SE3
 from spot_basic.base import SpotBaseProtocol
+from spot_basic.manual_conversions import (
+    se3_to_se3pose_proto,
+    to_se3,
+)
 from spot_basic.utilities import spot_namespaced
 from synchros2.subscription import Subscription
 from synchros2.utilities import namespace_with
 
-from bdai_ros.utilities.manual_conversions import (
-    se3_to_se3pose_proto,
-    to_se3,
-)
 from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 
 

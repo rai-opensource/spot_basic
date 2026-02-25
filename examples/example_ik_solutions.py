@@ -17,8 +17,7 @@ from bosdyn.client.math_helpers import Quat, SE3Pose
 from bosdyn.client.robot_command import RobotCommandBuilder
 from bosdyn_msgs.conversions import convert
 from spot_basic import FrameHint, SpotBasic
-
-from bdai_ros.utilities.manual_conversions import se3_to_se3pose  # FIXME
+from spot_basic.manual_conversions import se3_to_se3pose
 
 
 class IKSolutionsExample:

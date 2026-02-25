@@ -10,12 +10,14 @@ Copyright (c) 2023-2026 Robotics and AI Institute LLC dba RAI Institute. All rig
   <maintainer email="engineering@theaiinstitute.com">BD AI Institute</maintainer>
   <license>TODO: License declaration</license>
 
-  <depend>rclpy</depend>
-  <depend>geometry_msgs</depend>
-  <depend>bosdyn_msgs</depend>
-  <depend>spot_msgs</depend>
   <!-- FIXME get rid of bdai_ros -->
   <depend>bdai_ros</depend>
+  <depend>bosdyn_msgs</depend>
+  <depend>builtin_interfaces</depend>
+  <depend>geometry_msgs</depend>
+  <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>spot_msgs</depend>
   <depend>synchros2</depend>
 
   <exec_depend>spot_driver</exec_depend>

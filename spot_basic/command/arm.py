@@ -24,6 +24,7 @@ from spot_basic.command.helpers import (
     timestamped_se3_poses_to_se3_trajectory,
     timestamped_spatialforces_to_wrench_protos,
 )
+from spot_basic.manual_conversions import se3_to_se3pose_proto
 from spot_basic.state import ArmJointMap, FrameHint
 from spot_basic.utilities import SpotActionableProtocol, SpotActionHandle
 from spot_msgs.action import RobotCommand as RobotCommandAction
@@ -31,7 +32,6 @@ from synchros2.action import ActionFuture
 from synchros2.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
 
 from bdai.deprecation import deprecated
-from bdai_ros.utilities.manual_conversions import se3_to_se3pose_proto
 
 
 @dataclasses.dataclass(kw_only=True)
