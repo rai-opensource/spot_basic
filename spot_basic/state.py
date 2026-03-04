@@ -26,9 +26,8 @@ from spot_basic.manual_conversions import (
 )
 from spot_basic.utilities import spot_namespaced
 from synchros2.subscription import Subscription
+from synchros2.tf_listener_wrapper import TFListenerWrapper
 from synchros2.utilities import namespace_with
-
-from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
 
 
 @dataclass(kw_only=True)

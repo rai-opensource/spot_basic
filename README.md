@@ -480,8 +480,9 @@ import argparse
 import time
 
 import synchros2.process as ros_process
-from bdai_ros.wrappers.tf_listener_wrapper import TFListenerWrapper
+from synchros2.tf_listener_wrapper import TFListenerWrapper
 from spot_basic import SpotBasic
+from spot_basic.manual_conversions import to_se3
 
 def cli() -> argparse.ArgumentParser:
     """Command-line interface."""
@@ -499,7 +500,7 @@ def main(args: argparse.Namespace) -> None:
     tf.wait_for_a_tform_b(spot.body_frame_name, spot.vision_frame_name)
     time.sleep(1.0)
     spot.set_tf_listener(tf)
-    vision_to_body = tf.lookup_a_tform_b(spot.vision_frame_name, spot.body_frame_name, wait_for_frames=True)
+    vision_to_body = to_se3(tf.lookup_a_tform_b(spot.vision_frame_name, spot.body_frame_name, wait_for_frames=True))
 
     if args.asynchronous:
         spot.body_gaze_at_async(
