@@ -4,8 +4,7 @@ import pathlib
 
 import pytest
 from spot_basic import SpotBasic
-
-from bdai.test_utilities.testing_prompt_session import TestingPromptSession
+from spot_basic.testing_prompt_session import TestingPromptSession
 
 
 @pytest.mark.manual

@@ -7,10 +7,9 @@ from spatialmath import SE3, SO3, SpatialForce
 from spot_basic import FrameHint, SpotBasic
 from spot_basic.command.arm import ArmJointMap, AxisModeMap
 from spot_basic.image import SpotCameraSubscription
+from spot_basic.testing_prompt_session import TestingPromptSession
 from spot_basic.viz import prompt_for_click, visual_aid
 from synchros2.utilities import ensure
-
-from bdai.test_utilities.testing_prompt_session import TestingPromptSession
 
 
 @pytest.mark.manual

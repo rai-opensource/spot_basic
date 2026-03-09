@@ -1,5 +1,6 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+import os
 import pathlib
 from typing import Iterator
 
@@ -16,22 +17,21 @@ from launch.substitutions import PathJoinSubstitution
 from launch_pytest.actions import ReadyToTest
 from launch_ros.substitutions import FindPackageShare
 from spot_basic import SpotBasic
+from spot_basic.testing_prompt_session import TestingPromptSession
 from synchros2.scope import ROSAwareScope
 
-from bdai.test_utilities.testing_prompt_session import TestingPromptSession
-from bdai_core.robots.load_robot_configs import get_spot_config
+
+@pytest.fixture(scope="session")
+def hardware_robot_login(prompt_session: TestingPromptSession) -> tuple[str, str, str]:
+    ip = prompt_session.ask("What is the robot's IP?", who="pytest")
+    username = prompt_session.ask("What is the robot's username?", who="pytest")
+    password = prompt_session.ask("What is the robot's password?", who="pytest")
+    return (ip, username, password)
 
 
 @pytest.fixture(scope="session")
 def hardware_robot_name(prompt_session: TestingPromptSession) -> str:
-    spot_names = list(get_spot_config()["spots"].keys())
-    return prompt_session.choose("which robot shall we use?", spot_names, who="pytest")
-
-
-@pytest.fixture(scope="session")
-def hardware_robot_ip_type(prompt_session: TestingPromptSession) -> str:
-    ip_types = ["wifi", "ethernet"]
-    return prompt_session.choose("which ip type shall we use (wifi or ethernet)?", ip_types, who="pytest")
+    return prompt_session.ask("What is the robot's name (used as a namespace)?", who="pytest")
 
 
 @pytest.fixture(scope="session")
@@ -79,27 +79,32 @@ def hardware_spot_parameters(hardware_robot_name: str, prompt_session: TestingPr
 def hardware_spot_graph_description(
     tmp_path_factory: pytest.TempPathFactory,
     hardware_robot_name: str,
-    hardware_robot_ip_type: str,
+    hardware_robot_login: tuple[str, str, str],
     hardware_bound_domain_id: int,
     hardware_spot_parameters: dict,
 ) -> LaunchDescription:
     config_file = tmp_path_factory.mktemp("hardware_spot_graph_description") / "spot_ros.yaml"
     config_file.write_text(yaml.dump({"/**": {"ros__parameters": hardware_spot_parameters}}))
+    ip, username, password = hardware_robot_login
 
     return LaunchDescription(
         [
             SetEnvironmentVariable(name="ROS_DOMAIN_ID", value=str(hardware_bound_domain_id)),
+            SetEnvironmentVariable(name="RMW_IMPLEMENTATION", value=os.environ["RMW_IMPLEMENTATION"]),
+            SetEnvironmentVariable(
+                name="FASTRTPS_DEFAULT_PROFILES_FILE", value=os.environ["FASTRTPS_DEFAULT_PROFILES_FILE"]
+            ),
+            SetEnvironmentVariable(name="BOSDYN_CLIENT_USERNAME", value=username),
+            SetEnvironmentVariable(name="BOSDYN_CLIENT_PASSWORD", value=password),
+            SetEnvironmentVariable(name="SPOT_IP", value=ip),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
-                    [
-                        PathJoinSubstitution([FindPackageShare("spot_utilities"), "launch/spot_driver.launch.py"])
-                    ]  # FIXME this launchfile is specific to RAI robots bc of IP lookups
-                    # should system tests live elsewhere?
+                    [PathJoinSubstitution([FindPackageShare("spot_driver"), "launch/spot_driver.launch.py"])]
                 ),
                 launch_arguments={
                     "spot_name": hardware_robot_name,
-                    "ip": hardware_robot_ip_type,
                     "config_file": str(config_file),
+                    "depth_registered_mode": "from_spot",
                 }.items(),
             ),
             ReadyToTest(),
