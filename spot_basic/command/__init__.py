@@ -23,8 +23,13 @@ from spot_basic.utilities import (
     spot_namespaced,
 )
 from spot_msgs.action import RobotCommand as RobotCommandAction
-from spot_msgs.srv import ClearBehaviorFault, SetLocomotion, SetStairsMode, SetVelocity
-from spot_msgs.srv import RobotCommand as RobotCommandService
+from spot_msgs.srv import (
+    ClearBehaviorFault,
+    RobotCommand as RobotCommandService,
+    SetLocomotion,
+    SetStairsMode,
+    SetVelocity,
+)
 from std_srvs.srv import SetBool, Trigger
 from synchros2.action import ActionFuture
 from synchros2.callables import GeneralizedMethodLike, generalized_method
