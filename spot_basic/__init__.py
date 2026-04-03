@@ -7,7 +7,6 @@ from rclpy.node import Node
 from spot_basic.arm_surface_contact import SpotArmSurfaceContactMixin
 from spot_basic.base import SpotBase
 from spot_basic.cam.audio import SpotCAMAudioMixin
-from spot_basic.choreography import SpotChoreographyMixin
 from spot_basic.command import SpotCommandMixin
 from spot_basic.command.arm import SpotArmCommandMixin
 from spot_basic.command.full_body import SpotFullBodyCommandMixin
@@ -46,7 +45,6 @@ class SpotBasic(
     SpotGripperCameraMixin,
     SpotMobilityCommandMixin,
     SpotFullBodyCommandMixin,
-    SpotChoreographyMixin,
     SpotManipulationMixin,
     SpotCommandMixin,
     SpotArmSurfaceContactMixin,
