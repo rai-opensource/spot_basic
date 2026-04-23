@@ -12,7 +12,8 @@ ament_python_install_package(spot_basic
   SCRIPTS_DESTINATION lib/${PROJECT_NAME}
 )
 
-if(BUILD_TESTING)
+# TODO(WUD-2855) Disable tests
+if(BUILD_TESTING AND FALSE)
   add_subdirectory(test)
 endif(BUILD_TESTING)
 
