@@ -1,7 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
 import contextlib
-from typing import Generator, Optional
+from typing import Generator, Optional, Protocol
 
 from rclpy.node import Node
 from spot_basic.arm_surface_contact import SpotArmSurfaceContactMixin
@@ -105,3 +105,11 @@ class SpotBasic(
             finally:
                 if not drop_on_exit:
                     self.power_off.synchronously(timeout_sec=timeout_sec)
+
+
+class _Successful(Protocol):
+    success: bool
+
+
+def successful(result: Optional[_Successful]) -> bool:
+    return result is not None and result.success
