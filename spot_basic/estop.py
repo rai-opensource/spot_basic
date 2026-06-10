@@ -1,15 +1,12 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
-from typing import Any, Callable, Optional, Protocol, Union
+from typing import Any, Optional, Protocol
 
-from rclpy.task import Future
 from spot_basic.base import SpotBaseProtocol
-from spot_basic.utilities import SpotServiced, SpotServicedProtocol, SpotServiceHandle, spot_namespaced
+from spot_basic.utilities import SpotServiced, SpotServicedProtocol, spot_namespaced
 from std_srvs.srv import Trigger
 from synchros2.callables import GeneralizedMethodLike, generalized_method
 from synchros2.futures import FutureLike
-
-from bdai.deprecation import deprecated
 
 
 class SpotEStopProtocol(SpotBaseProtocol, Protocol):
@@ -134,47 +131,6 @@ class SpotEStopMixin(SpotBaseProtocol):
         See `SpotEStopProtocol.HardEStopProtocol` for further reference.
         """
 
-    @estop_hard.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.estop_hard.synchronously",
-    )
-    def _legacy_estop_hard(
-        self,
-        *,
-        asynchronous: bool = False,
-        result_callback: Optional[Callable[[Future], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Union[bool, SpotServiceHandle]:
-        """Pull a hard emergency stop on the robot.
-
-        This is a legacy interface and implementation.
-        It will eventually be deprecated.
-        Its usage is discouraged.
-
-        Args:
-            asynchronous: whether the emergency stop request is asynchronous or not.
-            result_callback: optional callback for emergency stop request response.
-            on_failure_callback: optional callback for emergency stop request failure.
-
-        Returns:
-            a boolean to flag its outcome for synchronous calls, and
-            a service handle for asynchronous calls.
-        """
-        handle = SpotServiceHandle.call(
-            self.robot_name,
-            "estop_hard",
-            self.estop_hard.client,
-            result_callback=result_callback,
-            on_failure_callback=on_failure_callback,
-            context=self.node.context,
-        )
-        if asynchronous:
-            return handle
-        if not handle.wait():
-            return False
-        return handle.result is not None and handle.result.success
-
     @generalized_method(spec=GeneralizedMethodLike[SpotEStopProtocol.GentleEStopProtocol])
     def estop_gentle(self, **kwargs: Any) -> Trigger.Response:
         """Pull a gentle emergency stop on the robot.
@@ -182,91 +138,9 @@ class SpotEStopMixin(SpotBaseProtocol):
         See `SpotEStopProtocol.GentleEStopProtocol` for further reference.
         """
 
-    @estop_gentle.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.stop_gentle.synchronously",
-    )
-    def _legacy_estop_gentle(
-        self,
-        *,
-        asynchronous: bool = False,
-        result_callback: Optional[Callable[[Future], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Union[bool, SpotServiceHandle]:
-        """Pull a gentle emergency stop on the robot.
-
-        This is a legacy interface and implementation.
-        It will eventually be deprecated.
-        Its usage is discouraged.
-
-        Args:
-            asynchronous: whether the emergency stop request is asynchronous or not.
-            result_callback: optional callback for emergency stop request response.
-            on_failure_callback: optional callback for emergency stop request failure.
-
-        Returns:
-            a boolean to flag its outcome for synchronous calls, and
-            a service handle for asynchronous calls.
-        """
-        handle = SpotServiceHandle.call(
-            self.robot_name,
-            "estop_gentle",
-            self.estop_gentle.client,
-            result_callback=result_callback,
-            on_failure_callback=on_failure_callback,
-            context=self.node.context,
-        )
-        if asynchronous:
-            return handle
-        if not handle.wait():
-            return False
-        return handle.result is not None and handle.result.success
-
     @generalized_method(spec=GeneralizedMethodLike[SpotEStopProtocol.ReleaseEStopProtocol])
     def estop_release(self, **kwargs: Any) -> Trigger.Response:
         """Release an active emergency stop on the robot.
 
         See `SpotEStopProtocol.ReleaseEStopProtocol` for further reference.
         """
-
-    @estop_release.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.estop_release.synchronously",
-    )
-    def _legacy_estop_release(
-        self,
-        *,
-        asynchronous: bool = False,
-        result_callback: Optional[Callable[[Future], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Union[bool, SpotServiceHandle]:
-        """Release an active emergency stop on the robot.
-
-        This is a legacy interface and implementation.
-        It will eventually be deprecated.
-        Its usage is discouraged.
-
-        Args:
-            asynchronous: whether the emergency stop release request is asynchronous or not.
-            result_callback: optional callback for emergency stop release request response.
-            on_failure_callback: optional callback for emergency stop release request failure.
-
-        Returns:
-            a boolean to flag its outcome for synchronous calls, and
-            a service handle for asynchronous calls.
-        """
-        handle = SpotServiceHandle.call(
-            self.robot_name,
-            "estop_release",
-            self.estop_release.client,
-            result_callback=result_callback,
-            on_failure_callback=on_failure_callback,
-            context=self.node.context,
-        )
-        if asynchronous:
-            return handle
-        if not handle.wait():
-            return False
-        return handle.result is not None and handle.result.success

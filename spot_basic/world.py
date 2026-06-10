@@ -13,8 +13,6 @@ from spot_msgs.srv import ListWorldObjects, MutateWorldObject
 from synchros2.callables import GeneralizedMethodLike, generalized_method
 from synchros2.futures import FutureLike
 
-from bdai.deprecation import deprecated
-
 # There isn't an "infinite lifetime" option so we just go for a year and also getting that song stuck in your head.
 INFINITE_LIFETIME_S = 525600 * 60
 
@@ -716,43 +714,3 @@ class SpotWorldMixin(SpotBaseProtocol):
         if resp is None:
             return ""
         return "[" + ", ".join([f"{wo.name} ({wo.id})" for wo in resp.response.world_objects]) + "]"
-
-    @list_world_objects.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.list_world_objects.synchronously",
-    )
-    def _legacy_list_world_objects(
-        self, request: bosdyn_api_msgs.msg.ListWorldObjectRequest
-    ) -> Optional[bosdyn_api_msgs.msg.ListWorldObjectResponse]:
-        """Requests a list of world objects.
-
-        When constructing the calling ListWorldObjectRequest, you must follow the correct typing for
-        requested objects, which is somewhat non-intuitive:
-
-            # imports required for below
-            from bosdyn_msgs.msg import ListWorldObjectRequest, WorldObjectType
-            from bosdyn.api import world_object_pb2
-
-            # must be constructed explicitly, WorldObjectType.WORLD_OBJECT_DOCK is also not the same
-            world_object_dock_type = WorldObjectType(value=world_object_pb2.WORLD_OBJECT_DOCK)
-
-            # add any requested objects to the list of object types (or leave it blank for all)
-            request_fiducials = ListWorldObjectRequest()
-            request_fiducials.object_type.append(world_object_dock_type)
-
-        This is a legacy interface and implementation.
-        It will eventually be deprecated.
-        Its usage is discouraged.
-
-        Args:
-            request: object listing request in ROS 2 form.
-
-        Returns:
-            the response to the object listing request, if any.
-        """
-        self.node.get_logger().info(f"List world objects for {self.robot_name}")
-        response = self.list_world_objects.synchronously(ListWorldObjects.Request(request=request), nothrow=True)
-        if response is None:
-            return None
-        return response.response

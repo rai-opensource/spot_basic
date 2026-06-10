@@ -13,8 +13,6 @@ from spot_msgs.srv import (
 from synchros2.callables import GeneralizedMethodLike, generalized_method
 from synchros2.futures import FutureLike
 
-from bdai.deprecation import deprecated
-
 
 class SpotGripperCameraProtocol(SpotBaseProtocol, Protocol):
     """Spot gripper camera protocol."""
@@ -169,31 +167,6 @@ class SpotGripperCameraMixin(SpotBaseProtocol):
         See `SpotGripperCameraProtocol.GetGripperCameraParameters` for further reference.
         """
 
-    @get_gripper_camera_parameters.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.get_gripper_camera_parameters.synchronously",
-    )
-    def _legacy_get_gripper_camera_parameters(self) -> tuple[bool, str, bosdyn_api_msgs.msg.GripperCameraParams]:
-        """Get the gripper camera parameters on the SpotDriver
-
-        This is a legacy interface and implementation.
-        It will eventually be deprecated.
-        Its usage is discouraged.
-
-        Returns:
-            a tuple containing [success, message, response]
-        """
-        self.node.get_logger().info(f"Getting gripper camera parameters for {self.robot_name}")
-        response = self.get_gripper_camera_parameters.synchronously(nothrow=True)
-        if response is None:
-            return False, "Call to wait_for_future timed out", None
-        if not response.success:
-            self.node.get_logger().warning(
-                f"Getting gripper camera parameters for {self.robot_name} failed. Msg: {response.message}."
-            )
-        return response.success, response.message, response.response.params
-
     @generalized_method(spec=GeneralizedMethodLike[SpotGripperCameraProtocol.SetGripperCameraProtocol])
     def set_gripper_camera_parameters(
         self,
@@ -209,36 +182,3 @@ class SpotGripperCameraMixin(SpotBaseProtocol):
 
         See `SpotGripperCameraProtocol.SetGripperCameraParameters` for further reference.
         """
-
-    @set_gripper_camera_parameters.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.set_gripper_camera_parameters.synchronously",
-    )
-    def _legacy_set_gripper_camera_parameters(
-        self, gripper_camera_params: bosdyn_api_msgs.msg.GripperCameraParams
-    ) -> bool:
-        """Set the gripper camera parameters on the SpotDriver
-
-        This is a legacy interface and implementation.
-        It will eventually be deprecated.
-        Its usage is discouraged.
-
-        Args:
-            gripper_camera_params: the gripper camera parameters and their desired values.
-                                    Of type bosdyn_msgs/GripperCameraParams
-
-        Returns: a boolean indicating if the service was successful or not
-        """
-        self.node.get_logger().info(f"Setting gripper camera parameters for {self.robot_name}")
-        request = SetGripperCameraParameters.Request()
-        request.request.params = gripper_camera_params
-        response = self.set_gripper_camera_parameters.synchronously(request, nothrow=True)
-        if response is None:
-            return False
-        if not response.success:
-            self.node.get_logger().warning(
-                f"Setting gripper camera parameters for {self.robot_name} failed. Msg: {response.message}."
-            )
-            return False
-        return True

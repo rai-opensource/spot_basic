@@ -27,7 +27,9 @@ from synchros2.scope import ROSAwareScope
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_arm_deployment(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     for robot_command_id, (actuate_arm, named_position) in enumerate(
         (
@@ -70,7 +72,9 @@ def test_arm_deployment(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_arm_locking(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     action = spot_interface.lock_arm.asynchronously()
 
@@ -105,7 +109,9 @@ def test_arm_locking(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_arm_gazing(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     target = x, y, z = (2.0, 3.0, 1.0)
 
@@ -149,7 +155,9 @@ def test_arm_gazing(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_arm_motion(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     target_configuration = ArmJointMap(sh0=0.5, sh1=0.0, el0=0.0, el1=0.0, wr0=-0.5, wr1=0.0)
     action = spot_interface.move_arm.asynchronously(target_configuration, duration_sec=5.0)
@@ -192,7 +200,9 @@ def test_arm_motion(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_arm_trajectory(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     times = [0.0, 1.0, 2.0]
     positions = [
@@ -259,7 +269,9 @@ def test_arm_trajectory(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_arm_end_effector_motion(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     duration_sec = 5.0
     vision_t_goal = SE3.Rt(SO3.Rz(45.0, unit="deg"), [0.5, 0.5, 1.0])
@@ -311,7 +323,9 @@ def test_arm_end_effector_motion(simple_spot: SpotFixture, ros: ROSAwareScope) -
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_arm_end_effector_and_body_motion(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     duration_sec = 10.0
     vision_t_goal = SE3.Rt(SO3(), [1.0, 1.0, 1.0])
@@ -357,7 +371,9 @@ def test_arm_end_effector_and_body_motion(simple_spot: SpotFixture, ros: ROSAwar
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_arm_end_effector_and_body_hip_motion(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     duration_sec = 7.5
     vision_t_goal = SE3.Rt(SO3.Rz(45.0, unit="deg"), [1.0, 1.0, 1.0])
@@ -415,7 +431,9 @@ def test_arm_end_effector_and_body_hip_motion(simple_spot: SpotFixture, ros: ROS
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_arm_end_effector_trajectory(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     timestamps = [0.0, 10.0]
     poses = [SE3(), SE3.Rt(SO3.Rz(45.0, unit="deg"), [2.0, 1.0, 1.0])]
@@ -483,7 +501,9 @@ def test_arm_end_effector_trajectory(simple_spot: SpotFixture, ros: ROSAwareScop
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_arm_end_effector_impedance_controlled_trajectory(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     trajectory = [(SE3(), 0.0), (SE3.Rt(SO3.Rz(45.0, unit="deg"), [0.5, 0.5, 1.0]), 10.0)]
     stiffness = SpatialVector([100, 100, 100, 10, 10, 10])

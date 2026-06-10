@@ -42,7 +42,9 @@ from synchros2.scope import ROSAwareScope
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_mobility_params(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     assert spot_interface.set_stairs_mode.synchronously(StairsMode.AUTO, timeout_sec=5.0)
     assert spot_interface.set_locomotion_mode.synchronously(LocomotionHint.TROT, timeout_sec=5.0)
@@ -71,7 +73,9 @@ def test_spot_mobility_params(simple_spot: SpotFixture, ros: ROSAwareScope) -> N
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_clear_behavior_fault(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     future = spot_interface.clear_behavior_fault.asynchronously(127)
 
@@ -90,7 +94,9 @@ def test_spot_clear_behavior_fault(simple_spot: SpotFixture, ros: ROSAwareScope)
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_stop(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     future = spot_interface.stop.asynchronously()
 
@@ -112,7 +118,9 @@ def test_spot_stop(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_execute(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     action = spot_interface.execute.asynchronously(RobotCommandBuilder.synchro_sit_command())
 
@@ -145,7 +153,9 @@ def test_spot_execute(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_start_execution(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     future = spot_interface.start_executing.asynchronously(RobotCommandBuilder.synchro_sit_command())
 
@@ -169,7 +179,9 @@ def test_spot_start_execution(simple_spot: SpotFixture, ros: ROSAwareScope) -> N
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_sit_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     action = spot_interface.sit.asynchronously()
 
@@ -205,35 +217,11 @@ def test_spot_sit_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
-def test_spot_legacy_sit_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
-    spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
-
-    command_response = RobotCommandResponse()
-    command_response.robot_command_id = 1234
-    command_response.status = RobotCommandResponse.Status.STATUS_OK
-    simple_spot.api.RobotCommand.future.returns(command_response)
-
-    feedback_response = RobotCommandFeedbackResponse()
-    synchro_feedback = feedback_response.feedback.synchronized_feedback
-    mobility_command_feedback = synchro_feedback.mobility_command_feedback
-    mobility_command_feedback.status = RobotCommandFeedbackStatus.Status.STATUS_PROCESSING
-    sit_feedback = mobility_command_feedback.sit_feedback
-    sit_feedback.status = SitCommand.Feedback.Status.STATUS_IS_SITTING
-    simple_spot.api.RobotCommandFeedback.future.returns(feedback_response)
-
-    result = spot_interface.sit(timeout_sec=pytest.DEFAULT_TIMEOUT)
-    assert result is not None
-
-    synchro_feedback = result.command.synchronized_feedback
-    sit_feedback = synchro_feedback.mobility_command_feedback.feedback.sit_feedback
-    assert sit_feedback.status.value == SitCommandFeedbackStatus.STATUS_IS_SITTING
-
-
-@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_stand_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     action = spot_interface.stand.asynchronously()
 
@@ -269,35 +257,11 @@ def test_spot_stand_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> Non
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
-def test_spot_legacy_stand_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
-    spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
-
-    command_response = RobotCommandResponse()
-    command_response.robot_command_id = 1234
-    command_response.status = RobotCommandResponse.Status.STATUS_OK
-    simple_spot.api.RobotCommand.future.returns(command_response)
-
-    feedback_response = RobotCommandFeedbackResponse()
-    synchro_feedback = feedback_response.feedback.synchronized_feedback
-    mobility_command_feedback = synchro_feedback.mobility_command_feedback
-    mobility_command_feedback.status = RobotCommandFeedbackStatus.Status.STATUS_PROCESSING
-    stand_feedback = mobility_command_feedback.stand_feedback
-    stand_feedback.status = StandCommand.Feedback.Status.STATUS_IS_STANDING
-    simple_spot.api.RobotCommandFeedback.future.returns(feedback_response)
-
-    result = spot_interface.stand(timeout_sec=pytest.DEFAULT_TIMEOUT)
-    assert result is not None
-
-    synchro_feedback = result.command.synchronized_feedback
-    stand_feedback = synchro_feedback.mobility_command_feedback.feedback.stand_feedback
-    assert stand_feedback.status.value == StandCommandFeedbackStatus.STATUS_IS_STANDING
-
-
-@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_stand_with_orientation_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     action = spot_interface.stand_with_orientation.asynchronously(
         gravbody_r_goal=SO3.Rz(45.0, unit="deg"), body_height=0.5
@@ -339,37 +303,11 @@ def test_spot_stand_with_orientation_command(simple_spot: SpotFixture, ros: ROSA
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
-def test_spot_legacy_stand_with_orientation_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
-    spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
-
-    command_response = RobotCommandResponse()
-    command_response.robot_command_id = 1234
-    command_response.status = RobotCommandResponse.Status.STATUS_OK
-    simple_spot.api.RobotCommand.future.returns(command_response)
-
-    feedback_response = RobotCommandFeedbackResponse()
-    synchro_feedback = feedback_response.feedback.synchronized_feedback
-    mobility_command_feedback = synchro_feedback.mobility_command_feedback
-    mobility_command_feedback.status = RobotCommandFeedbackStatus.Status.STATUS_PROCESSING
-    stand_feedback = mobility_command_feedback.stand_feedback
-    stand_feedback.status = StandCommand.Feedback.Status.STATUS_IS_STANDING
-    simple_spot.api.RobotCommandFeedback.future.returns(feedback_response)
-
-    result = spot_interface.stand_with_orientation(
-        gravbody_r_goal=SO3.Rz(45, unit="deg"), body_height=0.5, timeout_sec=pytest.DEFAULT_TIMEOUT
-    )
-    assert result is not None
-
-    synchro_feedback = result.command.synchronized_feedback
-    stand_feedback = synchro_feedback.mobility_command_feedback.feedback.stand_feedback
-    assert stand_feedback.status.value == StandCommandFeedbackStatus.STATUS_IS_STANDING
-
-
-@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_walk_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     goal = SE2(1.0, -1.0, math.pi / 4.0)
     action = spot_interface.walk.asynchronously(goal)
@@ -411,36 +349,11 @@ def test_spot_walk_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
-def test_spot_legacy_walk_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
-    spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
-
-    command_response = RobotCommandResponse()
-    command_response.robot_command_id = 1234
-    command_response.status = RobotCommandResponse.Status.STATUS_OK
-    simple_spot.api.RobotCommand.future.returns(command_response)
-
-    feedback_response = RobotCommandFeedbackResponse()
-    synchro_feedback = feedback_response.feedback.synchronized_feedback
-    mobility_command_feedback = synchro_feedback.mobility_command_feedback
-    mobility_command_feedback.status = RobotCommandFeedbackStatus.Status.STATUS_PROCESSING
-    se2_trajectory_feedback = mobility_command_feedback.se2_trajectory_feedback
-    se2_trajectory_feedback.status = SE2TrajectoryCommand.Feedback.Status.STATUS_AT_GOAL
-    simple_spot.api.RobotCommandFeedback.future.returns(feedback_response)
-
-    goal = SE2(1.0, -1.0, math.pi / 4.0)
-    result = spot_interface.walk(goal, timeout_sec=pytest.DEFAULT_TIMEOUT)
-    assert result is not None
-
-    mobility_command_feedback = result.command.synchronized_feedback.mobility_command_feedback
-    se2_trajectory_feedback = mobility_command_feedback.feedback.se2_trajectory_feedback
-    assert se2_trajectory_feedback.status.value == SE2TrajectoryCommandFeedbackStatus.STATUS_AT_GOAL
-
-
-@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_walk_trajectory_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     trajectory = SE2Trajectory(poses=[SE2(), SE2(1.0, -1.0, math.pi / 4.0)], duration_sec=5.0)
     action = spot_interface.walk_trajectory.asynchronously(trajectory, timestep_sec=0.1)
@@ -485,36 +398,11 @@ def test_spot_walk_trajectory_command(simple_spot: SpotFixture, ros: ROSAwareSco
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
-def test_spot_legacy_walk_trajectory_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
-    spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
-
-    command_response = RobotCommandResponse()
-    command_response.robot_command_id = 1234
-    command_response.status = RobotCommandResponse.Status.STATUS_OK
-    simple_spot.api.RobotCommand.future.returns(command_response)
-
-    feedback_response = RobotCommandFeedbackResponse()
-    synchro_feedback = feedback_response.feedback.synchronized_feedback
-    mobility_command_feedback = synchro_feedback.mobility_command_feedback
-    mobility_command_feedback.status = RobotCommandFeedbackStatus.Status.STATUS_PROCESSING
-    se2_trajectory_feedback = mobility_command_feedback.se2_trajectory_feedback
-    se2_trajectory_feedback.status = SE2TrajectoryCommand.Feedback.Status.STATUS_AT_GOAL
-    simple_spot.api.RobotCommandFeedback.future.returns(feedback_response)
-
-    trajectory = SE2Trajectory(poses=[SE2(), SE2(1.0, -1.0, math.pi / 4.0)], duration_sec=1.0)
-    result = spot_interface.walk_trajectory(trajectory, timeout_sec=pytest.DEFAULT_TIMEOUT)
-    assert result is not None
-
-    mobility_command_feedback = result.command.synchronized_feedback.mobility_command_feedback
-    se2_trajectory_feedback = mobility_command_feedback.feedback.se2_trajectory_feedback
-    assert se2_trajectory_feedback.status.value == SE2TrajectoryCommandFeedbackStatus.STATUS_AT_GOAL
-
-
-@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_walk_and_orient_maneuver(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     goal = SE3.Rt(SO3.Ry(math.pi / 6.0), [1.0, -1.0, 0.0])
     future = spot_interface.walk_and_orient.asynchronously(goal)
@@ -589,49 +477,11 @@ def test_spot_walk_and_orient_maneuver(simple_spot: SpotFixture, ros: ROSAwareSc
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
-def test_spot_legacy_walk_and_orient_maneuver(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
-    spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
-
-    command_response = RobotCommandResponse()
-    command_response.robot_command_id = 1234
-    command_response.status = RobotCommandResponse.Status.STATUS_OK
-    simple_spot.api.RobotCommand.future.returns(command_response)
-
-    command_response = RobotCommandResponse()
-    command_response.robot_command_id = 1235
-    command_response.status = RobotCommandResponse.Status.STATUS_OK
-    simple_spot.api.RobotCommand.future.returns(command_response)
-
-    feedback_response = RobotCommandFeedbackResponse()
-    synchro_feedback = feedback_response.feedback.synchronized_feedback
-    mobility_command_feedback = synchro_feedback.mobility_command_feedback
-    mobility_command_feedback.status = RobotCommandFeedbackStatus.Status.STATUS_PROCESSING
-    se2_trajectory_feedback = mobility_command_feedback.se2_trajectory_feedback
-    se2_trajectory_feedback.status = SE2TrajectoryCommand.Feedback.Status.STATUS_AT_GOAL
-    simple_spot.api.RobotCommandFeedback.future.returns(feedback_response)
-
-    feedback_response = RobotCommandFeedbackResponse()
-    synchro_feedback = feedback_response.feedback.synchronized_feedback
-    mobility_command_feedback = synchro_feedback.mobility_command_feedback
-    mobility_command_feedback.status = RobotCommandFeedbackStatus.Status.STATUS_PROCESSING
-    stand_feedback = mobility_command_feedback.stand_feedback
-    stand_feedback.status = StandCommand.Feedback.Status.STATUS_IS_STANDING
-    simple_spot.api.RobotCommandFeedback.future.returns(feedback_response)
-
-    goal = SE3.Rt(SO3.Ry(math.pi / 6.0), [1.0, -1.0, 0.0])
-    result = spot_interface.walk_and_orient(goal, timeout_sec=pytest.DEFAULT_TIMEOUT)
-    assert result is not None
-
-    synchro_feedback = result.command.synchronized_feedback
-    stand_feedback = synchro_feedback.mobility_command_feedback.feedback.stand_feedback
-    assert stand_feedback.status.value == StandCommandFeedbackStatus.STATUS_IS_STANDING
-
-
-@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_self_right_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     action = spot_interface.self_right.asynchronously()
 
@@ -662,7 +512,9 @@ def test_spot_self_right_command(simple_spot: SpotFixture, ros: ROSAwareScope) -
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_roll_to_battery_change_pose_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     action = spot_interface.roll_to_battery_change_pose.asynchronously(BatteryChangeDirHint.LEFT)
 
@@ -696,7 +548,9 @@ def test_spot_roll_to_battery_change_pose_command(simple_spot: SpotFixture, ros:
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_body_gaze_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     x_axis = np.array([1.0, 0.0, 0.0])
     expected_orientation = SO3.Ry(-30.0, unit="deg")
@@ -750,35 +604,11 @@ def test_spot_body_gaze_command(simple_spot: SpotFixture, ros: ROSAwareScope) ->
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
-def test_spot_legacy_body_gaze_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
-    spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
-
-    command_response = RobotCommandResponse()
-    command_response.robot_command_id = 1234
-    command_response.status = RobotCommandResponse.Status.STATUS_OK
-    simple_spot.api.RobotCommand.future.returns(command_response)
-
-    feedback_response = RobotCommandFeedbackResponse()
-    synchro_feedback = feedback_response.feedback.synchronized_feedback
-    mobility_command_feedback = synchro_feedback.mobility_command_feedback
-    mobility_command_feedback.status = RobotCommandFeedbackStatus.Status.STATUS_PROCESSING
-    stand_feedback = mobility_command_feedback.stand_feedback
-    stand_feedback.status = StandCommand.Feedback.Status.STATUS_IS_STANDING
-    simple_spot.api.RobotCommandFeedback.future.returns(feedback_response)
-
-    result = spot_interface.body_gaze_at(SE3.Trans([1.0, 1.0, 1.0]), timeout_sec=5.0)
-    assert result is not None
-
-    synchro_feedback = result.command.synchronized_feedback
-    stand_feedback = synchro_feedback.mobility_command_feedback.feedback.stand_feedback
-    assert stand_feedback.status.value == StandCommandFeedbackStatus.STATUS_IS_STANDING
-
-
-@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_walk_with_velocity_command(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     expected_body_velocity = Twist2([1.0, 0.0, 1.0])
     spot_interface.walk_with_velocity(expected_body_velocity)

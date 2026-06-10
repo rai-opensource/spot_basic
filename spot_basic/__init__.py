@@ -19,12 +19,11 @@ from spot_basic.gripper_camera import SpotGripperCameraMixin
 from spot_basic.ik import SpotIKMixin
 from spot_basic.image import SpotImageMixin
 from spot_basic.lease import SpotLeaseMixin
-from spot_basic.legacy import SpotLegacyMixin
 from spot_basic.manipulation import SpotManipulationMixin
 from spot_basic.power import SpotPowerMixin
 from spot_basic.state import FrameHint, SpotStateMixin
 from spot_basic.utilities import *  # noqa
-from spot_basic.utilities import SpotActionHandle, spot_namespaced
+from spot_basic.utilities import spot_namespaced
 from spot_basic.world import SpotWorldMixin
 
 
@@ -39,7 +38,6 @@ class SpotBasic(
     SpotGraphNavMixin,
     SpotIKMixin,
     SpotWorldMixin,
-    SpotLegacyMixin,
     SpotArmCommandMixin,
     SpotGripperCommandMixin,
     SpotGripperCameraMixin,
@@ -58,8 +56,6 @@ class SpotBasic(
         *,
         node: Optional[Node] = None,
         disable_collisions: bool = False,
-        dry: bool = False,
-        rviz: bool = False,
     ):
         """Initialize the Spot interface.
 
@@ -67,11 +63,9 @@ class SpotBasic(
             robot_name: name of the robot
             node: optional parent node, defaults to the current process node
             disable_collisions: True if collisions should be ignored, False otherwise
-            dry: True if this is a dry run and commands should not actually be sent, False otherwise
             rviz: True if visuals should be published, False otherwise
         """
-        super().__init__(robot_name, dry=dry, disable_collisions=disable_collisions, node=node)
-        assert not rviz, "Aid visuals are deprecated"
+        super().__init__(robot_name, disable_collisions=disable_collisions, node=node)
 
     @contextlib.contextmanager
     def leash(self, weak: bool = False, drop_on_exit: bool = False, timeout_sec: Optional[float] = None) -> Generator:
@@ -86,10 +80,7 @@ class SpotBasic(
             timeout_sec: optional timeout, in seconds. May block indefinitely if none is provided.
         """
         with self.lease(timeout_sec=timeout_sec):
-            if not self.execute.wait_for_server(timeout_sec):
-                self.node.get_logger().warn(f"No robot command interface found for {self.robot_name}.")
-            if self.has_arm() and not self.perform.wait_for_server(timeout_sec):
-                self.node.get_logger().warn(f"No manipulation command interface found for {self.robot_name}.")
+            self.wait_for_servers(timeout_sec)
             self.power_on.synchronously(timeout_sec=timeout_sec)
             try:
                 if not weak:
@@ -105,6 +96,34 @@ class SpotBasic(
             finally:
                 if not drop_on_exit:
                     self.power_off.synchronously(timeout_sec=timeout_sec)
+
+    def wait_for_servers(self, timeout_sec: Optional[float] = None) -> bool:
+        """Wait for the robot's ROS 2 action servers to become available.
+
+        Waits for the RobotCommand action server, and if the robot has an arm,
+        also waits for the Manipulation action server.
+
+        Args:
+            timeout_sec: optional timeout per server, in seconds. May block indefinitely if none is provided.
+
+        Returns:
+            True if all expected servers were found, False if any were not available within the timeout.
+        """
+        all_found = True
+        self.node.get_logger().info(f"Waiting for the 'RobotCommand' action server for {self.robot_name} ...")
+        if self.execute.wait_for_server(timeout_sec):
+            self.node.get_logger().info(f"Found the 'RobotCommand' action server for {self.robot_name}.")
+        else:
+            self.node.get_logger().warn(f"No robot command interface found for {self.robot_name}.")
+            all_found = False
+        if self.has_arm():
+            self.node.get_logger().info(f"Waiting for the 'Manipulation' action server for {self.robot_name} ...")
+            if self.perform.wait_for_server(timeout_sec):
+                self.node.get_logger().info(f"Found the 'Manipulation' action server for {self.robot_name}.")
+            else:
+                self.node.get_logger().warn(f"No manipulation command interface found for {self.robot_name}.")
+                all_found = False
+        return all_found
 
 
 class _Successful(Protocol):

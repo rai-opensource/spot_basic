@@ -1,15 +1,13 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
-from typing import Any, Callable, Optional, Protocol, Union
+from typing import Any, Optional, Protocol
 
 from spot_basic.base import SpotBaseProtocol
-from spot_basic.utilities import SpotServiced, SpotServicedProtocol, SpotServiceHandle, spot_namespaced
+from spot_basic.utilities import SpotServiced, SpotServicedProtocol, spot_namespaced
 from spot_msgs.srv import Dock
 from std_srvs.srv import Trigger
 from synchros2.callables import GeneralizedMethodLike, generalized_method
 from synchros2.futures import FutureLike
-
-from bdai.deprecation import deprecated
 
 
 class SpotDockingProtocol(SpotBaseProtocol, Protocol):
@@ -97,94 +95,9 @@ class SpotDockingMixin(SpotBaseProtocol):
         See `SpotDockingProtocol.DockProtocol` for further reference.
         """
 
-    @dock.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.dock.synchronously",
-    )
-    def _legacy_dock(
-        self,
-        dock_id: int,
-        *,
-        asynchronous: bool = False,
-        result_callback: Optional[Callable[[Dock.Response], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Union[bool, SpotServiceHandle]:
-        """Dock the robot.
-
-        This is a legacy interface and implementation.
-        It will eventually be deprecated.
-        Its usage is discouraged.
-
-        Args:
-            dock_id: ID for dock fiducial.
-            asynchronous: whether the docking request is asynchronous or not.
-            result_callback: optional callback for docking request response.
-            on_failure_callback: optional callback for docking request failure.
-
-        Returns:
-            a boolean to flag its outcome for synchronous calls, and
-            a service handle for asynchronous calls.
-        """
-        handle = SpotServiceHandle.call(
-            self.robot_name,
-            "dock",
-            self.dock.client,
-            Dock.Request(dock_id=dock_id),
-            result_callback=result_callback,
-            on_failure_callback=on_failure_callback,
-            context=self.node.context,
-        )
-        if asynchronous:
-            return handle
-        if not handle.wait():
-            return False
-        return handle.result is not None and handle.result.success
-
     @generalized_method(spec=GeneralizedMethodLike[SpotDockingProtocol.UndockProtocol])
     def undock(self, **kwargs: Any) -> Trigger.Response:
         """Undock the robot.
 
         See `SpotDockingProtocol.UndockProtocol` for further reference.
         """
-
-    @undock.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.undock.synchronously",
-    )
-    def _legacy_undock(
-        self,
-        *,
-        asynchronous: bool = False,
-        result_callback: Optional[Callable[[Trigger.Response], None]] = None,
-        on_failure_callback: Optional[Callable[[None], None]] = None,
-    ) -> Union[bool, SpotServiceHandle]:
-        """Undock the robot.
-
-        This is a legacy interface and implementation.
-        It will eventually be deprecated.
-        Its usage is discouraged.
-
-        Args:
-            asynchronous: whether the undocking request is asynchronous or not.
-            result_callback: optional callback for undocking request response.
-            on_failure_callback: optional callback for undocking request failure.
-
-        Returns:
-            a boolean to flag its outcome for synchronous calls, and
-            a service handle for asynchronous calls.
-        """
-        handle = SpotServiceHandle.call(
-            self.robot_name,
-            "undock",
-            self.undock.client,
-            result_callback=result_callback,
-            on_failure_callback=on_failure_callback,
-            context=self.node.context,
-        )
-        if asynchronous:
-            return handle
-        if not handle.wait():
-            return False
-        return handle.result is not None and handle.result.success

@@ -2,9 +2,9 @@
 
 from enum import Enum
 from functools import cached_property
-from typing import Any, List, Optional, Protocol, TypeAlias, Union, overload
+from typing import Any, Optional, Protocol, TypeAlias, Union, overload
 
-from geometry_msgs.msg import Pose, PoseStamped
+from geometry_msgs.msg import PoseStamped
 from spot_basic.base import SpotBaseProtocol
 from spot_basic.utilities import (
     SpotActionable,
@@ -25,8 +25,6 @@ from synchros2.action import ActionFuture
 from synchros2.callables import GeneralizedMethodLike, generalized_method
 from synchros2.futures import FutureLike
 from synchros2.subscription import Subscription
-
-from bdai.deprecation import deprecated
 
 
 class LocalizationMethod(str, Enum):
@@ -416,30 +414,6 @@ class SpotGraphNavMixin(SpotBaseProtocol):
         See `SpotGraphNavProtocol.ResetLocalizationProtocol` for further reference.
         """
 
-    @reset_localization.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.reset_localization.synchronously",
-    )
-    def _legacy_reset_localization(
-        self, method: Union[LocalizationMethod, str], waypoint_id: Optional[str] = None
-    ) -> bool:
-        """Force relocalization manually.
-
-        If using waypoints, a waypoint id must be specified.
-
-        This is a legacy interface and implementation.
-        It will eventually be deprecated.
-        Its usage is discouraged.
-        """
-        self.node.get_logger().info("Set localization")
-        request = GraphNavSetLocalization.Request()
-        request.method = LocalizationMethod(method)
-        if request.method == LocalizationMethod.WAYPOINT:
-            request.waypoint_id = waypoint_id
-        response = self.reset_localization.synchronously(request, nothrow=True)
-        return response is not None and response.success
-
     set_localization = reset_localization
 
     @generalized_method(spec=GeneralizedMethodLike[SpotGraphNavProtocol.GetLocalizationPoseProtocol])
@@ -448,26 +422,6 @@ class SpotGraphNavMixin(SpotBaseProtocol):
 
         See `SpotGraphNavProtocol.GetLocalizationPoseProtocol` for further reference.
         """
-
-    @get_localization_pose.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.get_localization_pose.synchronously",
-    )
-    def _legacy_get_localization_pose(self) -> Optional[Pose]:
-        """Get the estimated pose.
-
-        This is a legacy interface and implementation.
-        It will eventually be deprecated.
-        Its usage is discouraged.
-        """
-        self.node.get_logger().info("Get localization pose")
-        response = self.get_localization_pose.synchronously(nothrow=True)
-        if response is None:
-            return None
-        if not response.success:
-            raise RuntimeError(f"Failed to get localization pose. Reason: {response.message}")
-        return response.pose
 
     get_localization = get_localization_pose
 
@@ -481,22 +435,6 @@ class SpotGraphNavMixin(SpotBaseProtocol):
         See `SpotGraphNavProtocol.UploadGraphProtocol` for further reference.
         """
 
-    @upload_graph.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.upload_graph.synchronously",
-    )
-    def _legacy_upload_graph(self, upload_filepath: str) -> bool:
-        """Upload graph structure (waypoints and topology).
-
-        This is a legacy interface and implementation.
-        It will eventually be deprecated.
-        Its usage is discouraged.
-        """
-        self.node.get_logger().info("Upload graph")
-        response = self.upload_graph.synchronously(upload_filepath, nothrow=True)
-        return response is not None and response.success
-
     @generalized_method(spec=GeneralizedMethodLike[SpotGraphNavProtocol.ClearLocalizationGraphProtocol])
     def clear_graph(self, **kwargs: Any) -> GraphNavClearGraph.Response:
         """Clear the current GraphNav graph.
@@ -504,46 +442,12 @@ class SpotGraphNavMixin(SpotBaseProtocol):
         See `SpotGraphNavProtocol.ClearGraphProtocol` for further reference.
         """
 
-    @clear_graph.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.clear_graph.synchronously",
-    )
-    def _legacy_clear_graph(self) -> bool:
-        """Clear graph structure (and localization).
-
-        This is a legacy interface and implementation.
-        It will eventually be deprecated.
-        Its usage is discouraged.
-        """
-        self.node.get_logger().info("Clear graph")
-        response = self.clear_graph.synchronously(nothrow=True)
-        return response is not None and response.success
-
     @generalized_method(spec=GeneralizedMethodLike[SpotGraphNavProtocol.ListLocalizationGraphProtocol])
     def list_graph(self, upload_filepath: str, **kwargs: Any) -> ListGraph.Response:
         """List a GraphNav graph structure.
 
         See `SpotGraphNavProtocol.ListGraphProtocol` for further reference.
         """
-
-    @list_graph.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.list_graph.synchronously",
-    )
-    def _legacy_list_graph(self, upload_filepath: str) -> List[str]:
-        """List waypoint IDs in a given graph structure.
-
-        This is a legacy interface and implementation.
-        It will eventually be deprecated.
-        Its usage is discouraged.
-        """
-        self.node.get_logger().info(f"List graph {upload_filepath} for {self.robot_name}")
-        response = self.list_graph.synchronously(upload_filepath, nothrow=True)
-        if response is None:
-            return []
-        return response.waypoint_ids
 
     @generalized_method(spec=GeneralizedMethodLike[SpotGraphNavProtocol.NavigateToWaypointProtocol])
     def navigate_to_waypoint(self, waypoint_id: str, **kwargs: Any) -> NavigateTo.Result:

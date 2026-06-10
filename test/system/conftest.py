@@ -49,15 +49,13 @@ def hardware_bound_ros(hardware_bound_domain_id: int) -> Iterator[ROSAwareScope]
 @pytest.fixture(scope="session")
 def hardware_spot_interface(hardware_robot_name: str, hardware_bound_ros: ROSAwareScope) -> Iterator[SpotBasic]:
     robot_interface = SpotBasic(hardware_robot_name, node=hardware_bound_ros.node)
-    assert robot_interface.initialize_robot()
-    try:
-        yield robot_interface
-    finally:
-        if robot_interface.has_arm():
-            robot_interface.claw_gripper_open.synchronously(timeout_sec=10.0)
-            robot_interface.claw_gripper_close.synchronously(timeout_sec=10.0)
-            robot_interface.stow_arm.synchronously(timeout_sec=10.0)
-        robot_interface.sit.synchronously(timeout_sec=10.0)
+    with robot_interface.leash():
+        try:
+            yield robot_interface
+        finally:
+            if robot_interface.has_arm():
+                robot_interface.claw_gripper_open.synchronously(timeout_sec=10.0)
+                robot_interface.claw_gripper_close.synchronously(timeout_sec=10.0)
 
 
 @pytest.fixture(scope="session")

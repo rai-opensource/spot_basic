@@ -1,15 +1,13 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
 import os
-from typing import Any, Optional, Protocol, cast, overload
+from typing import Any, Optional, Protocol, overload
 
 from spot_basic.base import SpotBaseProtocol
 from spot_basic.utilities import SpotServiced, SpotServicedProtocol, spot_namespaced
 from spot_msgs.srv import DeleteSound, GetVolume, ListSounds, LoadSound, PlaySound, SetVolume
 from synchros2.callables import GeneralizedMethodLike, generalized_method
 from synchros2.futures import FutureLike
-
-from bdai.deprecation import deprecated
 
 
 class SpotCAMAudioProtocol(SpotBaseProtocol, Protocol):
@@ -362,18 +360,6 @@ class SpotCAMAudioMixin(SpotBaseProtocol):
         See `SpotCAMAudioProtocol.ListProtocol` for further reference.
         """
 
-    @list_sounds.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.list_sounds.synchronously",
-    )
-    def _legacy_list_sounds(self) -> tuple[bool, str, list[str]]:
-        """List sounds loaded on Spot CAM."""
-        response = self.list_sounds.synchronously(nothrow=True)
-        if response is None:
-            return False, "Internal error listing sounds", []
-        return response.success, response.message, response.names
-
     @generalized_method(spec=GeneralizedMethodLike[SpotCAMAudioProtocol.LoadProtocol])
     def load_sound(self, name: str, wav_path: os.PathLike, **kwargs: Any) -> LoadSound.Response:
         """Load a new sound to the Spot CAM.
@@ -384,18 +370,6 @@ class SpotCAMAudioMixin(SpotBaseProtocol):
 
         See `SpotCAMAudioProtocol.LoadProtocol` for further reference.
         """
-
-    @load_sound.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.load_sound.synchronously",
-    )
-    def _legacy_load_sound(self, name: str, wav_path: str) -> tuple[bool, str]:
-        """Upload wav file sound from this machine to Spot CAM."""
-        response = self.load_sound.synchronously(name, cast(os.PathLike, wav_path), nothrow=True)
-        if response is None:
-            return False, "Internal error loading sound"
-        return response.success, response.message
 
     @generalized_method(spec=GeneralizedMethodLike[SpotCAMAudioProtocol.PlaybackProtocol])
     def play_sound(self, name: str, volume_multiplier: float, **kwargs: Any) -> PlaySound.Response:
@@ -408,18 +382,6 @@ class SpotCAMAudioMixin(SpotBaseProtocol):
         See `SpotCAMAudioProtocol.PlaybackProtocol` for further reference.
         """
 
-    @play_sound.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.play_sound.synchronously",
-    )
-    def _legacy_play_sound(self, name: str, volume_multiplier: float) -> tuple[bool, str]:
-        """Play sound loaded on Spot CAM. Volume is a percentage."""
-        response = self.play_sound.synchronously(name, volume_multiplier, nothrow=True)
-        if response is None:
-            return False, "Internal error playing sound"
-        return response.success, response.message
-
     @generalized_method(spec=GeneralizedMethodLike[SpotCAMAudioProtocol.DeleteProtocol])
     def delete_sound(self, name: str, **kwargs: Any) -> DeleteSound.Response:
         """Delete a sound from the Spot CAM.
@@ -430,36 +392,12 @@ class SpotCAMAudioMixin(SpotBaseProtocol):
         See `SpotCAMAudioProtocol.DeleteProtocol` for further reference.
         """
 
-    @delete_sound.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.delete_sound.synchronously",
-    )
-    def _legacy_delete_sound(self, name: str) -> tuple[bool, str]:
-        """Delete sound loaded on Spot CAM."""
-        response = self.delete_sound.synchronously(name, nothrow=True)
-        if response is None:
-            return False, "Internal error deleting sound"
-        return response.success, response.message
-
     @generalized_method(spec=GeneralizedMethodLike[SpotCAMAudioProtocol.GetVolumeProtocol])
     def get_volume(self, **kwargs: Any) -> GetVolume.Response:
         """Get the Spot CAM speaker volume.
 
         See `SpotCAMAudioProtocol.GetVolumeProtocol` for further reference.
         """
-
-    @get_volume.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.get_volume.synchronously",
-    )
-    def _legacy_get_volume(self) -> tuple[bool, str, float]:
-        """Get volume of sound playback on Spot CAM as a percentage."""
-        response = self.get_volume.synchronously(nothrow=True)
-        if response is None:
-            return False, "Internal error getting volume", 0.0
-        return response.success, response.message, response.volume
 
     @generalized_method(spec=GeneralizedMethodLike[SpotCAMAudioProtocol.SetVolumeProtocol])
     def set_volume(self, volume: float, **kwargs: Any) -> SetVolume.Response:
@@ -470,15 +408,3 @@ class SpotCAMAudioMixin(SpotBaseProtocol):
 
         See `SpotCAMAudioProtocol.SetVolumeProtocol` for further reference.
         """
-
-    @set_volume.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.set_volume.synchronously",
-    )
-    def _legacy_set_volume(self, volume: float) -> tuple[bool, str]:
-        """Set volume of sound playback on Spot CAM. Volume is a percentage."""
-        response = self.set_volume.synchronously(volume, nothrow=True)
-        if response is None:
-            return False, "Internal error setting volume"
-        return response.success, response.message

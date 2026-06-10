@@ -1,6 +1,5 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
-import functools
 from copy import deepcopy
 from typing import Any, Callable, Iterable, List, Optional, Protocol, TypeAlias, Union, overload
 
@@ -11,8 +10,6 @@ from bosdyn.client.math_helpers import SE3Pose
 from bosdyn.client.robot_command import RobotCommandBuilder
 from bosdyn.geometry import Quaternion, to_euler_zxy
 from bosdyn.util import seconds_to_duration
-from bosdyn_api_msgs.conversions import convert
-from bosdyn_api_msgs.msg import RobotCommandFeedback
 from geometry_msgs.msg import Twist
 from spatialmath import SE2, SE3, SO3, Twist2, UnitQuaternion
 from spatialmath.base.types import R3
@@ -21,13 +18,11 @@ from spot_basic.command.helpers import timestamped_se2_vecs_to_robot_command_pro
 from spot_basic.manual_conversions import se3_to_se3pose
 from spot_basic.state import FrameHint
 from spot_basic.trajectory.se2_trajectory import SE2Trajectory
-from spot_basic.utilities import RobotComposeCommandHandle, SpotActionableProtocol, SpotActionHandle, spot_namespaced
+from spot_basic.utilities import SpotActionableProtocol, spot_namespaced
 from spot_msgs.action import RobotCommand as RobotCommandAction
 from synchros2.action import ActionFuture
 from synchros2.callables import GeneralizedMethodLike, generalized_method
 from synchros2.futures import FutureLike
-
-from bdai.deprecation import deprecated
 
 
 class SpotMobilityCommandBuilder(SpotCommandBuilder):
@@ -233,7 +228,7 @@ class SpotMobilityCommandBuilder(SpotCommandBuilder):
 
         yield self.stand_with_orientation_command(gravbody_t_orien, body_height)
 
-    def body_gaze_command(self, target: R3, frame: Optional[FrameHint] = None) -> RobotCommandFeedback:
+    def body_gaze_command(self, target: R3, frame: Optional[FrameHint] = None) -> robot_command_pb2.RobotCommand:
         """Build a body gazing command.
 
         This command is basically stand with orientation command defined in terms of a point in space
@@ -680,92 +675,12 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
         See `SpotMobilityCommandProtocol.SitProtocol` for further reference.
         """
 
-    @sit.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.sit.synchronously",
-    )
-    def _legacy_sit(self, timeout_sec: float = 5.0) -> Optional[RobotCommandFeedback]:
-        """Make the robot sit.
-
-        Returns:
-            outcome as command feedback.
-        """
-        response = self.sit.synchronously(timeout_sec=timeout_sec, nothrow=True)
-        if response is None:
-            return None
-        return response.result
-
-    def sit_async(
-        self,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[SpotActionHandle]:
-        """Treats sitting as an action instead of a service and asynchronously executes it
-
-        Args:
-          result_callback: A callback to process/handle the resulting feedback from executing the command
-          feedback_callback: A callback to process/handle the feedback received during the execution of the command
-          on_failure_callback: A callback to process/handle when the action fails for various reasons
-        """
-        goal = RobotCommandAction.Goal()
-        command_builder = SpotMobilityCommandBuilder(self)
-        convert(command_builder.sit_command(), goal.command)
-        return self.command_async(
-            "sit_async",
-            goal,
-            result_callback=result_callback,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
-
     @generalized_method(spec=GeneralizedMethodLike[SpotMobilityCommandProtocol.StandProtocol])
     def stand(self, **kwargs: Any) -> RobotCommandAction.Result:
         """Make the robot stand.
 
         See `SpotMobilityCommandProtocol.StandProtocol` for further reference.
         """
-
-    @stand.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.stand.synchronously",
-    )
-    def _legacy_stand(self, timeout_sec: float = 5.0) -> Optional[RobotCommandFeedback]:
-        """Make the robot stand.
-
-        Returns:
-            outcome as command feedback.
-        """
-        response = self.stand.synchronously(timeout_sec=timeout_sec, nothrow=True)
-        if response is None:
-            return None
-        return response.result
-
-    def stand_async(
-        self,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[SpotActionHandle]:
-        """Treats standing as an action instead of a service and asynchronously executes it
-
-        Args:
-          result_callback: A callback to process/handle the resulting feedback from executing the command
-          feedback_callback: A callback to process/handle the feedback received during the execution of the command
-          on_failure_callback: A callback to process/handle when the action fails for various reasons
-        """
-        goal = RobotCommandAction.Goal()
-        command_builder = SpotMobilityCommandBuilder(self)
-        convert(command_builder.stand_command(), goal.command)
-        return self.command_async(
-            "stand_async",
-            goal,
-            result_callback=result_callback,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
 
     @generalized_method(spec=GeneralizedMethodLike[SpotMobilityCommandProtocol.StandWithOrientationProtocol])
     def stand_with_orientation(
@@ -776,65 +691,6 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
         See `SpotMobilityCommandProtocol.StandWithOrientationProtocol` for further reference.
         """
 
-    @stand_with_orientation.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.stand_with_orientation.synchronously",
-    )
-    def _legacy_stand_with_orientation(
-        self, gravbody_r_goal: SO3, body_height: float = 0.0, timeout_sec: Optional[float] = None
-    ) -> Optional[RobotCommandFeedback]:
-        """Make the robot stand with target body height and orientation.
-
-        Args:
-            gravbody_r_goal: body frame orientation w.r.t. to a gravity aligned
-            framed with yaw computed from the stance feet.
-            body_height: body height, in meters, relative to the nominal stand height.
-
-        Returns:
-            outcome as command feedback.
-        """
-        response = self.stand_with_orientation.synchronously(
-            gravbody_r_goal, body_height, timeout_sec=timeout_sec, nothrow=True
-        )
-        if response is None:
-            return None
-        return response.result
-
-    def stand_with_orientation_async(
-        self,
-        gravbody_r_goal: SO3,
-        body_height: float,
-        *,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[SpotActionHandle]:
-        """Send the command to stand in a specific SO3 rotation
-
-        Args:
-            gravbody_r_goal: body frame orientation w.r.t. to a gravity aligned framed with yaw computed
-            from the stance feet
-            body_height: body height, in meters, relative to the nominal stand height
-            result_callback: a callback to process/handle the resulting feedback from executing the command
-            feedback_callback: a callback to process/handle the feedback received during the execution of the command
-            on_failure_callback: a callback to process/handle when the action fails for various reasons
-
-        Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
-                successfully received, None otherwise
-        """
-        goal = RobotCommandAction.Goal()
-        command_builder = SpotMobilityCommandBuilder(self)
-        convert(command_builder.stand_with_orientation_command(gravbody_r_goal, body_height), goal.command)
-        return self.command_async(
-            "orient",
-            goal,
-            result_callback=result_callback,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
-
     @generalized_method(spec=GeneralizedMethodLike[SpotMobilityCommandProtocol.WalkProtocol])
     def walk(
         self, frame_t_goal: SE2, body_height: float = 0.0, *, base_frame: Optional[FrameHint] = None, **kwargs: Any
@@ -844,73 +700,8 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
         See `SpotMobilityCommandProtocol.WalkProtocol` for further reference.
         """
 
-    @walk.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.walk.synchronously",
-    )
-    def _legacy_walk(
-        self,
-        frame_t_goal: SE2,
-        body_height: float = 0.0,
-        timeout_sec: Optional[float] = None,
-        *,
-        base_frame: Optional[FrameHint] = None,
-    ) -> Optional[RobotCommandFeedback]:
-        """Make the robot walk to an SE(2) pose.
-
-        Args:
-            frame_t_goal: pose to walk to, defined w.r.t. the given `base_frame`.
-            body_height: body height, in meters, relative to the nominal stand height.
-            base_frame: optional base frame, defaults to the VISION frame.
-
-        Returns:
-            outcome as command feedback.
-        """
-        response = self.walk.synchronously(
-            frame_t_goal, body_height, base_frame=base_frame, timeout_sec=timeout_sec, nothrow=True
-        )
-        if response is None:
-            return None
-        return response.result
-
     # Alias
     walk_to = walk
-
-    def walk_to_async(
-        self,
-        frame_t_goal: SE2,
-        body_height: float = 0.0,
-        *,
-        base_frame: Optional[FrameHint] = None,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[SpotActionHandle]:
-        """Send the command to walk to a specific SE2 pose
-
-        Args:
-            frame_t_goal: pose to walk to, defined w.r.t. the given `base_frame`
-            body_height: body height, in meters, relative to the nominal stand height
-            base_frame: optional base frame, defaults to the VISION frame
-            result_callback: a callback to process/handle the resulting feedback from executing the command
-            feedback_callback: a callback to process/handle the feedback received during the execution of the command
-            on_failure_callback: a callback to process/handle when the action fails for various reasons
-
-        Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
-                successfully received, None otherwise
-        """
-        goal = RobotCommandAction.Goal()
-        command_builder = SpotMobilityCommandBuilder(self)
-        convert(command_builder.walk_command(frame_t_goal, body_height, base_frame=base_frame), goal.command)
-        return self.command_async(
-            "walk_to",
-            goal,
-            result_callback=result_callback,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
 
     @generalized_method(spec=GeneralizedMethodLike[SpotMobilityCommandProtocol.WalkTrajectoryProtocol])
     def walk_trajectory(
@@ -927,85 +718,6 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
         See `SpotMobilityCommandProtocol.WalkTrajectoryProtocol` for further reference.
         """
 
-    @walk_trajectory.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.walk_trajectory.synchronously",
-    )
-    def _legacy_walk_trajectory(
-        self,
-        frame_t_trajectory: SE2Trajectory,
-        timestep_sec: float = 0.1,
-        interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
-        timeout_sec: Optional[float] = None,
-        *,
-        base_frame: Optional[FrameHint] = None,
-    ) -> Optional[RobotCommandFeedback]:
-        """Make the robot walk along an SE(2) trajectory.
-
-        Args:
-            frame_t_trajectory: time-parameterize sequence of poses, defined in the given `base_frame`.
-            timestep_sec: time step to be used for trajectory sampling.
-            interpolation: method to be used for trajectory interpolation.
-            base_frame: optional base frame, defaults to the VISION frame.
-
-        Returns:
-            outcome as command feedback.
-        """
-        response = self.walk_trajectory.synchronously(
-            frame_t_trajectory,
-            timestep_sec,
-            interpolation,
-            base_frame=base_frame,
-            timeout_sec=timeout_sec,
-            nothrow=True,
-        )
-        if response is None:
-            return None
-        return response.result
-
-    def walk_trajectory_async(
-        self,
-        frame_t_trajectory: SE2Trajectory,
-        timestep_sec: float = 0.1,
-        interpolation: trajectory_pb2.PositionalInterpolation = trajectory_pb2.POS_INTERP_CUBIC,
-        *,
-        base_frame: Optional[FrameHint] = None,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[SpotActionHandle]:
-        """Send the command to walk along a trajectory asynchronously
-
-        Args:
-            frame_t_trajectory: time-parameterize sequence of poses, defined in the given `base_frame`
-            timestep_sec: time step to be used for trajectory sampling
-            interpolation: method to be used for trajectory interpolation
-            base_frame: optional base frame, defaults to the VISION frame
-            result_callback: a callback to process/handle the resulting feedback from executing the command
-            feedback_callback: a callback to process/handle the feedback received during the execution of the command
-            on_failure_callback: a callback to process/handle when the action fails for various reasons
-
-        Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
-                successfully received, None otherwise
-        """
-        goal = RobotCommandAction.Goal()
-        command_builder = SpotMobilityCommandBuilder(self)
-        convert(
-            command_builder.walk_trajectory_command(
-                frame_t_trajectory, timestep_sec, interpolation, base_frame=base_frame
-            ),
-            goal.command,
-        )
-        return self.command_async(
-            "walk_trajectory",
-            goal,
-            result_callback=result_callback,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
-
     @generalized_method(spec=GeneralizedMethodLike[SpotMobilityCommandProtocol.WalkAndOrientProtocol])
     def walk_and_orient(
         self,
@@ -1020,170 +732,12 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
         See `SpotMobilityCommandProtocol.WalkAndOrientProtocol` for further reference.
         """
 
-    @walk_and_orient.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.walk_and_orient.synchronously",
-    )
-    def _legacy_walk_and_orient(
-        self,
-        frame_t_goal: SE3,
-        body_height: Optional[float] = None,
-        timeout_sec: Optional[float] = None,
-        *,
-        base_frame: Optional[FrameHint] = None,
-    ) -> Optional[RobotCommandFeedback]:
-        """Make the robot walk to an SE(3) pose.
-
-        Args:
-            frame_t_goal: pose to walk to, defined w.r.t. the given `base_frame`.
-            body_height: body height, in meters, relative to the nominal stand height.
-            base_frame: optional base frame, defaults to the VISION frame.
-
-        Returns:
-            outcome as command feedback.
-        """
-        response = self.walk_and_orient.synchronously(
-            frame_t_goal, body_height, base_frame=base_frame, timeout_sec=timeout_sec, nothrow=True
-        )
-        if response is None:
-            return None
-        return response[-1].result
-
-    def walk_and_orient_async(
-        self,
-        frame_t_goal: SE3,
-        *,
-        base_frame: Optional[FrameHint] = None,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[RobotComposeCommandHandle]:
-        """Send the command to walk and rotate to a specific SE3 pose
-
-        Args:
-            frame_t_goal: pose to walk to, defined w.r.t. the given `base_frame`
-            base_frame: optional base frame, defaults to the VISION frame
-            result_callback: a callback to process/handle the resulting feedback from executing each of the commands
-            feedback_callback: a callback to process/handle the feedback received during the execution of any of the
-                commands
-            on_failure_callback: a callback to process/handle when any of actions fail for various reasons
-
-        Returns:
-            RobotComposeCommandHandle: A class to handle a list with multiple async RobotCommand (actions). The actions
-                are sent sequentially to SpotDriver via an action client
-        """
-        walk_partial = functools.partial(
-            self.walk_to_async,
-            frame_t_goal.yaw_SE2(),
-            base_frame=base_frame,
-            body_height=frame_t_goal.z,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
-        stand_partial = functools.partial(
-            self.stand_with_orientation_async,
-            SO3(frame_t_goal),
-            body_height=frame_t_goal.z,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
-        return RobotComposeCommandHandle([walk_partial, stand_partial], result_callback)
-
-    def walk_to_fiducial(self, fiducial_id: int, fiducial_t_body: SE3) -> None:
-        """Send the command to walk to a fiducial
-
-        Args:
-            fiducial_id: the fiducial to walk to
-            fiducial_t_body: pose of fiducial w.r.t. the vision frame
-        """
-        vision_t_fiducial = self.lookup_a_tform_b(
-            FrameHint.VISION.value, f"filtered_fiducial_{fiducial_id}", wait_for_frames=True
-        )
-        vision_t_body = vision_t_fiducial * fiducial_t_body
-        self.walk_and_orient(frame_t_goal=vision_t_body, base_frame=FrameHint.VISION)
-
     @generalized_method(spec=GeneralizedMethodLike[SpotMobilityCommandProtocol.BodyGazeProtocol])
     def body_gaze(self, target: R3, frame: Optional[FrameHint] = None, **kwargs: Any) -> Any:
         """Make the robot point its body towards some point in space.
 
         See `SpotMobilityCommandProtocol.BodyGazeProtocol` for further reference.
         """
-
-    def body_gaze_at(
-        self,
-        body_t_target: SE3,
-        frame_t_body: Optional[SE3] = None,
-        timeout_sec: Optional[float] = None,
-        *,
-        base_frame: Optional[FrameHint] = None,
-    ) -> Optional[RobotCommandFeedback]:
-        """Aligns the x-axis of the body frame along the vector from the current body position
-        to the target. If you don't provide vision_t_body, you must set the tf listener for spot.
-
-        Args:
-            body_t_target: SE3 transform from the current body position to the target you want to gaze at
-            frame_t_body: SE3 transform from the base frame from to the current body position
-            timeout_sec: A timeout for waiting on a response/result from the action server. The timeout arg is used
-                on each command, so max duration is 2x timeout. Setting to None creates no timeout.
-            base_frame: The frame in which the goal is specified. Defaults to VISION frame in the get_set_base_frame
-
-        Returns:
-            The feedback from the SpotDriver about the result of the commands if it was accepted, None otherwise
-        """
-        target = body_t_target.t
-        if frame_t_body is not None:
-            if base_frame is None:
-                base_frame = FrameHint.VISION
-            target = frame_t_body * target
-            frame = base_frame
-        else:
-            frame = FrameHint.BODY
-        goal = RobotCommandAction.Goal()
-        command_builder = SpotMobilityCommandBuilder(self)
-        convert(command_builder.body_gaze_command(np.squeeze(target), frame), goal.command)
-        return self.command("gaze", goal, timeout_sec=timeout_sec)
-
-    def body_gaze_at_async(
-        self,
-        body_t_target: SE3,
-        frame_t_body: Optional[SE3] = None,
-        *,
-        base_frame: Optional[FrameHint] = None,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[RobotComposeCommandHandle]:
-        """Aligns the x-axis of the body frame along the vector from the current body position
-        to the target. If you don't provide vision_t_body, you must set the tf listener for spot.
-
-        Args:
-            body_t_target: SE3 transform from the current body position to the target you want to gaze at
-            frame_t_body: SE3 transform from the base_frame from to the current body position
-            base_frame: Frame the goal is specified in. Defaults to VISION frame in get_set_base_frame
-            result_callback: A callback to process/handle the resulting feedback from executing each of the commands
-            feedback_callback: A callback to process/handle the feedback received during the execution of any of the
-                commands
-            on_failure_callback: A callback to process/handle when any of actions fail for various reasons
-        """
-        target = body_t_target.t
-        if frame_t_body is not None:
-            if base_frame is None:
-                base_frame = FrameHint.VISION
-            target = frame_t_body * target
-            frame = base_frame
-        else:
-            frame = FrameHint.BODY
-        goal = RobotCommandAction.Goal()
-        command_builder = SpotMobilityCommandBuilder(self)
-        convert(command_builder.body_gaze_command(np.squeeze(target), frame), goal.command)
-        return self.command_async(
-            "gaze_async",
-            goal,
-            result_callback=result_callback,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
 
     def walk_with_velocity(
         self, body_velocity: Twist2, duration: Optional[float] = None, rate: Optional[float] = 50.0

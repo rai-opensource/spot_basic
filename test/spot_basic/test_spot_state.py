@@ -17,6 +17,7 @@ from synchros2.scope import ROSAwareScope
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_arm_joint_positions(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
     kinematic_state = simple_spot.api.robot_state.kinematic_state
     expected_arm_joint_positions = {"sh0": 0.1, "sh1": -0.1, "el0": 0.2, "el1": -0.2, "wr0": 0.3, "wr1": -0.3}
     for basename, position in expected_arm_joint_positions.items():
@@ -24,7 +25,8 @@ def test_spot_arm_joint_positions(simple_spot: SpotFixture, ros: ROSAwareScope) 
         joint_state.name = f"arm0.{basename}"
         joint_state.position.value = position
 
-    assert spot_interface.initialize_robot()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     assert wait_for_future(spot_interface.joint_states.update, timeout_sec=10.0)
 
@@ -35,6 +37,7 @@ def test_spot_arm_joint_positions(simple_spot: SpotFixture, ros: ROSAwareScope) 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_leg_joint_positions(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
     kinematic_state = simple_spot.api.robot_state.kinematic_state
 
     expected_leg_joint_positions = {
@@ -56,7 +59,8 @@ def test_spot_leg_joint_positions(simple_spot: SpotFixture, ros: ROSAwareScope) 
         joint_state.name = name
         joint_state.position.value = position
 
-    assert spot_interface.initialize_robot()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     assert wait_for_future(spot_interface.joint_states.update, timeout_sec=10.0)
 
@@ -66,6 +70,7 @@ def test_spot_leg_joint_positions(simple_spot: SpotFixture, ros: ROSAwareScope) 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_gripper_positions(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
     kinematic_state = simple_spot.api.robot_state.kinematic_state
 
     expected_gripper_position = -0.5
@@ -73,7 +78,8 @@ def test_spot_gripper_positions(simple_spot: SpotFixture, ros: ROSAwareScope) ->
     joint_state.name = "arm0.f1x"
     joint_state.position.value = expected_gripper_position
 
-    assert spot_interface.initialize_robot()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     assert wait_for_future(spot_interface.joint_states.update, timeout_sec=10.0)
 
@@ -84,6 +90,7 @@ def test_spot_gripper_positions(simple_spot: SpotFixture, ros: ROSAwareScope) ->
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_basic_transform_lookup(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
     kinematic_state = simple_spot.api.robot_state.kinematic_state
     kinematic_state.acquisition_timestamp.GetCurrentTime()
 
@@ -93,7 +100,8 @@ def test_spot_basic_transform_lookup(simple_spot: SpotFixture, ros: ROSAwareScop
     parent_edge.parent_tform_child.position.x = 1.0
     parent_edge.parent_tform_child.rotation.w = 1.0
 
-    assert spot_interface.initialize_robot()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     transform = spot_interface.lookup_a_tform_b(FrameHint.ODOM, FrameHint.BODY, timeout=10.0, wait_for_frames=True)
     assert_equal(transform.t, (1.0, 0.0, 0.0))
@@ -103,6 +111,7 @@ def test_spot_basic_transform_lookup(simple_spot: SpotFixture, ros: ROSAwareScop
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_transform_lookup(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
     kinematic_state = simple_spot.api.robot_state.kinematic_state
     kinematic_state.acquisition_timestamp.GetCurrentTime()
 
@@ -113,7 +122,8 @@ def test_spot_transform_lookup(simple_spot: SpotFixture, ros: ROSAwareScope) -> 
     expected_parent_edge.parent_tform_child.position.x = 1.5
     expected_parent_edge.parent_tform_child.rotation.y = math.sin(math.radians(-10.0) / 2)
     expected_parent_edge.parent_tform_child.rotation.w = math.cos(math.radians(-10.0) / 2)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     assert spot_interface.wait_for_a_tform_b(FrameHint.BODY, ptz_frame_name, timeout_sec=5.0)
 

@@ -13,6 +13,7 @@ from synchros2.scope import ROSAwareScope
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_docking(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
 
     with spot_interface.lease():
         assert spot_interface.dock.wait_for_service(timeout_sec=pytest.DEFAULT_TIMEOUT)
@@ -61,6 +62,7 @@ def test_spot_docking(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_undocking(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
 
     with spot_interface.lease():
         assert spot_interface.undock.wait_for_service(timeout_sec=pytest.DEFAULT_TIMEOUT)

@@ -1,16 +1,13 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
 import contextlib
-from typing import Any, Callable, Generator, Optional, Protocol, Union
+from typing import Any, Generator, Optional, Protocol
 
-from rclpy.task import Future
 from spot_basic.base import SpotBaseProtocol
-from spot_basic.utilities import SpotServiced, SpotServicedProtocol, SpotServiceHandle, spot_namespaced
+from spot_basic.utilities import SpotServiced, SpotServicedProtocol, spot_namespaced
 from std_srvs.srv import Trigger
 from synchros2.callables import GeneralizedMethodLike, generalized_method
 from synchros2.futures import FutureLike
-
-from bdai.deprecation import deprecated
 
 
 class SpotLeaseProtocol(SpotBaseProtocol, Protocol):
@@ -138,94 +135,12 @@ class SpotLeaseMixin(SpotBaseProtocol):
         See `SpotLeaseProtocol.ClaimProtocol` for further reference.
         """
 
-    @claim.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.claim.synchronously",
-    )
-    def _legacy_claim(
-        self,
-        *,
-        asynchronous: bool = False,
-        result_callback: Optional[Callable[[Future], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Union[bool, SpotServiceHandle]:
-        """Claim the robot by acquiring its body lease.
-
-        This is a legacy interface and implementation.
-        It will eventually be deprecated.
-        Its usage is discouraged.
-
-        Args:
-            asynchronous: whether the claim request is asynchronous or not.
-            result_callback: optional callback for claim request response.
-            on_failure_callback: optional callback for claim request failure.
-
-        Returns:
-            a boolean to flag its outcome for synchronous calls, and
-            a service handle for asynchronous calls.
-        """
-        handle = SpotServiceHandle.call(
-            self.robot_name,
-            "claim",
-            self.claim.client,
-            result_callback=result_callback,
-            on_failure_callback=on_failure_callback,
-            context=self.node.context,
-        )
-        if asynchronous:
-            return handle
-        if not handle.wait():
-            return False
-        return handle.result is not None and handle.result.success
-
     @generalized_method(spec=GeneralizedMethodLike[SpotLeaseProtocol.ReleaseProtocol])
     def release(self, **kwargs: Any) -> Trigger.Response:
         """Release the robot by returning its body lease.
 
         See `SpotLeaseProtocol.ReleaseProtocol` for further reference.
         """
-
-    @release.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.release.synchronously",
-    )
-    def _legacy_release(
-        self,
-        *,
-        asynchronous: bool = False,
-        result_callback: Optional[Callable[[Future], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Union[bool, SpotServiceHandle]:
-        """Release the robot by returning its body lease.
-
-        This is a legacy interface and implementation.
-        It will eventually be deprecated.
-        Its usage is discouraged.
-
-        Args:
-            asynchronous: whether the release request is asynchronous or not.
-            result_callback: optional callback for release request response.
-            on_failure_callback: optional callback for release request failure.
-
-        Returns:
-            a boolean to flag its outcome for synchronous calls, and
-            a service handle for asynchronous calls.
-        """
-        handle = SpotServiceHandle.call(
-            self.robot_name,
-            "release",
-            self.release.client,
-            result_callback=result_callback,
-            on_failure_callback=on_failure_callback,
-            context=self.node.context,
-        )
-        if asynchronous:
-            return handle
-        if not handle.wait():
-            return False
-        return handle.result is not None and handle.result.success
 
     @generalized_method(spec=GeneralizedMethodLike[SpotLeaseProtocol.TakeLeaseProtocol])
     def take_lease(self, **kwargs: Any) -> Trigger.Response:

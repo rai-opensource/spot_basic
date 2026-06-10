@@ -14,16 +14,17 @@ MotorPowerState = PowerState.MotorPowerState
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_spot_power_cycle(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
     power_state = simple_spot.api.robot_state.power_state
 
     with spot_interface.lease():
         assert power_state.motor_power_state == MotorPowerState.MOTOR_POWER_STATE_OFF
 
-        assert spot_interface.power_on()
+        assert spot_interface.power_on.synchronously().success
         assert power_state.motor_power_state == MotorPowerState.MOTOR_POWER_STATE_ON
 
         assert ros.executor is not None
-        future = ros.executor.create_task(lambda: spot_interface.power_off())
+        future = ros.executor.create_task(lambda: spot_interface.power_off.synchronously().success)
         call = simple_spot.api.RobotCommand.serve(timeout=5.0)
         assert call is not None
         full_body_command = call.request.command.full_body_command
@@ -37,5 +38,5 @@ def test_spot_power_cycle(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
         assert future.result() is True
         assert power_state.motor_power_state == MotorPowerState.MOTOR_POWER_STATE_OFF
 
-        assert spot_interface.power_on()
+        assert spot_interface.power_on.synchronously().success
         assert power_state.motor_power_state == MotorPowerState.MOTOR_POWER_STATE_ON

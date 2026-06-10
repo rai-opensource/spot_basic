@@ -4,15 +4,11 @@ from typing import Any, Callable, Optional, Protocol, TypeAlias, Union
 
 from bosdyn.api import robot_command_pb2
 from bosdyn.client.robot_command import _CLAW_GRIPPER_CLOSED_ANGLE, _CLAW_GRIPPER_OPEN_ANGLE, RobotCommandBuilder
-from bosdyn_api_msgs.conversions import convert
-from bosdyn_api_msgs.msg import RobotCommandFeedback
 from spot_basic.command import SpotCommandBuilder, SpotCommandProtocol
-from spot_basic.utilities import SpotActionableProtocol, SpotActionHandle
+from spot_basic.utilities import SpotActionableProtocol
 from spot_msgs.action import RobotCommand as RobotCommandAction
 from synchros2.action import ActionFuture
 from synchros2.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
-
-from bdai.deprecation import deprecated
 
 
 class SpotGripperCommandBuilder(SpotCommandBuilder):
@@ -213,51 +209,6 @@ class SpotGripperCommandMixin(SpotCommandProtocol):
         See `SpotGripperCommandProtocol.ClawGripperOpenProtocol` for further reference.
         """
 
-    @claw_gripper_open.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.claw_gripper_open.synchronously",
-    )
-    def _legacy_claw_gripper_open(self, *, timeout_sec: Optional[float] = None) -> Optional[RobotCommandFeedback]:
-        """Fully open the robot claw gripper.
-
-        Returns:
-            outcome as command feedback.
-        """
-        goal = RobotCommandAction.Goal()
-        command_builder = SpotGripperCommandBuilder(self)
-        convert(command_builder.claw_gripper_open_command(), goal.command)
-        return self.command("claw_gripper_open", goal, timeout_sec)
-
-    def claw_gripper_open_async(
-        self,
-        *,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[SpotActionHandle]:
-        """Send a command to fully open the gripper asynchronously
-
-        Args:
-            result_callback: A callback to process/handle the resulting feedback from executing the command
-            feedback_callback: A callback to process/handle the feedback received during the execution of the command
-            on_failure_callback: A callback to process/handle when the action fails for various reasons
-
-        Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
-                successfully received, None otherwise
-        """
-        goal = RobotCommandAction.Goal()
-        command_builder = SpotGripperCommandBuilder(self)
-        convert(command_builder.claw_gripper_open_command(), goal.command)
-        return self.command_async(
-            "claw_gripper_open",
-            goal,
-            result_callback=result_callback,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
-
     @generalized_method(spec=GeneralizedMethodLike[SpotGripperCommandProtocol.ClawGripperCloseProtocol])
     def claw_gripper_close(
         self, max_torque: Optional[float] = None, disable_force_on_contact: bool = False, **kwargs: Any
@@ -266,53 +217,6 @@ class SpotGripperCommandMixin(SpotCommandProtocol):
 
         See `SpotGripperCommandProtocol.ClawGripperCloseProtocol` for further reference.
         """
-
-    @claw_gripper_close.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.claw_gripper_close.synchronously",
-    )
-    def _legacy_claw_gripper_close(
-        self, timeout_sec: Optional[float] = None, max_torque: Optional[float] = None
-    ) -> Optional[RobotCommandFeedback]:
-        """Close the robot claw gripper.
-
-        Returns:
-            outcome as command feedback.
-        """
-        goal = RobotCommandAction.Goal()
-        command_builder = SpotGripperCommandBuilder(self)
-        convert(command_builder.claw_gripper_close_command(max_torque), goal.command)
-        return self.command("claw_gripper_close", goal, timeout_sec)
-
-    def claw_gripper_close_async(
-        self,
-        *,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[SpotActionHandle]:
-        """Send a command to close the gripper asynchronously
-
-        Args:
-            result_callback: A callback to process/handle the resulting feedback from executing the command
-            feedback_callback: A callback to process/handle the feedback received during the execution of the command
-            on_failure_callback: A callback to process/handle when the action fails for various reasons
-
-        Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
-                successfully received, None otherwise
-        """
-        goal = RobotCommandAction.Goal()
-        command_builder = SpotGripperCommandBuilder(self)
-        convert(command_builder.claw_gripper_close_command(), goal.command)
-        return self.command_async(
-            "claw_gripper_close",
-            goal,
-            result_callback=result_callback,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
 
     @generalized_method(spec=GeneralizedMethodLike[SpotGripperCommandProtocol.ClawGripperSetAngleProtocol])
     def claw_gripper_set_angle(

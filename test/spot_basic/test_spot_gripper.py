@@ -21,7 +21,9 @@ from synchros2.scope import ROSAwareScope
 @pytest.mark.launch(fixture=pytest.simple_spot_without_arm_graph_description)
 def test_no_gripper_opening(simple_spot_without_arm: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot_without_arm.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     with pytest.raises(RuntimeError):
         spot_interface.claw_gripper_open.synchronously()
@@ -30,7 +32,9 @@ def test_no_gripper_opening(simple_spot_without_arm: SpotFixture, ros: ROSAwareS
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_gripper_opening(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     action = spot_interface.claw_gripper_open.asynchronously()
 
@@ -69,7 +73,9 @@ def test_gripper_opening(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
 @pytest.mark.launch(fixture=pytest.simple_spot_without_arm_graph_description)
 def test_no_gripper_closing(simple_spot_without_arm: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot_without_arm.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     with pytest.raises(RuntimeError):
         spot_interface.claw_gripper_close.synchronously()
@@ -78,7 +84,9 @@ def test_no_gripper_closing(simple_spot_without_arm: SpotFixture, ros: ROSAwareS
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_gripper_closing(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     action = spot_interface.claw_gripper_close.asynchronously()
 
@@ -117,7 +125,9 @@ def test_gripper_closing(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_gripper_camera_changes(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     request = GripperCameraParamRequest()
     request.params.brightness.value = 0.8
@@ -152,7 +162,9 @@ def test_gripper_camera_changes(simple_spot: SpotFixture, ros: ROSAwareScope) ->
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_gripper_set_angle(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     # request a gripper angle of -30 degrees
     requested_angle = -math.radians(30.0)

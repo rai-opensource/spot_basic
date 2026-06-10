@@ -69,6 +69,7 @@ def nonzero_joint_command_update(stream: Iterable[JointControlStreamRequest], ex
 @pytest.mark.launch(fixture=pytest.simple_controllable_spot_graph_description)
 def test_spot_full_state_control(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
 
     response = RobotCommandResponse()
     response.status = RobotCommandResponse.Status.STATUS_OK
@@ -161,6 +162,7 @@ def test_spot_full_state_control(simple_spot: SpotFixture, ros: ROSAwareScope) -
 @pytest.mark.launch(fixture=pytest.simple_controllable_spot_graph_description)
 def test_spot_joint_position_control(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
 
     simple_spot.api.GetRobotStateStream.future.returns(itertools.repeat(zero_robot_state_stream_response()))
 
@@ -195,6 +197,7 @@ def test_spot_joint_position_control(simple_spot: SpotFixture, ros: ROSAwareScop
 @pytest.mark.launch(fixture=pytest.simple_controllable_spot_graph_description)
 def test_spot_full_state_control_feedback(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
 
     expected_response = RobotStateStreamResponse()
     expected_response.joint_states.position.extend(range(1, NUM_JOINTS + 1))
@@ -232,6 +235,7 @@ def test_spot_full_state_control_feedback(simple_spot: SpotFixture, ros: ROSAwar
 @pytest.mark.launch(fixture=pytest.simple_controllable_spot_graph_description)
 def test_spot_joint_controller(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
 
     simple_spot.api.GetRobotStateStream.future.returns(itertools.repeat(zero_robot_state_stream_response()))
 

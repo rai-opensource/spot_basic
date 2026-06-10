@@ -1,22 +1,12 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
-import functools
-from collections.abc import Sequence
 from typing import Any, Callable, Dict, Optional, Protocol, Type, TypeVar, Union
 
-from bosdyn_api_msgs.msg import RobotCommandFeedback
 from bosdyn_msgs.conversions import convert
-from rclpy.action.client import ActionClient
-from rclpy.client import Client
-from rclpy.context import Context
 from synchros2.action import Actionable, ActionableProtocol, ActionFuture
-from synchros2.action_handle import ActionHandle
 from synchros2.futures import FutureLike
 from synchros2.service import Serviced, ServicedProtocol
-from synchros2.service_handle import ServiceHandle
 from synchros2.utilities import namespace_with
-
-from bdai.deprecation import deprecated
 
 
 class MessageProtocol(Protocol):
@@ -133,169 +123,6 @@ class SpotActionable(Actionable[ActionGoalT, ActionResultT, ActionFeedbackT]):
     ) -> ActionFuture[ActionResultT, ActionFeedbackT]:
         goal = make_message(self.action_type.Goal, *args, **kwargs)
         return super().asynchronous(goal, track_feedback=track_feedback)
-
-
-@deprecated(
-    reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-    alternative="spot_basic.utilities.SpotServiced",
-)
-class SpotServiceHandle(ServiceHandle):
-    """Extends legacy ServiceHandle for spot specific services"""
-
-    @classmethod
-    def call(
-        cls,
-        robot_name: str,
-        service_name: str,
-        client: Client,
-        request: Optional[Any] = None,
-        result_callback: Optional[Callable] = None,
-        on_failure_callback: Optional[Callable] = None,
-        context: Optional[Context] = None,
-    ) -> "SpotServiceHandle":
-        """Call service asynchronously.
-
-        Args:
-            robot_name: name of the robot.
-            service_name: name of the service.
-            client: service client instance.
-            request: optional service request, will fallback to
-            a default initialized request if none is provided.
-            result_callback: optional service result callback.
-            on_failure_callback: optional service failure callback.
-            context: optional context, will default to the global
-            context if none is provided.
-
-        Returns:
-            a service handle.
-        """
-        handle = cls(robot_name, service_name, context=context)
-        if result_callback is not None:
-            handle.set_result_callback(result_callback)
-        if on_failure_callback is not None:
-            handle.set_on_failure_callback(on_failure_callback)
-        if request is None:
-            request = client.srv_type.Request()
-        handle.set_send_service_future(client.call_async(request))
-        return handle
-
-    def __init__(self, robot_name: str, service_name: str, *args: Any, **kwargs: Any) -> None:
-        """ """
-        super().__init__(f"{robot_name}.{service_name}", *args, **kwargs)
-
-
-@deprecated(
-    reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-    alternative="spot_basic.utilities.SpotActionable",
-)
-class SpotActionHandle(ActionHandle):
-    """Extends legacy ActionHandle for spot specific actions"""
-
-    @classmethod
-    def call(
-        cls,
-        robot_name: str,
-        action_name: str,
-        action_client: ActionClient,
-        goal: Any,
-        result_callback: Optional[Callable[[Any], None]] = None,
-        feedback_callback: Optional[Callable[[Any], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-        context: Optional[Context] = None,
-    ) -> "SpotActionHandle":
-        """Call action asynchronously.
-
-        Args:
-            robot_name: name of the robot.
-            action_name: name of the action.
-            action_client: action client instance.
-            goal: action goal.
-            result_callback: optional action result callback.
-            feedback_callback: optional action feedback callback.
-            on_failure_callback: optional action failure callback.
-            context: optional context, will default to the global
-            context if none is provided.
-
-        Returns:
-            an action handle.
-        """
-        handle = cls(robot_name, action_name, context=context)
-        if result_callback is not None:
-            handle.set_result_callback(result_callback)
-        if on_failure_callback is not None:
-            handle.set_on_failure_callback(on_failure_callback)
-        if feedback_callback is not None:
-            handle.set_feedback_callback(feedback_callback)
-            feedback_callback = handle.get_feedback_callback
-        send_goal_future = action_client.send_goal_async(goal, feedback_callback=feedback_callback)
-        handle.set_send_goal_future(send_goal_future)
-        return handle
-
-    def __init__(self, robot_name: str, action_name: str, *args: Any, **kwargs: Any):
-        """Initializes `SpotActionHandle`.
-
-        Args:
-            robot_name: name of the robot.
-            action_name: name of the action.
-            args: positional arguments for base class.
-            kwargs: keyword arguments for base class.
-        """
-        super().__init__(f"{robot_name}.{action_name}", *args, **kwargs)
-        self._result_callback = self._result_callback_intermediate
-        self._result_callback_internal: Optional[Callable[[Any], None]] = None
-        self._result_internal: Optional[Any] = None
-        self._feedback_callback = self._feedback_callback_intermediate
-        self._feedback_callback_internal: Optional[Callable[[Any], None]] = None
-
-    @property
-    def result(self) -> Optional[Any]:
-        return self._result_internal
-
-    def set_result_callback(self, result_callback: Callable[[Any], None]) -> None:
-        """Sets the callback for processing the result from executing an Action"""
-        self._result_callback_internal = result_callback
-
-    def _result_callback_intermediate(self, result: Any) -> None:
-        """Callback for pulling the result out of the result and passing it to a user provided callback"""
-        if not result.success:
-            self._logger.error(f"Action resulted in failure. Msg: {result.message}")
-            self._failure()
-            return
-
-        self._result_internal = result.result
-        if self._result_callback_internal is not None:
-            self._result_callback_internal(self._result_internal)
-
-    def set_feedback_callback(self, feedback_callback: Callable[[Any], None]) -> None:
-        """Sets the callback for processing the feedback during execution of an Action"""
-        self._feedback_callback_internal = feedback_callback
-
-    def _feedback_callback_intermediate(self, feedback: Any) -> None:
-        """Intermediate step to pull the feedback out of the feedback"""
-        if self._feedback_callback_internal is not None:
-            self._feedback_callback_internal(feedback.feedback)
-
-
-class RobotComposeCommandHandle(object):
-    """Handle for sequentially composing multiple asynchronous RobotCommand sent via an action client"""
-
-    def __init__(
-        self, actions: Sequence[functools.partial], result_callback: Optional[Callable[[RobotCommandFeedback], None]]
-    ) -> None:
-        self._index = 0
-        self._number_actions = len(actions)
-        self._action_list = list(actions)
-        self._result_callback = result_callback
-        self._action_list[self._index].keywords["result_callback"] = self.result_callback
-        self._action_list[self._index]()
-
-    def result_callback(self, feedback: RobotCommandFeedback) -> None:
-        if self._index < self._number_actions - 1:
-            self._index += 1
-            self._action_list[self._index].keywords["result_callback"] = self.result_callback
-            self._action_list[self._index]()
-        elif self._result_callback is not None:
-            self._result_callback(feedback)
 
 
 def spot_namespaced(robot_name: Optional[str], name: str, *topic_segments: str) -> str:

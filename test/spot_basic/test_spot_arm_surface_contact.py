@@ -35,6 +35,7 @@ def _create_dummy_args() -> list[Any]:
 @pytest.mark.launch(fixture=pytest.simple_spot_without_arm_graph_description)
 def test_with_no_arm(simple_spot_without_arm: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot_without_arm.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
 
     with pytest.raises(RuntimeError):
         spot_interface.arm_surface_contact.synchronously(*_create_dummy_args())
@@ -43,7 +44,9 @@ def test_with_no_arm(simple_spot_without_arm: SpotFixture, ros: ROSAwareScope) -
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_arm_surface_contact(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     command_response = ArmSurfaceContactResponse()
     # Check this runs asynchronously by first calling and then serving the response

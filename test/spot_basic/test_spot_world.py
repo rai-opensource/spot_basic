@@ -16,7 +16,9 @@ from synchros2.scope import ROSAwareScope
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_world_inspection(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     expected_world_object = WorldObject(id=1234)
     expected_apriltag_properties = expected_world_object.apriltag_properties

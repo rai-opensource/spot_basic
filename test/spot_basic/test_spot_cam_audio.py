@@ -21,6 +21,7 @@ from synchros2.scope import ROSAwareScope
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_sound_management(test_data_path: pathlib.Path, simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
 
     with spot_interface.lease():
         # Load a sound
@@ -75,6 +76,7 @@ def test_sound_management(test_data_path: pathlib.Path, simple_spot: SpotFixture
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_volume_control(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
 
     with spot_interface.lease():
         assert spot_interface.set_volume.wait_for_service(timeout_sec=pytest.DEFAULT_TIMEOUT)

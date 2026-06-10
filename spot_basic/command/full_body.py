@@ -7,20 +7,16 @@ from bosdyn.api import full_body_command_pb2, robot_command_pb2
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.client.math_helpers import SE3Pose
 from bosdyn.client.robot_command import RobotCommandBuilder
-from bosdyn_api_msgs.conversions import convert
-from bosdyn_api_msgs.msg import RobotCommandFeedback
 from spatialmath import SE3
 from spot_basic.command import SpotCommandBuilder, SpotCommandProtocol
 from spot_basic.command.arm import SpotArmCommandBuilder
 from spot_basic.command.gripper import SpotGripperCommandBuilder
 from spot_basic.command.mobility import SpotMobilityCommandBuilder
 from spot_basic.state import ArmJointMap
-from spot_basic.utilities import SpotActionableProtocol, SpotActionHandle
+from spot_basic.utilities import SpotActionableProtocol
 from spot_msgs.action import RobotCommand as RobotCommandAction
 from synchros2.action import ActionFuture
 from synchros2.callables import GeneralizedMethodLike, generalized_method
-
-from bdai.deprecation import deprecated
 
 
 class BatteryChangeDirHint(IntEnum):
@@ -225,48 +221,6 @@ class SpotFullBodyCommandMixin(SpotCommandProtocol):
         See `SpotFullBodyCommandProtocol.SelfRightProtocol` for further reference.
         """
 
-    @self_right.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.self_right.synchronously",
-    )
-    def _legacy_self_right(self, timeout_sec: float = 5.0) -> bool:
-        """Make the robot self right."""
-        response = self.self_right.synchronously(timeout_sec=timeout_sec, nothrow=True)
-        return response is not None and response.success
-
-    def rollover(self, timeout_sec: float = 5.0) -> Optional[RobotCommandFeedback]:
-        """Make the robot rollover (ie. self right)."""
-        response = self.self_right.synchronously(timeout_sec=timeout_sec, nothrow=True)
-        if response is None or not response.success:
-            return None
-        return response.result
-
-    def rollover_async(
-        self,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[SpotActionHandle]:
-        """Treats rollover (self righting) as an action instead of a service and asynchronously executes it
-
-        Args:
-          result_callback: A callback to process/handle the resulting feedback from executing the command
-          feedback_callback: A callback to process/handle the feedback received during the execution of the command
-          on_failure_callback: A callback to process/handle when the action fails for various reasons
-        """
-        command_builder = SpotFullBodyCommandBuilder(self)
-        command = command_builder.self_right_command()
-        goal = RobotCommandAction.Goal()
-        convert(command, goal.command)
-        return self.command_async(
-            "rollover_async",
-            goal,
-            result_callback=result_callback,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )
-
     @generalized_method(spec=GeneralizedMethodLike[SpotFullBodyCommandProtocol.RollToBatteryChangePoseProtocol])
     def roll_to_battery_change_pose(
         self, direction_hint: BatteryChangeDirHint = BatteryChangeDirHint.RIGHT, **kwargs: Any
@@ -276,54 +230,4 @@ class SpotFullBodyCommandMixin(SpotCommandProtocol):
         See `SpotFullBodyCommandProtocol.RollToBatteryChangePoseProtocol` for further reference.
         """
 
-    @roll_to_battery_change_pose.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.roll_to_battery_change_pose.synchronously",
-    )
-    def _legacy_roll_to_battery_change_pose(
-        self, dir_hint: BatteryChangeDirHint = BatteryChangeDirHint.RIGHT, timeout_sec: Optional[float] = None
-    ) -> Optional[RobotCommandFeedback]:
-        """Make the robot roll to its battery change pose.
-
-        Args:
-            dir_hint: A hint for the direction to roll.
-        """
-        response = self.roll_to_battery_change_pose.synchronously(dir_hint, timeout_sec=timeout_sec, nothrow=True)
-        if response is None or not response.success:
-            return None
-        return response.result
-
     go_to_battery_change_pose = roll_to_battery_change_pose
-
-    def go_to_battery_change_pose_async(
-        self,
-        dir_hint: BatteryChangeDirHint = BatteryChangeDirHint.RIGHT,
-        *,
-        result_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        feedback_callback: Optional[Callable[[RobotCommandFeedback], None]] = None,
-        on_failure_callback: Optional[Callable[[], None]] = None,
-    ) -> Optional[SpotActionHandle]:
-        """Send command to go to battery change pose asynchronously.
-
-        Args:
-            dir_hint: A hint for the direction to roll
-            result_callback: A callback to process/handle the resulting feedback from executing the command
-            feedback_callback: A callback to process/handle the feedback received during the execution of the command
-            on_failure_callback: A callback to process/handle when the action fails for various reasons
-
-        Returns:
-            The feedback from the SpotDriver about the result of the command if it was accepted and a result was
-                successfully received, None otherwise
-        """
-        command_builder = SpotFullBodyCommandBuilder(self)
-        command = command_builder.roll_to_battery_change_pose_command(dir_hint)
-        goal = RobotCommandAction.Goal()
-        convert(command, goal.command)
-        return self.command_async(
-            "go_to_battery_change_pose",
-            goal,
-            result_callback=result_callback,
-            feedback_callback=feedback_callback,
-            on_failure_callback=on_failure_callback,
-        )

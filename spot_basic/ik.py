@@ -4,14 +4,11 @@ from typing import Any, Optional, Protocol, Union, overload
 
 import bosdyn_spot_api_msgs.msg
 from bosdyn.api.spot import inverse_kinematics_pb2
-from bosdyn_api_msgs.conversions import convert
 from spot_basic.base import SpotBaseProtocol
 from spot_basic.utilities import SpotServiced, SpotServicedProtocol, spot_namespaced
 from spot_msgs.srv import GetInverseKinematicSolutions
 from synchros2.callables import GeneralizedMethodLike, generalized_method
 from synchros2.futures import FutureLike
-
-from bdai.deprecation import deprecated
 
 
 class SpotIKProtocol(SpotBaseProtocol, Protocol):
@@ -120,33 +117,3 @@ class SpotIKMixin(SpotBaseProtocol):
 
         See `SpotIKProtocol.IKSolutionsProtocol` for further reference.
         """
-
-    @get_inverse_kinematic_solutions.legacy
-    @deprecated(
-        reason="Legacy SpotBasic APIs are deprecated. Please use the new API instead.",
-        alternative="spot_basic.SpotBasic.get_inverse_kinematic_solutions.synchronously",
-    )
-    def _legacy_get_inverse_kinematic_solutions(
-        self, ik_request: inverse_kinematics_pb2.InverseKinematicsRequest
-    ) -> Optional[inverse_kinematics_pb2.InverseKinematicsResponse]:
-        """Query an IK solution for a given pose.
-
-        This is a legacy interface and implementation.
-        It will eventually be deprecated.
-        Its usage is discouraged.
-
-        Args:
-            ik_request: IK solution request.
-
-        Returns:
-            A solution to the IK query, if any.
-        """
-        self.node.get_logger().info(f"Query IK solutions on {self.robot_name}")
-        request = GetInverseKinematicSolutions.Request()
-        convert(ik_request, request.request)
-        response = self.get_inverse_kinematic_solutions.synchronously(request, nothrow=True)
-        if response is None:
-            return None
-        proto_response = inverse_kinematics_pb2.InverseKinematicsResponse()
-        convert(response.response, proto_response)
-        return proto_response

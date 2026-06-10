@@ -25,6 +25,7 @@ from synchros2.utilities import ensure
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_clear_graph(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
 
     with spot_interface.lease():
         future = spot_interface.clear_graph.asynchronously()
@@ -41,6 +42,7 @@ def test_clear_graph(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_upload_graph(tmp_path: pathlib.Path, simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
 
     almost_empty_graph = Graph()
     waypoint = almost_empty_graph.waypoints.add()
@@ -74,6 +76,7 @@ def test_upload_graph(tmp_path: pathlib.Path, simple_spot: SpotFixture, ros: ROS
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_get_localization(tmp_path: pathlib.Path, simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
 
     with spot_interface.lease():
         localization = Localization()
@@ -103,6 +106,7 @@ def test_get_localization(tmp_path: pathlib.Path, simple_spot: SpotFixture, ros:
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_set_localization(tmp_path: pathlib.Path, simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
     with spot_interface.lease():
         simple_spot.api.DownloadGraph.future.returns(DownloadGraphResponse(graph=Graph())).forever()
         future = spot_interface.set_localization.asynchronously(method="fiducial")
@@ -119,6 +123,7 @@ def test_set_localization(tmp_path: pathlib.Path, simple_spot: SpotFixture, ros:
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_list_graph(tmp_path: pathlib.Path, simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
 
     graph = Graph()
     waypoint = graph.waypoints.add()
@@ -155,6 +160,7 @@ def test_list_graph(tmp_path: pathlib.Path, simple_spot: SpotFixture, ros: ROSAw
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_navigate_to(tmp_path: pathlib.Path, simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
 
     with spot_interface.lease():
         action = spot_interface.navigate_to_waypoint.asynchronously("wp-0")

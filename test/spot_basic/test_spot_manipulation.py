@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 from bosdyn.api import manipulation_api_pb2
-from bosdyn.api.manipulation_api_pb2 import ApiGraspOverride
+from bosdyn.api.manipulation_api_pb2 import ApiGraspOverride, ApiGraspOverrideResponse
 from bosdyn.api.robot_state_pb2 import ManipulatorState
 from bosdyn_api_msgs.msg import ManipulationFeedbackState
 from sensor_msgs.msg import CameraInfo
@@ -17,7 +17,9 @@ from synchros2.scope import ROSAwareScope
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_generic_manipulation(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     tag_frame_name = "tag36h11:530"
     manipulation_request = manipulation_api_pb2.ManipulationApiRequest()
@@ -50,7 +52,9 @@ def test_generic_manipulation(simple_spot: SpotFixture, ros: ROSAwareScope) -> N
 @pytest.mark.launch(fixture=pytest.simple_spot_without_arm_graph_description)
 def test_generic_manipulation_with_no_arm(simple_spot_without_arm: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot_without_arm.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     dummy_manipulation_command = manipulation_api_pb2.ManipulationApiRequest()
     with pytest.raises(RuntimeError):
@@ -60,7 +64,9 @@ def test_generic_manipulation_with_no_arm(simple_spot_without_arm: SpotFixture, 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_pick_object_in_image(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     image_pixel = [10, 10]
     camera_info = CameraInfo()
@@ -107,7 +113,9 @@ def test_pick_object_in_image(simple_spot: SpotFixture, ros: ROSAwareScope) -> N
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_walk_to_object_in_image(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     image_pixel = [40, 20]
     camera_info = CameraInfo()
@@ -158,7 +166,9 @@ def test_walk_to_object_in_image(simple_spot: SpotFixture, ros: ROSAwareScope) -
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_pick_object_ray_in_world(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     ray_start = np.array([0.0, 0.0, 0.0])
     ray_end = np.array([-1.0, -1.0, -1.0])
@@ -207,7 +217,9 @@ def test_pick_object_ray_in_world(simple_spot: SpotFixture, ros: ROSAwareScope) 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_walk_to_object_ray_in_world(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     ray_start = np.array([0.0, 0.0, 0.0])
     ray_end = np.array([1.0, 1.0, -1.0])
@@ -252,7 +264,9 @@ def test_walk_to_object_ray_in_world(simple_spot: SpotFixture, ros: ROSAwareScop
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
 def test_override_grasp_or_carry(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
-    assert spot_interface.initialize_robot()
+    assert spot_interface.wait_for_servers()
+    assert spot_interface.claim.synchronously().success
+    assert spot_interface.power_on.synchronously().success
 
     future = spot_interface.override_grasp_or_carry.asynchronously(
         ApiGraspOverride.Override.OVERRIDE_HOLDING, ManipulatorState.CarryState.CARRY_STATE_CARRIABLE
@@ -268,3 +282,13 @@ def test_override_grasp_or_carry(simple_spot: SpotFixture, ros: ROSAwareScope) -
     result = future.result()
 
     assert result.success, result.message
+
+
+@pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
+def test_spot_override_grasp_or_carry(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
+    spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
+    assert spot_interface.wait_for_servers()
+    api_response = ApiGraspOverrideResponse()
+    simple_spot.api.OverrideGrasp.future.returns(api_response)
+    response = spot_interface.override_grasp_or_carry.synchronously(grasp_override=2, carry_override=2)
+    assert response.success
