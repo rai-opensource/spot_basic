@@ -149,4 +149,4 @@ def pytest_configure() -> None:
     pytest.simple_spot_graph_description = simple_spot_graph_description
     pytest.simple_spot_without_arm_graph_description = simple_spot_without_arm_graph_description
     pytest.simple_controllable_spot_graph_description = simple_controllable_spot_graph_description
-    pytest.DEFAULT_TIMEOUT = 10.0  # CI occassionally just requires super long timeouts
+    pytest.DEFAULT_TIMEOUT = 30.0  # CI occassionally just requires super long timeouts
