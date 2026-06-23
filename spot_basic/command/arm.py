@@ -1189,6 +1189,8 @@ class SpotArmCommandMixin(SpotCommandProtocol):
         See `SpotArmCommandProtocol.MoveEndEffectorAlongTrajectoryProtocol` for further reference.
         """
 
+    move_end_effector_cartesian_trajectory = move_end_effector_along_trajectory
+
     @generalized_method(
         spec=GeneralizedMethodLike[SpotArmCommandProtocol.MoveEndEffectorWithControlledImpedanceProtocol]
     )
