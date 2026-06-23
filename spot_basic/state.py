@@ -188,6 +188,7 @@ class SpotStateMixin(SpotBaseProtocol):
         self.wrist_frame_name = namespace_with(self.robot_name, FrameHint.WRIST.value)
         self.vision_frame_name = namespace_with(self.robot_name, FrameHint.VISION.value)
         self.odom_frame_name = namespace_with(self.robot_name, FrameHint.ODOM.value)
+        self.grav_aligned_frame_name = namespace_with(self.robot_name, FrameHint.GRAV_ALIGNED_BODY)
 
     def set_tf_listener(self, tf_listener: TFListenerWrapper) -> None:
         """Attach a TFListenerWrapper instance to the robot.
