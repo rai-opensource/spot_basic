@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<!-- Copyright (c) 2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved. -->
+
+<dds xmlns="http://www.eprosima.com">
+    <profiles>
+        <publisher profile_name="service">
+            <qos>
+                <reliability>
+                    <max_blocking_time>
+                        <sec>5</sec>
+                    </max_blocking_time>
+                </reliability>
+            </qos>
+        </publisher>
+    </profiles>
+</dds>

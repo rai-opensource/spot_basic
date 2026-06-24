@@ -1,0 +1,17 @@
+# Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
+
+/**:
+  ros__parameters:
+    robot_state_rate: 30.0
+    metrics_rate: 0.04
+    lease_rate: 1.0
+    image_rate: 15.0
+    auto_claim: False
+    auto_power_on: False
+    auto_stand: False
+    deadzone: 0.05
+    estop_timeout: 9.0
+    start_estop: True
+    cmd_duration: 0.25
+    publish_graph_nav_pose: true
+    initialize_spot_cam: true
