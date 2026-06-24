@@ -235,7 +235,7 @@ class SpotArmSurfaceContactProtocol(SpotBaseProtocol, Protocol):
                 follow_hand: True to have the body follow the hand
                 feedback_callback: Optional action feedback callback (note that there is not as of this writing
                     feedback sent out for this action as there is no feedback on the spot side).
-                timeout_sec: Pptional action timeout, in seconds. If a timeout is specified and it expires, the
+                timeout_sec: Optional action timeout, in seconds. If a timeout is specified and it expires, the
                     request will be cancelled and the call will raise. Note this timeout is local to the caller. It may
                     take some time for the action to be cancelled, if cancellation is not rejected by the action server.
                 nothrow: True to return the result instead of throwing an exception if the action does not complete

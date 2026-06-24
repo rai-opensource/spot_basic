@@ -158,7 +158,7 @@ Note how the `SpotCustomCommandProtocol.DoSomethingProtocol` stub class makes th
 
 ## Adding a new action
 
-The above discusses how to expose a new capability of an existing action. If we actually need to add a new action (corresponding usually to a new Spot gRPC service), a tutorial for that can be found in [Adding an action to `SpotBasic`](../spot_basic/AddingActionToSpotBasicTutorial.md).
+The above discusses how to expose a new capability of an existing action. If we actually need to add a new action (corresponding usually to a new Spot gRPC service), a tutorial for that can be found in [Adding an action to `SpotBasic`](adding_an_action.md).
 
 ## Exposing a state stream
 
