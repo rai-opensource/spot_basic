@@ -1,0 +1,24 @@
+# Source dependencies for spot_basic.
+#
+# Import into the src/ folder of a colcon workspace with:
+#
+#   vcs import --recursive src < spot_basic.repos
+#
+# NOTE: spot_ros2 vendors synchros2 and spot_wrapper as git submodules, so they
+# are intentionally NOT listed here
+#
+# Then resolve binary/system dependencies and build:
+#
+#   rosdep install --from-paths src --ignore-src -r -y
+#   pip install -r src/spot_basic/requirements.txt
+#   colcon build
+
+repositories:
+  spot_ros2:
+    type: git
+    url: https://github.com/rai-opensource/spot_ros2.git
+    version: main
+  bosdyn_msgs:
+    type: git
+    url: https://github.com/rai-opensource/bosdyn_msgs.git
+    version: main
