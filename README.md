@@ -132,7 +132,7 @@ More runnable scripts live in [`examples/`](examples).
 |-------|----------|
 | [Using `SpotBasic`](docs/using_spot_basic.md) | Executing commands, querying state, and capturing video. |
 | [Extending `SpotBasic`](docs/extending_spot_basic.md) | Adding commands, actions, state streams, and joint-level control. |
-| [Adding an action](spot_basic/AddingActionToSpotBasicTutorial.md) | Step-by-step tutorial for wiring up a brand-new action. |
+| [Adding an action](docs/adding_an_action.md) | Step-by-step tutorial for wiring up a brand-new action. |
 
 You can also explore the [`spot_basic`](spot_basic) package, the [`examples/`](examples), and the [tests](test/spot_basic) directly.
 

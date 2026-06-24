@@ -1,15 +1,19 @@
-# Adding a New Action to Spot Basic
+<!-- Copyright (c) 2025-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved. -->
 
-In this tutorial we will add an action to SpotBasic to show how the underlying concepts and especially `GeneralizedCallables` work.
+# Adding a new action to `SpotBasic`
+
+[← Back to the README](../README.md)
+
+In this tutorial we will add an action to `SpotBasic` to show how the underlying concepts -- and especially [generalized callables](https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/callables.py) -- work.
 
 The complete code for this tutorial is shown inline below.
 
-# Create an Action Definition and Server
+## Create an action definition and server
 
 Normally the server will have been written already (usually as a part of spot ros2 and eventually communicating via a protobuf to the Spot robot).  However, for example purposes we’re going to create a custom server that just prints numbers every second for N seconds.  We will arbitrarily and for no reason other than pedagogical assume that this action can only be called when the Spot robot has an arm.  This tutorial will not focus on how this action works - for an introduction to actions in ROS2 see [here](https://docs.ros.org/en/humble/Tutorials/Intermediate/Creating-an-Action.html).
 
 1. Create the action definition:
-    1. Add the following to a new file `spot_basic_msgs/action/Count.action` (in a custom interfaces package):
+    1. Add the following to a new file `spot_msgs/action/Count.action` (in the `spot_msgs` interfaces package, which is part of spot_ros2):
 
         ```bash
         # Goal
@@ -21,7 +25,7 @@ Normally the server will have been written already (usually as a part of spot ro
 
         ```
 
-    2. Add the new action to `spot_basic_msgs/CMakeLists.txt`:
+    2. Add the new action to `spot_msgs/CMakeLists.txt`:
 
         ```makefile
         ...
@@ -43,7 +47,7 @@ Normally the server will have been written already (usually as a part of spot ro
     import synchros2.process as ros_process
     from rclpy.action.server import ServerGoalHandle
     from spot_basic.utilities import spot_namespaced
-    from spot_basic_msgs.action import Count
+    from spot_msgs.action import Count
     from synchros2.single_goal_action_server import SingleGoalActionServer
 
     def _count_callback(goal_handle: ServerGoalHandle) -> Count.Result:
@@ -90,11 +94,11 @@ Normally the server will have been written already (usually as a part of spot ro
     ```
 
 
-# SpotBasic Code and Running
+## SpotBasic code and running
 
 Let’s first write and run the code that calls this action server from Spot Basic and then we’ll analyze it.
 
-## Code
+### Code
 
 Copy the following into `spot_basic/count.py`:
 
@@ -111,7 +115,7 @@ from spot_basic.utilities import (
     SpotActionableProtocol,
 )
 from spot_basic.utilities import spot_namespaced
-from spot_basic_msgs.action import Count as CountAction
+from spot_msgs.action import Count as CountAction
 from synchros2.action import ActionFuture
 from synchros2.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
 
@@ -141,7 +145,7 @@ class SpotCountProtocol(SpotBaseProtocol, Protocol):
                 n_seconds: The number of seconds the action should run for
                 feedback_callback: Optional action feedback callback (note that there is not as of this writing
                     feedback sent out for this action as there is no feedback on the spot side).
-                timeout_sec: Pptional action timeout, in seconds. If a timeout is specified and it expires, the
+                timeout_sec: Optional action timeout, in seconds. If a timeout is specified and it expires, the
                     request will be cancelled and the call will raise. Note this timeout is local to the caller. It may
                     take some time for the action to be cancelled, if cancellation is not rejected by the action server.
                 nothrow: True to return the result instead of throwing an exception if the action does not complete
@@ -242,7 +246,7 @@ from spot_basic import SpotBasic
 
 def cli() -> argparse.ArgumentParser:
     """Command-line interface."""
-    parser = argparse.ArgumentParser(description="Use arm surface contact to draw a square")
+    parser = argparse.ArgumentParser(description="Count for a number of seconds using SpotBasic")
     parser.add_argument("robot_name", help="Name of robot to use")
     parser.add_argument(
         "-n",
@@ -271,17 +275,17 @@ if __name__ == "__main__":
 
 ```
 
-## Running
+### Running
 
 Everything should be done from within your ROS 2 workspace (with the workspace sourced):
 
 1. First build the necessary packages (note: this may take a while):
 
     ```bash
-    colcon build --packages-select spot_basic_msgs spot_basic
+    colcon build --packages-select spot_msgs spot_basic
     ```
 
-2. First start the Spot ROS 2 driver since that needs to run for spot basic to be created (see the [spot_ros2](https://github.com/rai-opensource/spot_ros2) documentation for driver launch instructions):
+2. Start the Spot ROS 2 driver, since it needs to run for `SpotBasic` to be created (see the [`spot_ros2`](https://github.com/rai-opensource/spot_ros2) documentation for driver launch instructions):
 
     ```bash
     ros2 launch spot_driver spot_driver.launch.py
@@ -303,7 +307,7 @@ Everything should be done from within your ROS 2 workspace (with the workspace s
 
 You should see the prints from the script and also prints in the count server terminal.
 
-# Analyzing the Code
+## Analyzing the code
 
 The Spot Basic code is a little complicated because we want to easily be able to create these synchronous and asynchronous calls without having to rewrite that logic every time.  You could imagine the following class:
 
@@ -318,7 +322,7 @@ class SpotCountMixin:
         self,
         n_seconds: int,
         *,
-        feedback_callback: Optional[Callable[[ArmSurfaceContactAction.Feedback], None]] = None,
+        feedback_callback: Optional[Callable[[CountAction.Feedback], None]] = None,
         timeout_sec: Optional[float] = None,
         nothrow: bool = False,
     ) -> CountAction.Result:
@@ -349,7 +353,7 @@ All `GeneralizedCallable` objects have `synchronous` and `asynchronous` function
         """
 ```
 
-A generalized method is just a class that takes another class with `synchronous` and `asynchronous` defined and forwards calls to those functions.  We have this in the form of a [`SpotActionable`](utilities.py):
+A generalized method is just a class that takes another class with `synchronous` and `asynchronous` defined and forwards calls to those functions.  We have this in the form of a [`SpotActionable`](../spot_basic/utilities.py):
 
 ```python
         # This creates the action client, which already supports synchronous and asynchronous calls and then tells it
@@ -357,7 +361,7 @@ A generalized method is just a class that takes another class with `synchronous`
         implementation = SpotActionable(CountAction, spot_namespaced(self.robot_name, "count"), node=self.node)
 ```
 
-A [`SpotActionable`](utilities.py) is a wrapper around synchros2’s [`Actionable`](https://github.com/rai-opensource/synchros2/blob/bbe365dfafef15e9a6379246f801aca4d90a932b/synchros2/synchros2/action.py#L451) class, which handles synchronous and asynchronous calls to ROS actions in a way that won’t lead to deadlocks.  The Spot wrapper allows us to pass in either an action goal or the corresponding protobuf (not necessary for this example but usually necessary when dealing with Spot).
+A [`SpotActionable`](../spot_basic/utilities.py) is a wrapper around synchros2’s [`Actionable`](https://github.com/rai-opensource/synchros2/blob/bbe365dfafef15e9a6379246f801aca4d90a932b/synchros2/synchros2/action.py#L451) class, which handles synchronous and asynchronous calls to ROS actions in a way that won’t lead to deadlocks.  The Spot wrapper allows us to pass in either an action goal or the corresponding protobuf (not necessary for this example but usually necessary when dealing with Spot).
 
 However, `SpotActionable` requires that we pass it an action goal (or the equivalent protobuf) but we don’t want people to have to pass in the full action goal - the point of Spot Basic is to allow users to use nice function calls instead.  That’s what the `compose` call does - it tells the `SpotActionable` (which inherits from [`Actionable`](https://github.com/rai-opensource/synchros2/blob/bbe365dfafef15e9a6379246f801aca4d90a932b/synchros2/synchros2/action.py#L451) which inherits from [`ComposedCallable`](https://github.com/rai-opensource/synchros2/blob/bbe365dfafef15e9a6379246f801aca4d90a932b/synchros2/synchros2/callables.py#L107) which allows composition) to first call `_build_count`, which returns the action goal, and then call the `SpotActionable` functions:
 
@@ -407,74 +411,6 @@ Let’s put all this together by tracing what happens when we call `spot.count.s
 3. `implementation` is a `SpotActionable` composed with `_build_count_command` .  So, because of the composition, it first calls `_build_count_command(n_seconds)` and then sends the output of that (a `CountAction.Goal`) to `SpotActionable.synchronous`
 4. `SpotActionable.synchronous` calls the underlying `Actionable.synchronous` which sends the goal to the action and waits for it to return.
 
-You may have noticed that at no point in the above analysis did we ever reference the big long `SpotCountProtocol` class:
-
-```python
-class SpotCountProtocol(SpotBaseProtocol, Protocol):
-    """Counting protocol."""
-
-    class PerformProtocol(
-        SpotActionableProtocol[CountAction.Goal, CountAction.Result, CountAction.Feedback],
-        Protocol,
-    ):
-        """Counting request execution protocol."""
-
-        def synchronous(
-            self,
-            n_seconds: int,
-            *,
-            feedback_callback: Optional[Callable[[CountAction.Feedback], None]] = None,
-            timeout_sec: Optional[float] = None,
-            nothrow: bool = False,
-        ) -> CountAction.Result:
-            """Counting request synchronously.
-
-            Args:
-                n_seconds: The number of seconds the action should run for
-                feedback_callback: Optional action feedback callback (note that there is not as of this writing
-                    feedback sent out for this action as there is no feedback on the spot side).
-                timeout_sec: Pptional action timeout, in seconds. If a timeout is specified and it expires, the
-                    request will be cancelled and the call will raise. Note this timeout is local to the caller. It may
-                    take some time for the action to be cancelled, if cancellation is not rejected by the action server.
-                nothrow: True to return the result instead of throwing an exception if the action does not complete
-                    successfully.
-
-            Returns:
-                The counting result.
-
-            Raises:
-                ActionTimeout: if the count request timed out.
-                ActionRejected: if the count request was not accepted.
-                ActionCancelled: if the count request was cancelled.
-                ActionAborted: if the count request was aborted.
-                RuntimeError: if the robot has no arm.
-            """
-
-        def asynchronous(
-            self,
-            n_seconds: int,
-            *,
-            track_feedback: Union[int, bool] = False,
-        ) -> ActionFuture[CountAction.Result, CountAction.Feedback]:
-            """Perform count request asynchronously.
-
-            See "synchronous" for an explanation of the count arguments.
-
-            Args:
-                track_feedback: whether and how to track action feedback. Other than a boolean to enable or disable
-                    tracking, a positive integer may be provided to cap feedback buffer size.
-
-            Returns:
-                The future counting outcome.
-
-            Raises:
-                RuntimeError: if the robot has no arm.
-            """
-
-    count: GeneralizedMethodLike[PerformProtocol]
-
-```
-
-This class isn’t functional!  It’s here for type hinting and good documentation.
+You may have noticed that at no point in the above analysis did we ever reference the big long `SpotCountProtocol` class shown in the `count.py` snippet above. That class isn’t functional! It exists purely for type hinting and documentation -- it makes the `n_seconds` argument and the `synchronous`/`asynchronous` signatures explicit to both static analyzers and human readers.
 
 The other thing you might have noticed is that we call `asynchronously` and `synchronously` instead of `asynchronous` and `synchronous`.  These are aliased at the very top of [`GeneralizedCallable`](https://github.com/rai-opensource/synchros2/blob/bbe365dfafef15e9a6379246f801aca4d90a932b/synchros2/synchros2/callables.py#L61) so that `asynchronously` calls `asynchronous` and `synchronously` calls `synchronous`.  We tend to prefer the adverb for actions because it’s grammatically correct.
