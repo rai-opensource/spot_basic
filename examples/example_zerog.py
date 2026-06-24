@@ -23,7 +23,7 @@ class ZeroGravityExample:
         with self._robot.leash():
             self._robot.ready_arm.synchronously()
             self._logger.info("Attempting to set arm in zero gravity mode")
-            self._robot.zero_g.synchronously()
+            self._robot.arm_zero_g.synchronously()
             self._logger.info("Arm is in zero gravity mode")
             ros_process.wait_for_interrupt()
             return 0

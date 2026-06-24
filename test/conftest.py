@@ -11,8 +11,11 @@
 # warning that we want disabled.
 # pylint: disable=redefined-outer-name
 
+import math
 import os
 import pathlib
+import struct
+import wave
 from typing import Callable, Iterator
 
 import domain_coordinator
@@ -30,8 +33,6 @@ from spot_wrapper.testing.fixtures import SpotFixture
 from spot_wrapper.testing.mocks import MockSpot
 from synchros2.launch.actions import update_sigterm_sigkill_timeout
 from synchros2.scope import ROSAwareScope
-
-from bdai_core.os.path import get_bdai_data_path
 
 TEST_PATH = pathlib.Path(__file__).parent
 os.environ.update(
@@ -142,7 +143,30 @@ def simple_controllable_spot_graph_description(
 
 @pytest.fixture(scope="session")
 def test_data_path() -> pathlib.Path:
-    return pathlib.Path(get_bdai_data_path()) / "bdai" / "spot_utilities" / "test_data"
+    return TEST_PATH / "data"
+
+
+@pytest.fixture(scope="session")
+def tone_wav_path(tmp_path_factory: pytest.TempPathFactory) -> pathlib.Path:
+    """Synthesize a short sine-wave WAV file for sound tests.
+
+    Generating the audio at runtime avoids committing a binary asset to the repository.
+    """
+    framerate = 44100
+    duration_sec = 0.25
+    frequency_hz = 440.0
+    amplitude = 16000
+    path = tmp_path_factory.mktemp("audio") / "tone.wav"
+    with wave.open(str(path), "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(framerate)
+        frames = bytearray()
+        for sample_index in range(int(framerate * duration_sec)):
+            value = int(amplitude * math.sin(2.0 * math.pi * frequency_hz * sample_index / framerate))
+            frames += struct.pack("<h", value)
+        wav_file.writeframes(bytes(frames))
+    return path
 
 
 def pytest_configure() -> None:

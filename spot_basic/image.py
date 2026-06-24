@@ -13,6 +13,10 @@ from cv_bridge import CvBridge
 from numpy.typing import NDArray
 from rclpy.node import Node
 from spatialmath import SO3
+from spot_basic.camera_subscription import (
+    CameraSubscription,
+    RgbdFrameWithInfo,
+)
 from spot_basic.command.mobility import SpotMobilityCommandProtocol
 from spot_basic.manual_conversions import open3d_pointcloud_to_ros_pointcloud2, to_se3
 from spot_basic.state import FrameHint
@@ -20,8 +24,6 @@ from spot_basic.utilities import spot_namespaced
 from synchros2.feeds import AdaptedMessageFeed, FramedMessageFeed, MessageFeed, SynchronizedMessageFeed
 from synchros2.futures import unwrap_future
 from synchros2.utilities import namespace_with
-
-from bdai_ros_perception.camera_subscription import CameraSubscription, RgbdFrameWithInfo
 
 
 def reconstruct_pointcloud(

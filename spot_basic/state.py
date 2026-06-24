@@ -182,7 +182,6 @@ class SpotStateMixin(SpotBaseProtocol):
         super().__init__(*args, **kwargs)
         # A tf listener instance can be connected to the robot.
         self.tf_listener = tf_listener or ros_scope.tf_listener()
-        # TODO: are there other frame names to grab?
         self.body_frame_name = namespace_with(self.robot_name, FrameHint.BODY.value)
         self.hand_frame_name = namespace_with(self.robot_name, FrameHint.HAND.value)
         self.wrist_frame_name = namespace_with(self.robot_name, FrameHint.WRIST.value)

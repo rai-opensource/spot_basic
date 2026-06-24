@@ -304,7 +304,7 @@ class SpotArmCommandBuilder(SpotCommandBuilder):
                 stand mode (so it will stand up if it's sitting down).
 
         See https://dev.bostondynamics.com/protos/bosdyn/api/proto_reference.html#armcartesiancommand-request
-        and https://github.com/bdaiinstitute/spatialmath-python/blob/master/spatialmath/pose3d.py for further
+        and https://github.com/rai-opensource/spatialmath-python/blob/master/spatialmath/pose3d.py for further
         reference.
         """
         robot_command = robot_command_pb2.RobotCommand()

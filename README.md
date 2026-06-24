@@ -10,10 +10,10 @@ This package provides libraries and tools that make it easier to work with Bosto
 
 #### `SpotBasic`
 
-`spot_basic.SpotBasic` is to the Spot ROS 2 driver what the Spot Python SDK is to Spot gRPC servers: a simpler interface to Spot capabilities. Under the hood, `SpotBasic` takes all ROS 2 topics, services, and actions that the [`spot_ros2` driver](https://github.com/bdaiinstitute/spot_ros2/blob/main/spot_driver/launch/spot_driver.launch.py) exposes and repackages them as a set of consistent, intuitive APIs, suitable for both synchronous and asynchronous programming.
+`spot_basic.SpotBasic` is to the Spot ROS 2 driver what the Spot Python SDK is to Spot gRPC servers: a simpler interface to Spot capabilities. Under the hood, `SpotBasic` takes all ROS 2 topics, services, and actions that the [`spot_ros2` driver](https://github.com/rai-opensource/spot_ros2/blob/main/spot_driver/launch/spot_driver.launch.py) exposes and repackages them as a set of consistent, intuitive APIs, suitable for both synchronous and asynchronous programming.
 
 > [!IMPORTANT]
-> Integration with [process-wide `ros_utilities`](https://github.com/bdaiinstitute/ros_utilities/wiki/Process%E2%80%90wide-APIs) is tight and it is usually easier (though not strictly required) to use them when working with `spot_basic`.
+> Integration with [process-wide `synchros2`](https://github.com/rai-opensource/synchros2/wiki/Process%E2%80%90wide-APIs) is tight and it is usually easier (though not strictly required) to use them when working with `spot_basic`.
 
 
 #### Semi-automated HIL tests
@@ -21,7 +21,7 @@ This package provides libraries and tools that make it easier to work with Bosto
 A complete, interactive hardware-in-the-loop testing suite can be run with:
 
 ``` python
-pytest --manual -v -s path/to/spot_utilities/test/system
+pytest --manual -v -s path/to/spot_basic/test/system
 ```
 
 > [!TIP]
@@ -40,15 +40,13 @@ Here is a quick rundown of all packages that functionally contribute to a `bdai 
 | `spot_wrapper`  | `spot_wrapper`   | A thin, convenience layer atop the Spot Python SDK.                                               |
 | `bosdyn_msgs`   | `bosdyn_msgs`    | ROS 2 equivalents to Spot SDK Protobuf messages (plus bidirectional conversion APIs).             |
 
-![graphviz (2)](https://github.com/bdaiinstitute/bdai/assets/156013635/c7e68405-8f82-4fcb-8e00-6e3c364dc498)
-
 Once brought up, the Spot ROS 2 driver (graph of) node(s) acts as a ROS 2 bridge to the Spot SDK. When a service request or action goal is sent, using `SpotBasic` or ROS 2 APIs, the Spot ROS 2 driver node serves it by forwarding the request(s) to Spot wrapper, that forwards it to Spot SDK APIs , which in turn hit the Spot robot over gRPC. Responses follow the same path in reverse. State and sensor streams are handled separately, placing data requests via Spot SDK APIs at fixed rates, publishing Spot specific messages on topics and broadcasting `/tf` transforms.
 
 ## Guides
 
 ### Using `SpotBasic`
 
-`SpotBasic` user facing APIs are the result of repeatedly applying two abstractions: [generalized callables](https://github.com/bdaiinstitute/ros_utilities/blob/main/synchros2/synchros2/callables.py), to put out requests and commands over ROS 2 services and actions, and [message feeds](https://github.com/bdaiinstitute/ros_utilities/blob/main/synchros2/synchros2/feeds.py), to fetch and iterate over stateful ROS 2 topic streams. In combination, these abstractions afford an idiomatic approach to Spot robot programming.
+`SpotBasic` user facing APIs are the result of repeatedly applying two abstractions: [generalized callables](https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/callables.py), to put out requests and commands over ROS 2 services and actions, and [message feeds](https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/feeds.py), to fetch and iterate over stateful ROS 2 topic streams. In combination, these abstractions afford an idiomatic approach to Spot robot programming.
 
 ```python
 import argparse
@@ -313,7 +311,7 @@ except KeyboardInterrupt:
     spot.stop.synchronously(timeout_sec=20.0)
 ```
 
-Explore the [`spot_basic.command`](./spot_utilities/spot_basic/command) subpackage and its documentation for a complete list of all available commands. For manipulation commands, see the [`spot_basic.manipulation`](./spot_utilities/spot_basic/manipulation.py) submodule instead. Note `SpotBasic.perform` semantics are very similar to those of `SpotBasic.execute`, yet not the same, to accommodate the distinction that the Spot SDK makes between regular commands and manipulation commands (or requests).
+Explore the [`spot_basic.command`](./spot_basic/command) subpackage and its documentation for a complete list of all available commands. For manipulation commands, see the [`spot_basic.manipulation`](./spot_basic/manipulation.py) submodule instead. Note `SpotBasic.perform` semantics are very similar to those of `SpotBasic.execute`, yet not the same, to accommodate the distinction that the Spot SDK makes between regular commands and manipulation commands (or requests).
 
 #### Querying state
 
@@ -356,7 +354,7 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-However, by far the most common interface is the transform tree. `SpotBasic` API for transform lookup mimics that of the [`TransformListener` wrapper](https://github.com/bdaiinstitute/ros_utilities/blob/main/synchros2/synchros2/tf_listener_wrapper.py) in `synchros2`.
+However, by far the most common interface is the transform tree. `SpotBasic` API for transform lookup mimics that of the [`TransformListener` wrapper](https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/tf_listener_wrapper.py) in `synchros2`.
 
 ```python
 import argparse
@@ -391,11 +389,11 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-Explore the [`spot_basic.state`](./spot_utilities/spot_basic/state.py) submodule and its documentation for a complete list of all APIs.
+Explore the [`spot_basic.state`](./spot_basic/state.py) submodule and its documentation for a complete list of all APIs.
 
 #### Capturing video
 
-`SpotBasic` can access all RGBD cameras on Spot. Each RGBD camera streams RGB images, depth maps, camera intrinsics (usually but not necessarily static), and (locally reconstructed) pointclouds. Subscriptions to these streams are exposed as a single arrangement (or configuration) of [`spot.cameras`](./spot_utilities/spot_basic/image.py). You can work with these message feeds in a number of ways:
+`SpotBasic` can access all RGBD cameras on Spot. Each RGBD camera streams RGB images, depth maps, camera intrinsics (usually but not necessarily static), and (locally reconstructed) pointclouds. Subscriptions to these streams are exposed as a single arrangement (or configuration) of [`spot.cameras`](./spot_basic/image.py). You can work with these message feeds in a number of ways:
 
 - fetching the latest frame if available:
 
@@ -455,12 +453,12 @@ with closing(sync_rgb_image_feeds.stream()) as imagestream:
             # do something
 ```
 
-And more. Explore the [`synchros2.feeds`](https://github.com/bdaiinstitute/ros_utilities/blob/main/synchros2/synchros2/feeds.py) submodule for an overview of what message feeds can do.
+And more. Explore the [`synchros2.feeds`](https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/feeds.py) submodule for an overview of what message feeds can do.
 
 #### Where to go next
 
-- Explore the [`spot_basic`](./spot_utilities/spot_basic) subpackage and its documentation for a complete list of all available Spot APIs.
-- Explore [`spot_utilities` examples](./examples) and [tests](./test/spot_basic) for a practical overview of what you can do with it.
+- Explore the [`spot_basic`](./spot_basic) subpackage and its documentation for a complete list of all available Spot APIs.
+- Explore [`spot_basic` examples](./examples) and [tests](./test/spot_basic) for a practical overview of what you can do with it.
 
 ### Migrating away from `SpotBasic` legacy APIs
 
@@ -469,7 +467,7 @@ As of Q3 2024, `SpotBasic` offers more functionality than earlier (now legacy) A
 When migrating your code to the latest APIs, while nothing trumps a good grasp of available features and supported idioms, the following rules of thumb may be of use:
 
 - `SpotBasic.<command>()` API calls should be replaced by `SpotBasic.<command>.synchronously()` API calls. Calling code will now get full responses to inspect. It will also no longer get `None` on error but a suitable exception -- manage it accordingly or let it propagate.
-- `SpotBasic.<command>_async()` API calls should be replaced by `SpotBasic.<command>.asynchronously()` API calls. Calling code will no longer get a handle but a suitable future i.e. a plain future for ROS 2 service-based APIs and an [action future](https://github.com/bdaiinstitute/ros_utilities/blob/main/synchros2/synchros2/action.py#L54) for ROS 2 action-based APIs.
+- `SpotBasic.<command>_async()` API calls should be replaced by `SpotBasic.<command>.asynchronously()` API calls. Calling code will no longer get a handle but a suitable future i.e. a plain future for ROS 2 service-based APIs and an [action future](https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/action.py#L54) for ROS 2 action-based APIs.
 - Use `SpotBasic.lookup_*()` and `SpotBasic.wait_*()` APIs over direct `SpotBasic.tf_listener` use whenever possible.
 - Use `SpotBasic.cameras` property over the `SpotVision` class whenever possible.
 
@@ -566,7 +564,7 @@ Note that:
 - If the sample script is explicitly interrupted, any Spot motion will be stopped before proceeding.
 - For the most, there is little if any error checking. That is a choice that makes sense for a sample script -- we will just let any exceptions raised by `SpotBasic` on error propagate to the user.
 
-Exploring [`spot_utilities` examples](./examples) diffs and checking the [`spot_utilities` system test suite](./test/system) may also prove instructive if you looking forward to migrate.
+Exploring [`spot_basic` examples](./examples) diffs and checking the [`spot_basic` system test suite](./test/system) may also prove instructive if you looking forward to migrate.
 
 ### Extending `SpotBasic`
 
@@ -574,12 +572,12 @@ Under the hood, `SpotBasic` is structured as an aggregate of loosely coupled [mi
 
 #### Exposing a robot command
 
-Any robot command can be constructed and `SpotBasic.execute`d, but some robot commands may be worth adding to `spot_utilities` for reuse.
+Any robot command can be constructed and `SpotBasic.execute`d, but some robot commands may be worth adding to `spot_basic` for reuse.
 
 The first step to expose a new robot command is to implement a factory function for it. Command factory functions are typically implemented as methods in `spot_basic.command.SpotCommandBuilder` subclasses under the `spot_basic.command` subpackage. Your factory function may semantically fit in an existing subclass or require another -- use your judgement. In the following we will assume a new subclass is required:
 
 ``` python
-# spot_utilities/spot_basic/command/custom.py
+# spot_basic/command/custom.py
 
 from typing import Any
 from spot_basic.command import SpotCommandBuilder
@@ -607,7 +605,7 @@ response = spot.execute.synchronous(command)
 But you may want to further integrate your command with `SpotBasic`. You may want to allow `SpotBasic.do_custom_task()` calls. Typically, `SpotBasic` methods are generalized methods, and that is the case for command execution methods. These generalized command execution methods are implemented in mixin classes under the `spot_basic.command` subpackage. Your command execution method may semantically fit in an existing mixin or require another -- again, use your judgement. In the following we will assume a new mixin is required:
 
 ``` python
-# spot_utilities/spot_basic/command/custom.py
+# spot_basic/command/custom.py
 
 from typing import Any
 
@@ -655,7 +653,7 @@ Exposing a manipulation request is no different, except for the fact that `SpotB
 In the above, we glanced over type annotations for our `SpotBasic.do_something` generalized method. Type annotating generalized methods relies on structural subtyping support i.e. [`Protocol`](https://typing.readthedocs.io/en/latest/spec/protocol.html#protocols)s.
 
 ``` python
-# spot_utilities/spot_basic/command/custom.py
+# spot_basic/command/custom.py
 
 from typing import Any, Callable, Protocol, TypeAlias
 
@@ -720,11 +718,11 @@ class SpotCustomCommandMixin(SpotCustomCommandProtocol):
         """Perform some custom command."""
 ```
 
-Note how the `SpotCustomCommandProtocol.DoSomethingProtocol` stub class makes the method signature explicit for both synchronous and asynchronous invocations. It also shows that the underlying interface is an action, making it clear to a static analyzer that action specific APIs are also available e.g. the [`spot.do_something.wait_for_server()`](https://github.com/bdaiinstitute/ros_utilities/blob/main/synchros2/synchros2/action.py#L354) method to wait for the remote action server. This added (and entirely optional) complexity is rewarded by improved static analysis reports.
+Note how the `SpotCustomCommandProtocol.DoSomethingProtocol` stub class makes the method signature explicit for both synchronous and asynchronous invocations. It also shows that the underlying interface is an action, making it clear to a static analyzer that action specific APIs are also available e.g. the [`spot.do_something.wait_for_server()`](https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/action.py#L354) method to wait for the remote action server. This added (and entirely optional) complexity is rewarded by improved static analysis reports.
 
 #### Adding a new action
 
-The above discusses how to expose a new capability of an existing action.  If we actually need to add a new action (corresponding usually to a new Spot grpc service), a tutorial for that can be found [here](spot_utilities/spot_basic/AddingActionToSpotBasicTutorial.md).
+The above discusses how to expose a new capability of an existing action.  If we actually need to add a new action (corresponding usually to a new Spot grpc service), a tutorial for that can be found [here](spot_basic/AddingActionToSpotBasicTutorial.md).
 
 #### Exposing a state stream
 
@@ -759,9 +757,9 @@ print(value.data)
 
 ### Using the Mixed-Level API
 
-A joint-level API exists within [spot_ros2](https://github.com/bdaiinstitute/spot_ros2/tree/main) using `ros2_control`. A combined API that utilizes both this lower level joint control and the traditional high-level API was created to leverage both of these APIs.
+A joint-level API exists within [spot_ros2](https://github.com/rai-opensource/spot_ros2/tree/main) using `ros2_control`. A combined API that utilizes both this lower level joint control and the traditional high-level API was created to leverage both of these APIs.
 
-For a full example script, see [`example_controlled_squat.py`](https://github.com/bdaiinstitute/bdai/blob/main/ws/src/spot_utilities/examples/example_controlled_squat.py). To run this example, first start the driver in full controllable mode using the `--controllable` flag.
+For a full example script, see [`example_controlled_squat.py`](examples/example_controlled_squat.py). To run this example, first start the driver in full controllable mode using the `--controllable` flag.
 
 ```bash
 bdai spot driver <spot-name> --controllable
@@ -770,7 +768,7 @@ bdai spot driver <spot-name> --controllable
 To use this mixed level API, you can use `SpotBasic` as usual with an additional `spot_basic.control` import.
 
 ```python
-# spot_utilities/examples/example_controlled_squat.py
+# spot_basic/examples/example_controlled_squat.py
 from spot_basic.control import SpotForwardPositionControllerInterface
 
 class ControlledSquatExample:
@@ -857,13 +855,13 @@ class ControlledSquatExample:
         return 0
 ```
 
-Note the use of `with SpotForwardPositionControllerInterface(self._robot) as ifc:` to transition into the joint level control and expose the state and command streamers while the high level driver is still accessible through the usual interfaces like `walk`. This example specifically makes use of a provided forward position controller for Spot. A forward state controller is also provided in `SpotForwardStateControllerInterface` inside `spot_utilities/spot_basic/control/forward_state.py`. New controllers added to the joint-level API will also need a similar interface to access.
+Note the use of `with SpotForwardPositionControllerInterface(self._robot) as ifc:` to transition into the joint level control and expose the state and command streamers while the high level driver is still accessible through the usual interfaces like `walk`. This example specifically makes use of a provided forward position controller for Spot. A forward state controller is also provided in `SpotForwardStateControllerInterface` inside `spot_basic/control/forward_state.py`. New controllers added to the joint-level API will also need a similar interface to access.
 
 #### Exposing new SDK functionality
 
-If the Spot ROS 2 driver does not already expose some Spot SDK functionality that is of interest to us, things get slightly more involved. The Spot SDK sits deep down the [`spot_driver`](https://github.com/bdaiinstitute/spot_ros2/tree/main/spot_driver), potentially within the [`spot_wrapper`](https://github.com/bdaiinstitute/spot_wrapper/tree/main). A suitable ROS 2 interface must be chosen to expose it. [`spot_msgs`](https://github.com/bdaiinstitute/spot_ros2/tree/main/spot_msgs) hosts service and action definitions, [`bosdyn_msgs`](https://github.com/bdaiinstitute/bosdyn_msgs) hosts equivalent ROS 2 message for every Spot SDK Protobuf message. Only then a `SpotBasic` mixin class can be put together.
+If the Spot ROS 2 driver does not already expose some Spot SDK functionality that is of interest to us, things get slightly more involved. The Spot SDK sits deep down the [`spot_driver`](https://github.com/rai-opensource/spot_ros2/tree/main/spot_driver), potentially within the [`spot_wrapper`](https://github.com/rai-opensource/spot_wrapper/tree/main). A suitable ROS 2 interface must be chosen to expose it. [`spot_msgs`](https://github.com/rai-opensource/spot_ros2/tree/main/spot_msgs) hosts service and action definitions, [`bosdyn_msgs`](https://github.com/rai-opensource/bosdyn_msgs) hosts equivalent ROS 2 message for every Spot SDK Protobuf message. Only then a `SpotBasic` mixin class can be put together.
 
 #### Where to go next
 
-- Take a look at existing mixins in the [`spot_basic`](./spot_utilities/spot_basic) subpackage.
-- Explore available functionality in the  [`synchros2`](https://github.com/bdaiinstitute/ros_utilities/tree/main/synchros2) package.
+- Take a look at existing mixins in the [`spot_basic`](./spot_basic) subpackage.
+- Explore available functionality in the  [`synchros2`](https://github.com/rai-opensource/synchros2/tree/main/synchros2) package.

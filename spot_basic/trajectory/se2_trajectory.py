@@ -96,7 +96,6 @@ class SE2Trajectory:
     def poses(self) -> list[SE2]:
         return self._poses
 
-    # TODO property decorator?
     def set_poses(self, poses: list[SE2]) -> None:
         self._poses = poses
         assert all(isinstance(pose, SE2) for pose in self._poses)
@@ -147,7 +146,7 @@ class SE2Trajectory:
             else:
                 result = np.array(result_list)
 
-            if with_timestamps:  # FIXME type aliasing still didn't fix these pyright complaints...
+            if with_timestamps:
                 return timestamps_sec, result  # pyright: ignore
             return result  # pyright: ignore
 

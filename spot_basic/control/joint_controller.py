@@ -40,7 +40,7 @@ class SpotJointControllerInterface(SpotControllerInterface):
             command: A spot_msgs/msg/JointCommand message that has the names of the desired joints to
             command, desired position, velocity, effort, and gain values. They should be in the same order.
             Note: Needs <robot_name> prefix for joint names (i.e. Opal/arm_sh0)
-            See https://github.com/bdaiinstitute/spot_ros2/tree/main/spot_controllers#spotjointcontroller
+            See https://github.com/rai-opensource/spot_ros2/tree/main/spot_controllers#spotjointcontroller
             for more info on using the SpotJointController
 
         Raises:

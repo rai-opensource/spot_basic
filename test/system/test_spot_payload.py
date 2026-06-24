@@ -10,7 +10,7 @@ from spot_basic.testing_prompt_session import TestingPromptSession
 @pytest.mark.manual
 @pytest.mark.launch(fixture=pytest.hardware_spot_graph_description)
 def test_spot_audio_playback(
-    test_data_path: pathlib.Path,
+    tone_wav_path: pathlib.Path,
     hardware_spot_interface: SpotBasic,
     hardware_spot_parameters: dict,
     prompt_session: TestingPromptSession,
@@ -18,9 +18,7 @@ def test_spot_audio_playback(
     if not hardware_spot_parameters["initialize_spot_cam"]:
         pytest.skip("Cannot test audio playback without a Spot CAM")
 
-    response = hardware_spot_interface.load_sound.synchronously(
-        "test-tone", str(test_data_path / "tone.wav"), timeout_sec=5.0
-    )
+    response = hardware_spot_interface.load_sound.synchronously("test-tone", str(tone_wav_path), timeout_sec=5.0)
     assert response.success, response.message
 
     response = hardware_spot_interface.list_sounds.synchronously(timeout_sec=5.0)

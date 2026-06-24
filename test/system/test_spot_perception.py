@@ -52,6 +52,7 @@ def test_spot_cameras(hardware_spot_interface: SpotBasic, prompt_session: Testin
         assert prompt_session.boolean_ask(f"was the image shown consistent with the {camera.name} camera?")
 
 
+# NOTE: requires a graphnav map at test/data/graphnav_session (not bundled with the package).
 @pytest.mark.manual
 @pytest.mark.launch(fixture=pytest.hardware_spot_graph_description)
 def test_graphnav_localization(
@@ -91,6 +92,7 @@ def test_graphnav_localization(
     assert response.success, response.message
 
 
+# NOTE: requires a graphnav map at test/data/graphnav_session (not bundled with the package).
 @pytest.mark.manual
 @pytest.mark.launch(fixture=pytest.hardware_spot_graph_description)
 def test_graphnav_introspection(

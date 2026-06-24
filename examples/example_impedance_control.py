@@ -37,7 +37,7 @@ class ImpedanceControlExample:
 
             self._logger.info("Attempting to run trajectory with stiff impedance control")
 
-            self._robot.move_end_effector_impedance.synchronously(
+            self._robot.move_end_effector_with_controlled_impedance.synchronously(
                 root_frame=self._robot.FrameHint.BODY,
                 root_t_task=root_t_task,
                 wrist_t_tool=wrist_t_tool,
@@ -47,7 +47,7 @@ class ImpedanceControlExample:
             self._logger.info("Trajectory completed")
             self._logger.info("Attempting to run trajectory with soft impedance control and small wrench")
 
-            self._robot.move_end_effector_impedance.synchronously(
+            self._robot.move_end_effector_with_controlled_impedance.synchronously(
                 root_frame=self._robot.FrameHint.BODY,
                 root_t_task=root_t_task,
                 wrist_t_tool=wrist_t_tool,

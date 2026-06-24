@@ -19,13 +19,13 @@ from synchros2.scope import ROSAwareScope
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)
-def test_sound_management(test_data_path: pathlib.Path, simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
+def test_sound_management(tone_wav_path: pathlib.Path, simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     spot_interface = SpotBasic(simple_spot.api.name, node=ros.node)
     assert spot_interface.wait_for_servers()
 
     with spot_interface.lease():
         # Load a sound
-        test_wav_path = test_data_path / "tone.wav"
+        test_wav_path = tone_wav_path
         assert spot_interface.load_sound.wait_for_service(timeout_sec=pytest.DEFAULT_TIMEOUT)
         future = spot_interface.load_sound.asynchronously("tone", str(test_wav_path))
         call = simple_spot.api.LoadSound.serve(timeout=2.0)
