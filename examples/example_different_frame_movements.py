@@ -32,7 +32,7 @@ class FrameMovementsExample:
             self._logger.info("Attempting to move end effector upwards")
             frame_t_goal = SE3.Rt(SO3.Rx(np.pi / 6), t=[1.0, 0.0, 0.5])
 
-            self._robot.move_end_effector_cartesian.synchronously(
+            self._robot.move_end_effector.synchronously(
                 frame_t_goal=frame_t_goal, duration_sec=2.0, body_follow=True, base_frame=self._robot.FrameHint.BODY
             )
 
@@ -42,12 +42,8 @@ class FrameMovementsExample:
             self._logger.info("Moved end effector downards")
             self._logger.info("Attempting to make robot body gaze at the origin of the odometry frame")
 
-            frame_t_body = self._robot.lookup_a_tform_b(
-                frame_a=self._robot.odom_frame_name, frame_b=self._robot.body_frame_name
-            )
-
-            self._robot.body_gaze_at(
-                body_t_target=frame_t_body.inv(), frame_t_body=frame_t_body, base_frame=self._robot.FrameHint.ODOM
+            self._robot.body_gaze.synchronously(
+                target=[0.0, 0.0, 0.0], frame=self._robot.FrameHint.ODOM
             )
 
             self._logger.info("Body gazed at the origin of the odometry frame")

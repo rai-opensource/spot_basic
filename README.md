@@ -20,7 +20,7 @@ It might be overwhelming and confusing when you first start to work with Spots i
 | `spot_ros2`     | `spot_driver`    | The driver nodes for Spot in ROS 2 (though conceptually it is closer to a bridge).      |
 | `spot_ros2`     | `spot_msgs`      | ROS 2 interfaces specific to Spot (mainly service and action definitions).             |
 | `spot_wrapper`  | `spot_wrapper`   | A thin, convenience layer atop the Spot Python SDK.                                     |
-| `bosdyn_msgs`   | `bosdyn_msgs`    | ROS 2 equivalents to Spot SDK Protobuf messages (plus bidirectional conversion APIs).  |
+| `bosdyn_msgs`   | `bosdyn_api_msgs`, `bosdyn_msgs` | ROS 2 equivalents of Spot SDK Protobuf messages (`bosdyn_api_msgs`) plus bidirectional conversion APIs (`bosdyn_msgs`). |
 
 Once brought up, the Spot ROS 2 driver node(s) act as a ROS 2 bridge to the Spot SDK. When a service request or action goal is sent -- using `SpotBasic` or ROS 2 APIs directly -- the driver forwards it to Spot wrapper, which forwards it to the Spot SDK APIs, which in turn hit the Spot robot over gRPC. Responses follow the same path in reverse. State and sensor streams are handled separately, requesting data via Spot SDK APIs at fixed rates and publishing Spot-specific messages on topics while broadcasting `/tf` transforms.
 
