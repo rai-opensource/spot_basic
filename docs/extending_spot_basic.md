@@ -91,7 +91,7 @@ In the above, we glanced over type annotations for our `SpotBasic.do_something` 
 ```python
 # spot_basic/command/custom.py
 
-from typing import Any, Callable, Protocol, TypeAlias
+from typing import Any, Callable, Optional, Protocol, TypeAlias
 
 from bosdyn.api import robot_command_pb2
 

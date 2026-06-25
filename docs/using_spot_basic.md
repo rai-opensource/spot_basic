@@ -74,7 +74,7 @@ from spot_basic import SpotBasic
 
 def cli() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--async", "--asynchronous", action="store_true")
+    parser.add_argument("--asynchronous", "--async", action="store_true")
     parser.add_argument("robot_name")
     return parser
 
@@ -90,7 +90,7 @@ def main(args: argparse.Namespace) -> int:
         else:
             result = spot.execute.synchronous(command, timeout_sec=10.0)
         spot.power_off.synchronously(timeout_sec=10.0)
-        return 0 if action.succeeded else 1
+        return 0 if result.success else 1
 
 if __name__ == "__main__":
     sys.exit(main())
@@ -116,7 +116,7 @@ from spot_basic import SpotBasic
 
 def cli() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--async", "--asynchronous", action="store_true")
+    parser.add_argument("--asynchronous", "--async", action="store_true")
     parser.add_argument("robot_name")
     return parser
 
@@ -132,7 +132,7 @@ def main(args: argparse.Namespace) -> int:
         else:
             result = spot.start_executing.synchronous(command, timeout_sec=10.0)
         spot.power_off.synchronously(timeout_sec=10.0)
-        return 0 if action.succeeded else 1
+        return 0 if result.success else 1
 
 if __name__ == "__main__":
     sys.exit(main())
@@ -155,7 +155,7 @@ from spot_basic.command.full_body import SpotFullBodyCommandBuilder
 
 def cli() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--async", "--asynchronous", action="store_true")
+    parser.add_argument("--asynchronous", "--async", action="store_true")
     parser.add_argument("robot_name")
     return parser
 
@@ -176,7 +176,7 @@ def main(args: argparse.Namespace) -> int:
         else:
             result = spot.execute.synchronous(command, timeout_sec=20.0)
         spot.power_off.synchronously(timeout_sec=10.0)
-        return 0 if action.succeeded else 1
+        return 0 if result.success else 1
 
 if __name__ == "__main__":
     sys.exit(main())
@@ -198,7 +198,7 @@ from spot_basic.command.mobility import SpotMobilityCommandBuilder
 
 def cli() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--async", "--asynchronous", action="store_true")
+    parser.add_argument("--asynchronous", "--async", action="store_true")
     parser.add_argument("robot_name")
     return parser
 
@@ -244,7 +244,7 @@ from spot_basic.command.mobility import SpotMobilityCommandBuilder
 
 def cli() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--async", "--asynchronous", action="store_true")
+    parser.add_argument("--asynchronous", "--async", action="store_true")
     parser.add_argument("robot_name")
     return parser
 
@@ -284,7 +284,7 @@ Explore the [`spot_basic.command`](../spot_basic/command) subpackage and its doc
 import argparse
 import sys
 
-from bosdyn.api.world_object_pb2 import ListWorldObjectRequest, WorldObjectType,
+from bosdyn.api.world_object_pb2 import ListWorldObjectRequest, WorldObjectType
 
 from synchros2.futures import unwrap_future
 import synchros2.process as ros_process
@@ -322,8 +322,6 @@ However, by far the most common interface is the transform tree. `SpotBasic` API
 ```python
 import argparse
 import sys
-
-from bosdyn.api.world_object_pb2 import ListWorldObjectRequest, WorldObjectType,
 
 from synchros2.futures import unwrap_future
 import synchros2.process as ros_process
