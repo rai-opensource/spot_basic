@@ -41,7 +41,7 @@ Options:
 while [ $# -gt 0 ]; do
   case "$1" in
     --arm64 | --aarch64 ) ARCH="arm64"; shift ;;
-    --ros-distro ) ROS_DISTRO="$2"; shift 2 ;;
+    --ros-distro ) [ $# -ge 2 ] || { echo "Missing value for --ros-distro" >&2; echo "$HELP" >&2; exit 1; }; ROS_DISTRO="$2"; shift 2 ;;
     --no-build ) DO_BUILD=0; shift ;;
     -h | --help ) echo "$HELP"; exit 0 ;;
     -- ) shift; break ;;
@@ -71,7 +71,7 @@ else
 fi
 
 echo "==> Installing spot_basic PyPI dependencies"
-pip3 install --no-cache-dir -r "$SCRIPT_DIR/requirements.txt"
+python3 -m pip install --no-cache-dir -r "$SCRIPT_DIR/requirements.txt"
 
 echo "==> Resolving rosdep dependencies"
 # shellcheck disable=SC1090
