@@ -13,20 +13,16 @@ from bosdyn.api.basic_command_pb2 import (
     SitCommand,
     StandCommand,
 )
-from bosdyn.api.robot_command_pb2 import (
-    ClearBehaviorFaultResponse,
-    RobotCommandFeedbackResponse,
-    RobotCommandResponse,
-)
+from bosdyn.api.robot_command_pb2 import ClearBehaviorFaultResponse, RobotCommandFeedbackResponse, RobotCommandResponse
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.client.robot_command import RobotCommandBuilder
-from bosdyn_api_msgs.msg import (
-    SE2TrajectoryCommandFeedbackStatus,
-    SitCommandFeedbackStatus,
-    StandCommandFeedbackStatus,
-)
+from bosdyn_api_msgs.msg import SE2TrajectoryCommandFeedbackStatus, SitCommandFeedbackStatus, StandCommandFeedbackStatus
 from geometry_msgs.msg import Twist, Vector3
 from spatialmath import SE2, SE3, SO3, Twist2, UnitQuaternion
+from spot_wrapper.testing.fixtures import SpotFixture
+from synchros2.futures import wait_for_future
+from synchros2.scope import ROSAwareScope
+
 from spot_basic import SpotBasic
 from spot_basic.command import LocomotionHint, SpotCommandProtocol, StairsMode
 from spot_basic.command.arm import SpotArmCommandBuilder
@@ -34,9 +30,6 @@ from spot_basic.command.full_body import BatteryChangeDirHint, SpotFullBodyComma
 from spot_basic.command.mobility import SpotMobilityCommandBuilder
 from spot_basic.state import FrameHint
 from spot_basic.trajectory.se2_trajectory import SE2Trajectory
-from spot_wrapper.testing.fixtures import SpotFixture
-from synchros2.futures import wait_for_future
-from synchros2.scope import ROSAwareScope
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)

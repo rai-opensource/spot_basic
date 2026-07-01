@@ -7,11 +7,12 @@ from bosdyn.api.arm_surface_contact_pb2 import ArmSurfaceContact as ArmSurfaceCo
 from bosdyn.api.arm_surface_contact_service_pb2 import ArmSurfaceContactResponse
 from bosdyn.api.header_pb2 import CommonError
 from spatialmath import SE3
-from spot_basic import SpotBasic
-from spot_basic.trajectory.se3_trajectory import SE3Trajectory, SE3TrajectoryPoint
 from spot_wrapper.testing.fixtures import SpotFixture
 from synchros2.futures import wait_for_future
 from synchros2.scope import ROSAwareScope
+
+from spot_basic import SpotBasic
+from spot_basic.trajectory.se3_trajectory import SE3Trajectory, SE3TrajectoryPoint
 
 
 def _create_dummy_args() -> list[Any]:

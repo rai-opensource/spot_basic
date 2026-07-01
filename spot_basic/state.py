@@ -19,15 +19,13 @@ from geometry_msgs.msg import Vector3Stamped
 from rclpy.time import Time
 from sensor_msgs.msg import JointState
 from spatialmath import SE3
-from spot_basic.base import SpotBaseProtocol
-from spot_basic.manual_conversions import (
-    se3_to_se3pose_proto,
-    to_se3,
-)
-from spot_basic.utilities import spot_namespaced
 from synchros2.subscription import Subscription
 from synchros2.tf_listener_wrapper import TFListenerWrapper
 from synchros2.utilities import namespace_with
+
+from spot_basic.base import SpotBaseProtocol
+from spot_basic.manual_conversions import se3_to_se3pose_proto, to_se3
+from spot_basic.utilities import spot_namespaced
 
 
 @dataclass(kw_only=True)

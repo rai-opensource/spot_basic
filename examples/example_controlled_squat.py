@@ -10,9 +10,10 @@ import synchros2.process as ros_process
 from rclpy.duration import Duration
 from rclpy.time import Time
 from spatialmath import SE2
+from synchros2.futures import unwrap_future
+
 from spot_basic import SpotBasic
 from spot_basic.control import SpotForwardPositionControllerInterface
-from synchros2.futures import unwrap_future
 
 
 class ControlledSquatExample:

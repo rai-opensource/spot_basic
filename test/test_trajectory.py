@@ -2,6 +2,7 @@
 
 import numpy as np
 from spatialmath import SE2
+
 from spot_basic.trajectory.se2_trajectory import SE2Trajectory
 from spot_basic.trajectory.spot_se2_properties import MAX_SPEED_VEC
 

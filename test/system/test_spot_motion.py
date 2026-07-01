@@ -6,6 +6,7 @@ import pytest
 from bosdyn.client.robot_command import RobotCommandBuilder
 from bosdyn_api_msgs.msg import SE2TrajectoryCommandFeedbackStatus
 from spatialmath import SE2, SE3, SO3
+
 from spot_basic import FrameHint, SpotBasic
 from spot_basic.command import LocomotionHint
 from spot_basic.testing_prompt_session import TestingPromptSession

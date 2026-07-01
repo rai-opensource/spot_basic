@@ -4,11 +4,12 @@ from typing import Any, Optional, Protocol, Union, overload
 
 import bosdyn_spot_api_msgs.msg
 from bosdyn.api.spot import inverse_kinematics_pb2
-from spot_basic.base import SpotBaseProtocol
-from spot_basic.utilities import SpotServiced, SpotServicedProtocol, spot_namespaced
 from spot_msgs.srv import GetInverseKinematicSolutions
 from synchros2.callables import GeneralizedMethodLike, generalized_method
 from synchros2.futures import FutureLike
+
+from spot_basic.base import SpotBaseProtocol
+from spot_basic.utilities import SpotServiced, SpotServicedProtocol, spot_namespaced
 
 
 class SpotIKProtocol(SpotBaseProtocol, Protocol):

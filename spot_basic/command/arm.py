@@ -3,13 +3,7 @@
 import dataclasses
 from typing import Any, Callable, List, Optional, Protocol, Sequence, Tuple, TypeAlias, Union, overload
 
-from bosdyn.api import (
-    arm_command_pb2,
-    basic_command_pb2,
-    geometry_pb2,
-    robot_command_pb2,
-    trajectory_pb2,
-)
+from bosdyn.api import arm_command_pb2, basic_command_pb2, geometry_pb2, robot_command_pb2, trajectory_pb2
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.client.robot_command import RobotCommandBuilder
 from bosdyn.util import seconds_to_duration
@@ -17,6 +11,10 @@ from numpy.typing import ArrayLike
 from spatialmath import SE3, SpatialForce, Twist3, UnitQuaternion
 from spatialmath.base.types import R3
 from spatialmath.spatialvector import SpatialVector
+from spot_msgs.action import RobotCommand as RobotCommandAction
+from synchros2.action import ActionFuture
+from synchros2.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
+
 from spot_basic.command import SpotCommandBuilder, SpotCommandProtocol
 from spot_basic.command.helpers import (
     timestamped_se3_poses_to_se3_trajectory,
@@ -25,9 +23,6 @@ from spot_basic.command.helpers import (
 from spot_basic.manual_conversions import se3_to_se3pose_proto
 from spot_basic.state import ArmJointMap, FrameHint
 from spot_basic.utilities import SpotActionableProtocol
-from spot_msgs.action import RobotCommand as RobotCommandAction
-from synchros2.action import ActionFuture
-from synchros2.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
 
 
 @dataclasses.dataclass(kw_only=True)

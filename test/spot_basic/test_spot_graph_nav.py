@@ -15,11 +15,12 @@ from bosdyn.api.graph_nav.graph_nav_pb2 import (
 )
 from bosdyn.api.graph_nav.map_pb2 import Graph
 from bosdyn.api.graph_nav.nav_pb2 import Localization
-from spot_basic import SpotBasic
 from spot_wrapper.testing.fixtures import SpotFixture
 from synchros2.futures import wait_for_future
 from synchros2.scope import ROSAwareScope
 from synchros2.utilities import ensure
+
+from spot_basic import SpotBasic
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)

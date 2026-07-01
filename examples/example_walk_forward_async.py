@@ -6,8 +6,9 @@ import sys
 
 import synchros2.process as ros_process
 from spatialmath import SE2
-from spot_basic import SpotBasic
 from synchros2.futures import unwrap_future
+
+from spot_basic import SpotBasic
 
 
 class AsyncWalkForwardExample:

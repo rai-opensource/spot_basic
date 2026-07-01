@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation, Slerp
 from spatialmath import SE3
+
 from spot_basic.trajectory.se3_trajectory import SE3Trajectory, interpolate_line
 
 

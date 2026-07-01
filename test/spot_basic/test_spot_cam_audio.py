@@ -12,10 +12,11 @@ from bosdyn.api.spot_cam.audio_pb2 import (
     SetVolumeResponse,
     Sound,
 )
-from spot_basic import SpotBasic
 from spot_wrapper.testing.fixtures import SpotFixture
 from synchros2.futures import wait_for_future
 from synchros2.scope import ROSAwareScope
+
+from spot_basic import SpotBasic
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)

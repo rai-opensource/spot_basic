@@ -12,6 +12,12 @@ from bosdyn.api.robot_state_pb2 import ManipulatorState
 from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo
 from spatialmath.base.types import R3
+from spot_msgs.action import Manipulation
+from spot_msgs.srv import OverrideGraspOrCarry
+from synchros2.action import ActionFuture
+from synchros2.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
+from synchros2.futures import FutureLike
+
 from spot_basic.state import FrameHint, SpotStateProtocol
 from spot_basic.utilities import (
     SpotActionable,
@@ -20,11 +26,6 @@ from spot_basic.utilities import (
     SpotServicedProtocol,
     spot_namespaced,
 )
-from spot_msgs.action import Manipulation
-from spot_msgs.srv import OverrideGraspOrCarry
-from synchros2.action import ActionFuture
-from synchros2.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
-from synchros2.futures import FutureLike
 
 
 class SpotManipulationCommandBuilder:

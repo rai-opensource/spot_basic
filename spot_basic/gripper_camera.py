@@ -4,14 +4,12 @@ from typing import Any, Optional, Protocol, Union, overload
 
 import bosdyn_api_msgs.msg
 from bosdyn.api import gripper_camera_param_pb2
-from spot_basic.base import SpotBaseProtocol
-from spot_basic.utilities import SpotServiced, SpotServicedProtocol, spot_namespaced
-from spot_msgs.srv import (
-    GetGripperCameraParameters,
-    SetGripperCameraParameters,
-)
+from spot_msgs.srv import GetGripperCameraParameters, SetGripperCameraParameters
 from synchros2.callables import GeneralizedMethodLike, generalized_method
 from synchros2.futures import FutureLike
+
+from spot_basic.base import SpotBaseProtocol
+from spot_basic.utilities import SpotServiced, SpotServicedProtocol, spot_namespaced
 
 
 class SpotGripperCameraProtocol(SpotBaseProtocol, Protocol):

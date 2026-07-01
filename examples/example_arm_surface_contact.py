@@ -7,6 +7,7 @@ import numpy as np
 import synchros2.process as ros_process
 from bosdyn.api.arm_surface_contact_pb2 import ArmSurfaceContact as ArmSurfaceContactProto
 from spatialmath import SE3
+
 from spot_basic import FrameHint, SpotBasic
 from spot_basic.trajectory.se3_trajectory import SE3Trajectory, SE3TrajectoryPoint, get_trajectory_point
 

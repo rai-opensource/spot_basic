@@ -7,11 +7,12 @@ from dataclasses import asdict
 import pytest
 from numpy.testing import assert_equal
 from spatialmath import SO3
-from spot_basic import SpotBasic
-from spot_basic.state import FrameHint
 from spot_wrapper.testing.fixtures import SpotFixture
 from synchros2.futures import wait_for_future
 from synchros2.scope import ROSAwareScope
+
+from spot_basic import SpotBasic
+from spot_basic.state import FrameHint
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)

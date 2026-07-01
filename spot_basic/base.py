@@ -5,11 +5,12 @@ from typing import Any, Optional, Protocol
 import synchros2.scope as ros_scope
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
-from spot_basic.utilities import spot_namespaced
 from std_msgs.msg import Bool
 from synchros2.futures import wait_for_future
 from synchros2.subscription import Subscription
 from synchros2.utilities import ensure
+
+from spot_basic.utilities import spot_namespaced
 
 HAS_ARM_WAIT_TIME_S = 1.0
 N_HAS_ARM_RETRIES = 5

@@ -8,15 +8,16 @@ from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.client.math_helpers import SE3Pose
 from bosdyn.client.robot_command import RobotCommandBuilder
 from spatialmath import SE3
+from spot_msgs.action import RobotCommand as RobotCommandAction
+from synchros2.action import ActionFuture
+from synchros2.callables import GeneralizedMethodLike, generalized_method
+
 from spot_basic.command import SpotCommandBuilder, SpotCommandProtocol
 from spot_basic.command.arm import SpotArmCommandBuilder
 from spot_basic.command.gripper import SpotGripperCommandBuilder
 from spot_basic.command.mobility import SpotMobilityCommandBuilder
 from spot_basic.state import ArmJointMap
 from spot_basic.utilities import SpotActionableProtocol
-from spot_msgs.action import RobotCommand as RobotCommandAction
-from synchros2.action import ActionFuture
-from synchros2.callables import GeneralizedMethodLike, generalized_method
 
 
 class BatteryChangeDirHint(IntEnum):

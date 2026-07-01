@@ -5,6 +5,7 @@ import logging
 import sys
 
 import synchros2.process as ros_process
+
 from spot_basic import SpotBasic
 from spot_basic.image import SpotCameraSubscription
 from spot_basic.viz import prompt_for_click

@@ -7,6 +7,7 @@ import sys
 
 import synchros2.process as ros_process
 from bosdyn.api.gripper_camera_param_pb2 import GripperCameraParamRequest
+
 from spot_basic import SpotBasic
 
 

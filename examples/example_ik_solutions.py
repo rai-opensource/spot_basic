@@ -8,14 +8,11 @@ import sys
 import numpy as np
 import synchros2.process as ros_process
 from bosdyn.api.spot import inverse_kinematics_pb2, robot_command_pb2
-from bosdyn.client.frame_helpers import (
-    BODY_FRAME_NAME,
-    ODOM_FRAME_NAME,
-    get_a_tform_b,
-)
+from bosdyn.client.frame_helpers import BODY_FRAME_NAME, ODOM_FRAME_NAME, get_a_tform_b
 from bosdyn.client.math_helpers import Quat, SE3Pose
 from bosdyn.client.robot_command import RobotCommandBuilder
 from bosdyn_msgs.conversions import convert
+
 from spot_basic import FrameHint, SpotBasic
 from spot_basic.manual_conversions import se3_to_se3pose
 

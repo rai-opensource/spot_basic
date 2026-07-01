@@ -9,25 +9,23 @@ import pytest
 from bosdyn.api import geometry_pb2
 from bosdyn.client.math_helpers import Quat, SE2Pose, SE3Pose
 from builtin_interfaces.msg import Time as RosTimestamp
-from geometry_msgs.msg import (
-    Point as RosPoint,
-    Pose as RosPose,
-    PoseStamped as RosPoseStamped,
-    PoseWithCovariance as RosPoseWithCovariance,
-    PoseWithCovarianceStamped as RosPoseWithCovarianceStamped,
-    Quaternion as RosQuaternion,
-    QuaternionStamped as RosQuaternionStamped,
-    Transform as RosTransform,
-    TransformStamped as RosTransformStamped,
-    Vector3,
-)
+from geometry_msgs.msg import Point as RosPoint
+from geometry_msgs.msg import Pose as RosPose
+from geometry_msgs.msg import PoseStamped as RosPoseStamped
+from geometry_msgs.msg import PoseWithCovariance as RosPoseWithCovariance
+from geometry_msgs.msg import PoseWithCovarianceStamped as RosPoseWithCovarianceStamped
+from geometry_msgs.msg import Quaternion as RosQuaternion
+from geometry_msgs.msg import QuaternionStamped as RosQuaternionStamped
+from geometry_msgs.msg import Transform as RosTransform
+from geometry_msgs.msg import TransformStamped as RosTransformStamped
+from geometry_msgs.msg import Vector3
 from open3d.geometry import PointCloud as open3dPointCloud
 from open3d.t.geometry import PointCloud as open3dTensorPointCloud
-from sensor_msgs.msg import (
-    PointCloud2 as RosPointCloud2,
-    PointField as RosPointField,
-)
+from sensor_msgs.msg import PointCloud2 as RosPointCloud2
+from sensor_msgs.msg import PointField as RosPointField
 from spatialmath import SE2, SE3, UnitQuaternion
+from std_msgs.msg import Header
+
 from spot_basic.manual_conversions import (
     get_list_from_wxyz,
     get_list_from_xyz,
@@ -37,7 +35,6 @@ from spot_basic.manual_conversions import (
     to_se3,
     to_unit_quaternion,
 )
-from std_msgs.msg import Header
 
 
 @dataclass

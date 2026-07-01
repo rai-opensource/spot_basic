@@ -7,6 +7,7 @@ from typing import Optional
 
 import open3d
 import synchros2.process as ros_process
+
 from spot_basic import SpotBasic
 
 

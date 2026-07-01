@@ -9,6 +9,15 @@ import rclpy.duration
 from bosdyn.api import robot_command_pb2
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from geometry_msgs.msg import Twist
+from spot_msgs.action import RobotCommand as RobotCommandAction
+from spot_msgs.srv import ClearBehaviorFault
+from spot_msgs.srv import RobotCommand as RobotCommandService
+from spot_msgs.srv import SetLocomotion, SetStairsMode, SetVelocity
+from std_srvs.srv import SetBool, Trigger
+from synchros2.action import ActionFuture
+from synchros2.callables import GeneralizedMethodLike, generalized_method
+from synchros2.futures import FutureLike
+
 from spot_basic.base import SpotBaseProtocol
 from spot_basic.state import SpotStateProtocol
 from spot_basic.utilities import (
@@ -18,18 +27,6 @@ from spot_basic.utilities import (
     SpotServicedProtocol,
     spot_namespaced,
 )
-from spot_msgs.action import RobotCommand as RobotCommandAction
-from spot_msgs.srv import (
-    ClearBehaviorFault,
-    RobotCommand as RobotCommandService,
-    SetLocomotion,
-    SetStairsMode,
-    SetVelocity,
-)
-from std_srvs.srv import SetBool, Trigger
-from synchros2.action import ActionFuture
-from synchros2.callables import GeneralizedMethodLike, generalized_method
-from synchros2.futures import FutureLike
 
 
 class LocomotionHint(IntEnum):

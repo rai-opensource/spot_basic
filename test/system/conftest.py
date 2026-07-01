@@ -16,9 +16,10 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import PathJoinSubstitution
 from launch_pytest.actions import ReadyToTest
 from launch_ros.substitutions import FindPackageShare
+from synchros2.scope import ROSAwareScope
+
 from spot_basic import SpotBasic
 from spot_basic.testing_prompt_session import TestingPromptSession
-from synchros2.scope import ROSAwareScope
 
 
 @pytest.fixture(scope="session")

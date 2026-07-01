@@ -11,6 +11,7 @@ import numpy as np
 import synchros2.process as ros_process
 from spatialmath import SE3, Twist3
 from spatialmath.base import trinterp
+
 from spot_basic import FrameHint, SpotBasic
 from spot_basic.command.arm import AxisModeMap
 

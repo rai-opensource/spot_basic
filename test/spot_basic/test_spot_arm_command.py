@@ -16,12 +16,13 @@ from bosdyn.api.spot.robot_command_pb2 import MobilityParams
 from bosdyn_api_msgs.msg import GazeCommandFeedbackStatus
 from spatialmath import SE3, SO3, UnitQuaternion
 from spatialmath.spatialvector import SpatialVector
-from spot_basic import SpotBasic
-from spot_basic.command.arm import AxisModeMap
-from spot_basic.state import ArmJointMap, FrameHint
 from spot_wrapper.testing.fixtures import SpotFixture
 from synchros2.futures import wait_for_future
 from synchros2.scope import ROSAwareScope
+
+from spot_basic import SpotBasic
+from spot_basic.command.arm import AxisModeMap
+from spot_basic.state import ArmJointMap, FrameHint
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)

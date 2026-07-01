@@ -9,6 +9,7 @@ import sys
 
 import numpy as np
 import synchros2.process as ros_process
+
 from spot_basic import SpotBasic
 from spot_basic.state import ArmJointMap
 

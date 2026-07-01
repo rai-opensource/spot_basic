@@ -5,11 +5,12 @@ from functools import cached_property
 from typing import Optional
 
 from sensor_msgs.msg import JointState
+from std_msgs.msg import Float64MultiArray
+from synchros2.subscription import Subscription
+
 from spot_basic.base import SpotBaseProtocol
 from spot_basic.control.base import SpotControllerInterface
 from spot_basic.utilities import spot_namespaced
-from std_msgs.msg import Float64MultiArray
-from synchros2.subscription import Subscription
 
 
 class SpotForwardPositionControllerInterface(SpotControllerInterface):

@@ -10,6 +10,7 @@ import sys
 import synchros2.process as ros_process
 from bosdyn.api import arm_command_pb2
 from spatialmath import SE3, SpatialForce
+
 from spot_basic import FrameHint, SpotBasic
 from spot_basic.command.arm import AxisModeMap
 

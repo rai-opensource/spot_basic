@@ -7,6 +7,7 @@ import sys
 import numpy as np
 import synchros2.process as ros_process
 from spatialmath import SE2, SE3, SO3
+
 from spot_basic import SpotBasic
 from spot_basic.trajectory.se2_trajectory import SE2Trajectory
 from spot_basic.trajectory.spot_se2_properties import MAX_SPEED_FORWARD
@@ -42,9 +43,7 @@ class FrameMovementsExample:
             self._logger.info("Moved end effector downards")
             self._logger.info("Attempting to make robot body gaze at the origin of the odometry frame")
 
-            self._robot.body_gaze.synchronously(
-                target=[0.0, 0.0, 0.0], frame=self._robot.FrameHint.ODOM
-            )
+            self._robot.body_gaze.synchronously(target=[0.0, 0.0, 0.0], frame=self._robot.FrameHint.ODOM)
 
             self._logger.info("Body gazed at the origin of the odometry frame")
             self._logger.info("Attempting to walk forward 1 meter as specified in the odometry frame")

@@ -9,11 +9,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import synchros2.process as ros_process
 from spatialmath import SE2
+from synchros2.futures import wait_for_future
+
 from spot_basic import FrameHint, SpotBasic
 from spot_basic.trajectory.se2_trajectory import SE2Trajectory
 from spot_basic.trajectory.se2_trajectory_plotting import draw_shape
 from spot_basic.trajectory.spot_se2_properties import BODY_SHAPE, MAX_SPEED_FORWARD, MAX_SPEED_VEC
-from synchros2.futures import wait_for_future
 
 
 class TrajectoryCommandExample:

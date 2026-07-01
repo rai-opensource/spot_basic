@@ -5,6 +5,7 @@ import logging
 import sys
 
 import synchros2.process as ros_process
+
 from spot_basic import SpotBasic
 
 
