@@ -4,6 +4,12 @@
 
 [← Back to the README](../README.md)
 
+## Table of contents
+
+- [Create an action definition and server](#create-an-action-definition-and-server)
+- [SpotBasic code and running](#spotbasic-code-and-running)
+- [Analyzing the code](#analyzing-the-code)
+
 In this tutorial we will add an action to `SpotBasic` to show how the underlying concepts -- and especially [generalized callables](https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/callables.py) -- work.
 
 The complete code for this tutorial is shown inline below.

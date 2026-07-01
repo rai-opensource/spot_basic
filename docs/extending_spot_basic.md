@@ -4,6 +4,15 @@
 
 [← Back to the README](../README.md)
 
+## Table of contents
+
+- [Exposing a robot command](#exposing-a-robot-command)
+- [Adding a new action](#adding-a-new-action)
+- [Exposing a state stream](#exposing-a-state-stream)
+- [Using the Mixed-Level API](#using-the-mixed-level-api)
+- [Exposing new SDK functionality](#exposing-new-sdk-functionality)
+- [Where to go next](#where-to-go-next)
+
 Under the hood, `SpotBasic` is structured as an aggregate of loosely coupled [mixins](https://en.wikipedia.org/wiki/Mixin). These mixins heavily rely on [factory](https://en.wikipedia.org/wiki/Factory_method_pattern) and [delegation](https://en.wikipedia.org/wiki/Delegation_pattern) patterns to abstract and reuse what is specific to message passing, which is central to `SpotBasic` implementation, the Spot ROS 2 driver being nothing but a bridge to the Spot SDK over ROS 2 topics, services, and actions.
 
 ## Exposing a robot command
