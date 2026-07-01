@@ -2,7 +2,17 @@
 
 # `spot_basic`
 
-A simpler, more intuitive interface to Boston Dynamics' Spot robots from ROS 2.
+A simpler, more intuitive interface to Boston Dynamics' Spot robots with ROS 2.
+
+## Table of contents
+
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Installation](#installation)
+- [Running the Spot driver](#running-the-spot-driver)
+- [A first example](#a-first-example)
+- [Documentation](#documentation)
+- [Testing](#testing)
 
 ## Overview
 
