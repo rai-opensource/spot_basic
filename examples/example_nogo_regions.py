@@ -10,7 +10,7 @@ from spot_basic import FrameHint, SpotBasic
 
 def cli() -> argparse.ArgumentParser:
     """Command-line interface."""
-    parser = argparse.ArgumentParser(description="Use arm surface contact to draw a square")
+    parser = argparse.ArgumentParser(description="Add and remove user nogo regions")
     parser.add_argument("robot_name", help="Name of robot to use")
 
     return parser

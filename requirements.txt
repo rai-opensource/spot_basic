@@ -1,0 +1,14 @@
+# PyPI dependencies that have no rosdep key and are not built from source.
+# Install with: pip install -r requirements.txt
+#
+# Note: ROS-provided and rosdep-resolvable dependencies (numpy, scipy,
+# opencv, cv_bridge, etc.) are declared in package.xml and installed via
+# `rosdep install`; they are intentionally NOT listed here.
+
+# Boston Dynamics Spot SDK (bosdyn.api / bosdyn.client).
+bosdyn-client
+bosdyn-api
+bosdyn-core
+
+# Spatial math types (SE2, SE3, SO3, Twist2, UnitQuaternion, ...).
+spatialmath-python
