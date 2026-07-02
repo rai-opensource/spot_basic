@@ -3,8 +3,8 @@
 /**:
   ros__parameters:
     username: "user"
-    password: "password"
-    hostname: "<spot_ip>"
+    password: "bbbdddaaaiii"
+    hostname: "10.17.30.33" # Nyla
 
     metrics_rate: 0.04
     lease_rate: 1.0

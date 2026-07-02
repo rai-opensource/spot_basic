@@ -1,0 +1,16 @@
+# pip constraints for spot_basic.
+#
+# Constraints are guardrails: unlike requirements, they never *install* a
+# package, they only bound the version if/when something else pulls it in.
+# Applied automatically via `-c constraints.txt` in requirements.txt, and can
+# also be exported globally with:
+#
+#   export PIP_CONSTRAINT="$(pwd)/constraints.txt"
+#
+# Why NumPy < 2:
+#   ROS 2 Humble binaries (rclpy, cv_bridge, tf_transformations, ...) and the
+#   spot_wrapper stack are built against the apt-provided NumPy 1.21.5. A stray
+#   NumPy 2.x pulled into ~/.local silently shadows the system NumPy and breaks
+#   those extension modules with ABI errors (e.g. "_ARRAY_API not found",
+#   "numpy.dtype size changed"). Pinning below 2 prevents that drift.
+numpy<2

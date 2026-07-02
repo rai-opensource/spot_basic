@@ -5,6 +5,9 @@
 # opencv, cv_bridge, etc.) are declared in package.xml and installed via
 # `rosdep install`; they are intentionally NOT listed here.
 
+# Version guardrails (e.g. numpy < 2). See constraints.txt for rationale.
+-c constraints.txt
+
 # Boston Dynamics Spot SDK (bosdyn.api / bosdyn.client).
 bosdyn-client
 bosdyn-api
