@@ -77,6 +77,8 @@ colcon build
 source install/setup.bash
 ```
 
+Note that you will also need to follow the `spot_ros2` installation instructions as well if you choose manual installation (the build will most likely fail before you do this).
+
 ## Running the Spot driver
 
 `spot_basic` talks to a robot through the `spot_ros2` driver, so a `spot_driver` instance must be running first. Bring it up with:

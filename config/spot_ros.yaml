@@ -2,11 +2,15 @@
 
 /**:
   ros__parameters:
+    username: "user"
+    password: "password"
+    hostname: "<spot_ip>"
+
     metrics_rate: 0.04
     lease_rate: 1.0
     auto_claim: False
     auto_power_on: False
-    auto_stand: True
+    auto_stand: False
     estop_timeout: 9.0
     start_estop: False
     cmd_duration: 0.25
