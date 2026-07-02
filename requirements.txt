@@ -9,9 +9,10 @@
 -c constraints.txt
 
 # Boston Dynamics Spot SDK (bosdyn.api / bosdyn.client).
-bosdyn-client
-bosdyn-api
-bosdyn-core
+# Pinned to match the prebuilt bosdyn_msgs release and the Spot C++ SDK.
+bosdyn-client==5.0.1
+bosdyn-api==5.0.1
+bosdyn-core==5.0.1
 
 # Spatial math types (SE2, SE3, SO3, Twist2, UnitQuaternion, ...).
 spatialmath-python
