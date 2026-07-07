@@ -53,7 +53,7 @@ def cli() -> argparse.ArgumentParser:
         nargs="+",
         help="Choose one or more cameras to create the image",
         choices=available_cameras,
-        default=[],
+        default=["front_left", "front_right"],
     )
     parser.add_argument("robot_name", help="Name of the robot")
     return parser

@@ -161,12 +161,6 @@ class ArmCartesianTrajectoryExample:
             self._robot.move_end_effector.synchronously(cobra_pose, duration_sec=0.5, base_frame=FrameHint.BODY)
 
             self._move_cosine_optional_body_follow(True)
-            self._move_cosine_optional_body_follow(False)
-
-            # Go back to cobra
-            self._logger.info("Going back to cobra pose...")
-            self._robot.stow_arm.synchronously(timeout_sec=5.0)
-            self._robot.move_end_effector.synchronously(cobra_pose, duration_sec=0.5, base_frame=FrameHint.BODY)
 
         return 0
 
