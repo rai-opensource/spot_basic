@@ -2,15 +2,11 @@
 
 /**:
   ros__parameters:
-    username: "user"
-    password: "bbbdddaaaiii"
-    hostname: "10.17.30.33" # Nyla
-
     metrics_rate: 0.04
     lease_rate: 1.0
     auto_claim: False
     auto_power_on: False
-    auto_stand: False
+    auto_stand: True
     estop_timeout: 9.0
     start_estop: False
     cmd_duration: 0.25
