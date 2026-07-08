@@ -9,6 +9,7 @@ import sys
 
 import numpy as np
 import synchros2.process as ros_process
+
 from spot_basic import SpotBasic
 from spot_basic.state import ArmJointMap
 
@@ -35,7 +36,7 @@ class ArmJointTrajectoryExample:
         max_velocity = 10.0  # rad/sec
         start_joint_position = ArmJointMap.from_list([0.0, -np.pi / 2, np.pi / 2, np.pi / 2, 0.0, -np.pi / 2])
         with self._robot.leash(timeout_sec=10.0):
-            self._logger.info("Moving arm...")
+            self._logger.info("Moving arm (it will be jerky!!)...")
             self._robot.move_arm.synchronously(
                 start_joint_position, max_acceleration=max_acceleration, max_velocity=max_velocity, timeout_sec=10.0
             )

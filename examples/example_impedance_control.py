@@ -8,7 +8,9 @@ import numpy as np
 import synchros2.process as ros_process
 from spatialmath import SE3, SpatialForce
 from spatialmath.spatialvector import SpatialVector
+
 from spot_basic import SpotBasic
+from spot_basic.command.arm import AxisModeMap
 
 
 class ImpedanceControlExample:
@@ -35,6 +37,23 @@ class ImpedanceControlExample:
                 (SE3(x=radius * np.cos(angle), y=radius * np.sin(angle), z=0), time_scale * angle) for angle in sweep
             ]
 
+            # The impedance trajectory's first waypoint is at time_since_reference=0, so the tool must
+            # already be at that pose when the command starts. Otherwise stiff impedance control cannot
+            # instantly close the gap and the trajectory stalls (reported as STATUS_TRAJECTORY_STALLED,
+            # which the driver surfaces as an aborted goal). Unstow the arm and pre-position the tool at
+            # the trajectory start, using the SAME wrist_t_tool and root_t_task as the impedance command
+            # so the tool (here the wrist) lands exactly on the first waypoint. This mirrors the Boston
+            # Dynamics arm impedance example.
+            self._robot.ready_arm.synchronously(timeout_sec=10.0)
+            self._robot.move_end_effector_cartesian_trajectory.synchronously(
+                root_frame=self._robot.FrameHint.BODY,
+                axis_mode_map=AxisModeMap.position_mode(),
+                pose_vecs=[trajectory[0][0]],
+                timestamps_between_poses=[3.0],
+                wrist_t_tool=wrist_t_tool,
+                root_t_task=root_t_task,
+            )
+
             self._logger.info("Attempting to run trajectory with stiff impedance control")
 
             self._robot.move_end_effector_with_controlled_impedance.synchronously(
@@ -58,6 +77,8 @@ class ImpedanceControlExample:
             )
 
             self._logger.info("Trajectory completed")
+
+            self._robot.stow_arm.synchronously(timeout_sec=10.0)
 
             return 0
 

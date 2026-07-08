@@ -7,6 +7,7 @@ import argparse
 import numpy as np
 from matplotlib import pyplot as plt
 from spatialmath import SE2
+
 from spot_basic.trajectory.se2_trajectory import SE2Trajectory
 from spot_basic.trajectory.se2_trajectory_plotting import draw_shape
 from spot_basic.trajectory.spot_se2_properties import BODY_SHAPE, MAX_SPEED_VEC

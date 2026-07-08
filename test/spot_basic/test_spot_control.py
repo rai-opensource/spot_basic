@@ -9,16 +9,17 @@ from bosdyn.api.robot_state_pb2 import RobotStateStreamResponse
 from rclpy.executors import Executor
 from rclpy.task import Future
 from sensor_msgs.msg import JointState
+from spot_msgs.msg import JointCommand
+from spot_wrapper.testing.fixtures import SpotFixture
+from synchros2.futures import unwrap_future
+from synchros2.scope import ROSAwareScope
+
 from spot_basic import SpotBasic
 from spot_basic.control import (
     SpotForwardPositionControllerInterface,
     SpotForwardStateControllerInterface,
     SpotJointControllerInterface,
 )
-from spot_msgs.msg import JointCommand
-from spot_wrapper.testing.fixtures import SpotFixture
-from synchros2.futures import unwrap_future
-from synchros2.scope import ROSAwareScope
 
 ORDERED_JOINTS = [
     "front_left_hip_x",

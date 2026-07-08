@@ -4,12 +4,13 @@ import numpy as np
 import pytest
 from rclpy.time import Time
 from spatialmath import SE3, SO3, SpatialForce
+from synchros2.utilities import ensure
+
 from spot_basic import FrameHint, SpotBasic
 from spot_basic.command.arm import ArmJointMap, AxisModeMap
 from spot_basic.image import SpotCameraSubscription
 from spot_basic.testing_prompt_session import TestingPromptSession
 from spot_basic.viz import prompt_for_click, visual_aid
-from synchros2.utilities import ensure
 
 
 @pytest.mark.manual

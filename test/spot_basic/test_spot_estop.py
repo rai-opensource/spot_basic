@@ -2,9 +2,10 @@
 
 import pytest
 from bosdyn.api.estop_pb2 import EstopStopLevel
-from spot_basic import SpotBasic
 from spot_wrapper.testing.fixtures import SpotFixture
 from synchros2.scope import ROSAwareScope
+
+from spot_basic import SpotBasic
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)

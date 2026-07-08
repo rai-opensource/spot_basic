@@ -3,13 +3,14 @@
 import contextlib
 from typing import Any, Generator, Optional, Protocol
 
-from spot_basic.base import SpotBaseProtocol
-from spot_basic.utilities import SpotServiced, SpotServicedProtocol, spot_namespaced
 from spot_msgs.msg import PowerState
 from std_srvs.srv import Trigger
 from synchros2.callables import GeneralizedMethodLike, generalized_method
 from synchros2.futures import FutureLike
 from synchros2.subscription import Subscription
+
+from spot_basic.base import SpotBaseProtocol
+from spot_basic.utilities import SpotServiced, SpotServicedProtocol, spot_namespaced
 
 
 class SpotPowerProtocol(SpotBaseProtocol, Protocol):

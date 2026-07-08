@@ -5,6 +5,7 @@ import logging
 import sys
 
 import synchros2.process as ros_process
+
 from spot_basic import SpotBasic
 from spot_basic.image import SpotCameraSubscription
 from spot_basic.viz import prompt_for_click
@@ -43,7 +44,7 @@ class WalkToObjectExample:
             image_click_xy, image_message, camera_info_message = result
 
             self._logger.info("Walking to object...")
-            self._robot.walk_to_object_image.synchronously(
+            self._robot.walk_to_object_in_image.synchronously(
                 image_pixel_xy=image_click_xy,
                 image_timestamp=image_message.header.stamp,
                 camera_info=camera_info_message,

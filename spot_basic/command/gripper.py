@@ -4,11 +4,12 @@ from typing import Any, Callable, Optional, Protocol, TypeAlias, Union
 
 from bosdyn.api import robot_command_pb2
 from bosdyn.client.robot_command import _CLAW_GRIPPER_CLOSED_ANGLE, _CLAW_GRIPPER_OPEN_ANGLE, RobotCommandBuilder
-from spot_basic.command import SpotCommandBuilder, SpotCommandProtocol
-from spot_basic.utilities import SpotActionableProtocol
 from spot_msgs.action import RobotCommand as RobotCommandAction
 from synchros2.action import ActionFuture
 from synchros2.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
+
+from spot_basic.command import SpotCommandBuilder, SpotCommandProtocol
+from spot_basic.utilities import SpotActionableProtocol
 
 
 class SpotGripperCommandBuilder(SpotCommandBuilder):

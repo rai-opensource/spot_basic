@@ -13,10 +13,11 @@ from controller_manager_msgs.srv import (
 from lifecycle_msgs.msg import State
 from rcl_interfaces.srv import GetParameters, ListParameters
 from rclpy.parameter import parameter_value_to_python
-from spot_basic.base import SpotBaseProtocol
-from spot_basic.utilities import SpotServiced, spot_namespaced
 from synchros2.callables import GeneralizedMethodLike, generalized_method
 from synchros2.futures import FutureLike, wait_for_future
+
+from spot_basic.base import SpotBaseProtocol
+from spot_basic.utilities import SpotServiced, spot_namespaced
 
 
 class SpotControllerProtocol(Protocol):

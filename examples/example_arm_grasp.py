@@ -6,6 +6,7 @@ import sys
 
 import synchros2.process as ros_process
 from bosdyn.api import manipulation_api_pb2
+
 from spot_basic import SpotBasic
 from spot_basic.image import SpotCameraSubscription
 from spot_basic.viz import prompt_for_click

@@ -7,11 +7,12 @@ from bosdyn.api.manipulation_api_pb2 import ApiGraspOverride, ApiGraspOverrideRe
 from bosdyn.api.robot_state_pb2 import ManipulatorState
 from bosdyn_api_msgs.msg import ManipulationFeedbackState
 from sensor_msgs.msg import CameraInfo
-from spot_basic import SpotBasic
-from spot_basic.state import FrameHint
 from spot_wrapper.testing.fixtures import SpotFixture
 from synchros2.futures import wait_for_future
 from synchros2.scope import ROSAwareScope
+
+from spot_basic import SpotBasic
+from spot_basic.state import FrameHint
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)

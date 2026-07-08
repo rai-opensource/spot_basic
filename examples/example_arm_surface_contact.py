@@ -7,6 +7,7 @@ import numpy as np
 import synchros2.process as ros_process
 from bosdyn.api.arm_surface_contact_pb2 import ArmSurfaceContact as ArmSurfaceContactProto
 from spatialmath import SE3
+
 from spot_basic import FrameHint, SpotBasic
 from spot_basic.trajectory.se3_trajectory import SE3Trajectory, SE3TrajectoryPoint, get_trajectory_point
 
@@ -46,8 +47,13 @@ def cli() -> argparse.ArgumentParser:
 def main(args: argparse.Namespace) -> None:
     spot = SpotBasic(args.robot_name)
 
-    wrist_t_tool = spot.lookup_a_tform_b(FrameHint.WRIST, FrameHint.HAND) * SE3(x=args.hand_p_tool)
-    gbody_t_tool = spot.lookup_a_tform_b(FrameHint.GRAV_ALIGNED_BODY, FrameHint.WRIST) * wrist_t_tool
+    wrist_t_tool = spot.lookup_a_tform_b(FrameHint.WRIST, FrameHint.HAND, wait_for_frames=True, timeout=5.0) * SE3(
+        x=args.hand_p_tool
+    )
+    gbody_t_tool = (
+        spot.lookup_a_tform_b(FrameHint.GRAV_ALIGNED_BODY, FrameHint.WRIST, wait_for_frames=True, timeout=5.0)
+        * wrist_t_tool
+    )
     offsets = [
         [0.0, -args.side_length, 0.0],
         [-args.side_length, 0.0, 0.0],
@@ -75,7 +81,9 @@ def main(args: argparse.Namespace) -> None:
         y_axis_mode=pos_mode,
         z_axis_mode=force_mode,
         press_force_percentage=[0.0, 0.0, -1.0 * np.abs(args.press_force_percentage)],
-        root_t_task=spot.lookup_a_tform_b(FrameHint.VISION, FrameHint.GRAV_ALIGNED_BODY),
+        root_t_task=spot.lookup_a_tform_b(
+            FrameHint.VISION, FrameHint.GRAV_ALIGNED_BODY, wait_for_frames=True, timeout=5.0
+        ),
         wrist_t_tool=wrist_t_tool,
         xy_to_z_cross_term_admittance=ArmSurfaceContactProto.Request.AdmittanceSetting.ADMITTANCE_SETTING_NORMAL,
         follow_hand=args.body_follow,

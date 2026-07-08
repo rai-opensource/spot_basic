@@ -7,6 +7,7 @@ from typing import Optional
 
 import open3d
 import synchros2.process as ros_process
+
 from spot_basic import SpotBasic
 
 
@@ -52,7 +53,7 @@ def cli() -> argparse.ArgumentParser:
         nargs="+",
         help="Choose one or more cameras to create the image",
         choices=available_cameras,
-        default=[],
+        default=["front_left", "front_right"],
     )
     parser.add_argument("robot_name", help="Name of the robot")
     return parser

@@ -1,9 +1,10 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
 import pytest
-from spot_basic import SpotBasic
 from spot_msgs.msg import PowerState
 from synchros2.futures import wait_for_future
+
+from spot_basic import SpotBasic
 
 
 @pytest.mark.manual

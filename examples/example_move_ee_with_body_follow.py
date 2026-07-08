@@ -7,9 +7,10 @@ import synchros2.process as ros_process
 from bosdyn.client.frame_helpers import VISION_FRAME_NAME
 from bosdyn.client.robot_command import RobotCommandBuilder
 from spatialmath import SE3, UnitQuaternion
-from spot_basic import FrameHint, SpotBasic
 from synchros2.futures import wait_for_future
 from synchros2.utilities import ensure
+
+from spot_basic import FrameHint, SpotBasic
 
 
 class MoveEEWithBodyFollowExample:

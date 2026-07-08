@@ -10,10 +10,11 @@ import synchros2.process as ros_process
 from rclpy.duration import Duration
 from rclpy.time import Time
 from spatialmath import SE2
-from spot_basic import SpotBasic
-from spot_basic.control import SpotJointControllerInterface
 from spot_msgs.msg import JointCommand
 from synchros2.futures import unwrap_future
+
+from spot_basic import SpotBasic
+from spot_basic.control import SpotJointControllerInterface
 
 
 class ControlledSquatExample:
@@ -21,6 +22,7 @@ class ControlledSquatExample:
     Have Spot squat in a controlled manner.
 
     The Spot driver must be running in full controllable mode before attempting to use this example.
+    You can start it in controllable mode by adding `controllable:=true` to the launch command.
     """
 
     SQUAT_JOINT_POSITIONS = {

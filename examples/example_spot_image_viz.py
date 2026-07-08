@@ -8,9 +8,10 @@ import open3d
 import synchros2.process as ros_process
 from cv_bridge import CvBridge
 from scipy import ndimage
+from synchros2.futures import unwrap_future
+
 from spot_basic import SpotBasic
 from spot_basic.image import SpotCameraSubscription
-from synchros2.futures import unwrap_future
 
 
 class SpotImageVizExample:

@@ -4,6 +4,13 @@
 
 [← Back to the README](../README.md)
 
+## Table of contents
+
+- [Executing commands](#executing-commands)
+- [Querying state](#querying-state)
+- [Capturing video](#capturing-video)
+- [Where to go next](#where-to-go-next)
+
 `SpotBasic` user facing APIs are the result of repeatedly applying two abstractions:
 
 - [generalized callables](https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/callables.py), to put out requests and commands over ROS 2 services and actions, and

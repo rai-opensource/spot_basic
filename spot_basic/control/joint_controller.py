@@ -3,11 +3,12 @@
 from functools import cached_property
 
 from sensor_msgs.msg import JointState
+from spot_msgs.msg import JointCommand
+from synchros2.subscription import Subscription
+
 from spot_basic.base import SpotBaseProtocol
 from spot_basic.control.base import SpotControllerInterface
 from spot_basic.utilities import spot_namespaced
-from spot_msgs.msg import JointCommand
-from synchros2.subscription import Subscription
 
 
 class SpotJointControllerInterface(SpotControllerInterface):

@@ -2,12 +2,13 @@
 
 from typing import Any, Optional, Protocol
 
-from spot_basic.base import SpotBaseProtocol
-from spot_basic.utilities import SpotServiced, SpotServicedProtocol, spot_namespaced
 from spot_msgs.srv import Dock
 from std_srvs.srv import Trigger
 from synchros2.callables import GeneralizedMethodLike, generalized_method
 from synchros2.futures import FutureLike
+
+from spot_basic.base import SpotBaseProtocol
+from spot_basic.utilities import SpotServiced, SpotServicedProtocol, spot_namespaced
 
 
 class SpotDockingProtocol(SpotBaseProtocol, Protocol):

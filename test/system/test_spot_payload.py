@@ -3,6 +3,7 @@
 import pathlib
 
 import pytest
+
 from spot_basic import SpotBasic
 from spot_basic.testing_prompt_session import TestingPromptSession
 

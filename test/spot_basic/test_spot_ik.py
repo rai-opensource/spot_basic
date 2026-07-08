@@ -2,11 +2,12 @@
 
 import pytest
 from bosdyn.api.spot.inverse_kinematics_pb2 import InverseKinematicsRequest, InverseKinematicsResponse
-from spot_basic import SpotBasic
-from spot_basic.state import FrameHint
 from spot_wrapper.testing.fixtures import SpotFixture
 from synchros2.futures import unwrap_future
 from synchros2.scope import ROSAwareScope
+
+from spot_basic import SpotBasic
+from spot_basic.state import FrameHint
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_graph_description)

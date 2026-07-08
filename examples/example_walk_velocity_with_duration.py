@@ -7,6 +7,7 @@ import sys
 
 import synchros2.process as ros_process
 from spatialmath import Twist2
+
 from spot_basic import SpotBasic
 
 

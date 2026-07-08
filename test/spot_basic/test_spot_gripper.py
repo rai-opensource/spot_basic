@@ -12,10 +12,11 @@ from bosdyn.api.gripper_camera_param_pb2 import (
 from bosdyn.api.gripper_command_pb2 import ClawGripperCommand
 from bosdyn.api.robot_command_pb2 import RobotCommandFeedbackResponse, RobotCommandResponse
 from bosdyn_api_msgs.msg import ClawGripperCommandFeedbackStatus
-from spot_basic import SpotBasic
 from spot_wrapper.testing.fixtures import SpotFixture
 from synchros2.futures import unwrap_future, wait_for_future
 from synchros2.scope import ROSAwareScope
+
+from spot_basic import SpotBasic
 
 
 @pytest.mark.launch(fixture=pytest.simple_spot_without_arm_graph_description)

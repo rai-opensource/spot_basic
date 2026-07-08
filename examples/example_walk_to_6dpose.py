@@ -7,8 +7,9 @@ import sys
 
 import synchros2.process as ros_process
 from spatialmath import SE3, UnitQuaternion
-from spot_basic import FrameHint, SpotBasic
 from synchros2.utilities import ensure
+
+from spot_basic import FrameHint, SpotBasic
 
 
 class WalkTo6DPoseExample:

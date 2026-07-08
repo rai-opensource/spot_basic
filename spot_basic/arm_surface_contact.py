@@ -8,19 +8,16 @@ from typing import Any, Callable, Optional, Protocol, Union
 from bosdyn.api import arm_command_pb2, geometry_pb2, gripper_command_pb2, trajectory_pb2
 from bosdyn.api.arm_surface_contact_pb2 import ArmSurfaceContact as ArmSurfaceContactProto
 from spatialmath import SE3
+from spot_msgs.action import ArmSurfaceContact as ArmSurfaceContactAction
+from synchros2.action import ActionFuture
+from synchros2.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
+
 from spot_basic.base import SpotBaseProtocol
 from spot_basic.command.helpers import se3_trajectory_to_proto
 from spot_basic.manual_conversions import se3_to_se3pose_proto
 from spot_basic.state import ArmJointMap, FrameHint
 from spot_basic.trajectory.se3_trajectory import SE3Trajectory
-from spot_basic.utilities import (
-    SpotActionable,
-    SpotActionableProtocol,
-    spot_namespaced,
-)
-from spot_msgs.action import ArmSurfaceContact as ArmSurfaceContactAction
-from synchros2.action import ActionFuture
-from synchros2.callables import GeneralizedGuard, GeneralizedMethodLike, generalized_method
+from spot_basic.utilities import SpotActionable, SpotActionableProtocol, spot_namespaced
 
 
 class PreferredJointConfigurationMode(IntEnum):

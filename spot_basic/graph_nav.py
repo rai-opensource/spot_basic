@@ -5,14 +5,6 @@ from functools import cached_property
 from typing import Any, Optional, Protocol, TypeAlias, Union, overload
 
 from geometry_msgs.msg import PoseStamped
-from spot_basic.base import SpotBaseProtocol
-from spot_basic.utilities import (
-    SpotActionable,
-    SpotActionableProtocol,
-    SpotServiced,
-    SpotServicedProtocol,
-    spot_namespaced,
-)
 from spot_msgs.action import NavigateTo  # type: ignore
 from spot_msgs.srv import (
     GraphNavClearGraph,
@@ -25,6 +17,15 @@ from synchros2.action import ActionFuture
 from synchros2.callables import GeneralizedMethodLike, generalized_method
 from synchros2.futures import FutureLike
 from synchros2.subscription import Subscription
+
+from spot_basic.base import SpotBaseProtocol
+from spot_basic.utilities import (
+    SpotActionable,
+    SpotActionableProtocol,
+    SpotServiced,
+    SpotServicedProtocol,
+    spot_namespaced,
+)
 
 
 class LocalizationMethod(str, Enum):

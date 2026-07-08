@@ -3,11 +3,12 @@
 import contextlib
 from typing import Any, Generator, Optional, Protocol
 
-from spot_basic.base import SpotBaseProtocol
-from spot_basic.utilities import SpotServiced, SpotServicedProtocol, spot_namespaced
 from std_srvs.srv import Trigger
 from synchros2.callables import GeneralizedMethodLike, generalized_method
 from synchros2.futures import FutureLike
+
+from spot_basic.base import SpotBaseProtocol
+from spot_basic.utilities import SpotServiced, SpotServicedProtocol, spot_namespaced
 
 
 class SpotLeaseProtocol(SpotBaseProtocol, Protocol):

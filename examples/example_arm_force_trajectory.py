@@ -10,6 +10,7 @@ import sys
 import synchros2.process as ros_process
 from bosdyn.api import arm_command_pb2
 from spatialmath import SE3, SpatialForce
+
 from spot_basic import FrameHint, SpotBasic
 from spot_basic.command.arm import AxisModeMap
 
@@ -80,28 +81,6 @@ class ArmForceTrajectoryExample:
             self._robot.move_end_effector_cartesian_trajectory.synchronously(
                 timestamps_between_wrenches=[1.5],
                 wrench_vecs=[SpatialForce([0.0, 0.0, 0.0, 0.0, 0.0, 1.0])],
-                axis_mode_map=dataclasses.replace(AxisModeMap.position_mode(), rz=AXIS_MODE_FORCE),
-                root_frame=FrameHint.BODY,
-                timeout_sec=5.0,
-            )
-
-            self._robot.move_end_effector.synchronously(cobra_pose, duration_sec=0.5, base_frame=FrameHint.BODY)
-
-            self._robot.move_end_effector_cartesian_trajectory.synchronously(
-                timestamps_between_wrenches=[1.5],
-                wrench_vecs=[SpatialForce([1.0, 0.0, 0.0, 0.0, 0.5, 0.0])],
-                axis_mode_map=dataclasses.replace(AxisModeMap.position_mode(), x=AXIS_MODE_FORCE, ry=AXIS_MODE_FORCE),
-                root_frame=FrameHint.BODY,
-                timeout_sec=5.0,
-            )
-
-            self._robot.move_end_effector.synchronously(cobra_pose, duration_sec=0.5, base_frame=FrameHint.BODY)
-
-            self._robot.move_end_effector_cartesian_trajectory.synchronously(
-                pose_vecs=[SE3([0.45, 0.0, 0.55]), SE3([0.65, 0.0, 0.55])],
-                wrench_vecs=[SpatialForce([0.0, 0.0, 0.0, 0.0, 0.0, -1.0])],
-                timestamps_between_poses=[0.5, 1.0],
-                timestamps_between_wrenches=[1.0],
                 axis_mode_map=dataclasses.replace(AxisModeMap.position_mode(), rz=AXIS_MODE_FORCE),
                 root_frame=FrameHint.BODY,
                 timeout_sec=5.0,

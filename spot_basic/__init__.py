@@ -4,6 +4,7 @@ import contextlib
 from typing import Generator, Optional, Protocol
 
 from rclpy.node import Node
+
 from spot_basic.arm_surface_contact import SpotArmSurfaceContactMixin
 from spot_basic.base import SpotBase
 from spot_basic.cam.audio import SpotCAMAudioMixin

@@ -6,6 +6,7 @@ from typing import Any, Iterator, Optional, Tuple
 import cv2
 import cv_bridge
 from sensor_msgs.msg import CameraInfo, Image
+
 from spot_basic.image import CameraSubscription
 
 

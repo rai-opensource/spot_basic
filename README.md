@@ -2,7 +2,17 @@
 
 # `spot_basic`
 
-A simpler, more intuitive interface to Boston Dynamics' Spot robots from ROS 2.
+A simpler, more intuitive interface to Boston Dynamics' Spot robots with ROS 2.
+
+## Table of contents
+
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Installation](#installation)
+- [Running the Spot driver](#running-the-spot-driver)
+- [A first example](#a-first-example)
+- [Documentation](#documentation)
+- [Testing](#testing)
 
 ## Overview
 
@@ -66,6 +76,8 @@ pip install -r src/spot_basic/requirements.txt
 colcon build
 source install/setup.bash
 ```
+
+Note that you will also need to follow the `spot_ros2` installation instructions as well if you choose manual installation (the build will most likely fail before you do this).
 
 ## Running the Spot driver
 
