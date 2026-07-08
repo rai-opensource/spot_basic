@@ -84,7 +84,6 @@ mixed-level (controllable) mode first — see the
 
 | Example | Description | Run |
 |---------|-------------|-----|
-| [example_controlled_squat.py](example_controlled_squat.py) | Have Spot squat in a controlled manner (forward position controller). | `python3 example_controlled_squat.py <robot_name>` |
 | [example_joint_control_squat.py](example_joint_control_squat.py) | Have Spot squat in a controlled manner (joint-level control). | `python3 example_joint_control_squat.py <robot_name>` |
 
 > **Note:** Arm examples require a Spot equipped with an arm. Some scripts accept extra

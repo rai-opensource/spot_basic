@@ -22,7 +22,7 @@ class ControlledSquatExample:
     Have Spot squat in a controlled manner.
 
     The Spot driver must be running in full controllable mode before attempting to use this example.
-    You can start it in controllable mode by adding controllable:=true to the launch command
+    You can start it in controllable mode by adding `controllable:=true` to the launch command.
     """
 
     SQUAT_JOINT_POSITIONS = {
