@@ -35,8 +35,8 @@ def test_world_inspection(simple_spot: SpotFixture, ros: ROSAwareScope) -> None:
     assert len(response.response.world_objects) == 1
     world_object = response.response.world_objects[0]
     assert expected_world_object.id == world_object.id
-    apriltag_properties = expected_world_object.apriltag_properties
+    apriltag_properties = world_object.apriltag_properties
     assert expected_apriltag_properties.tag_id == apriltag_properties.tag_id
-    assert apriltag_properties.fiducial_filtered_pose_status == (
+    assert apriltag_properties.fiducial_filtered_pose_status.value == (
         expected_apriltag_properties.fiducial_filtered_pose_status
     )
