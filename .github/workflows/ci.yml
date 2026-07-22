@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || ''}}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint spot_basic package
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        config:
+          - { python: "3.10" }
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.config.python }}
+
+      - name: Lint sources
+        uses: pre-commit/action@v3.0.1
+
+  build_and_test:
+    name: Build and test spot_basic package
+    runs-on: ubuntu-22.04
+    needs: lint
+    permissions:
+      contents: read
+      packages: read
+    container:
+      # Use the prebuilt spot_ros2 image, published by that repo. It already contains ROS
+      # 2 Humble, bosdyn_msgs, spot-cpp-sdk and the spot_wrapper Python requirements, so
+      # spot_basic only builds spot_ros2 and itself from source.
+      image: ghcr.io/rai-opensource/spot_ros2_jammy_humble:main
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout spot_basic
+        uses: actions/checkout@v6
+        with:
+          path: src/spot_basic
+
+      # Checkout spot_ros2 and its submodules, because it's a necessary dependency of
+      # spot_basic. Other necessary dependencies are contained in the Docker image.
+      - name: Checkout spot_ros2
+        run: |
+          git clone --recurse-submodules --depth 1 --shallow-submodules \
+            https://github.com/rai-opensource/spot_ros2.git src/spot_ros2
+
+      - name: Add Git safe directories
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/src/spot_basic"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/src/spot_ros2"
+
+      - name: Install spot_basic Python dependencies
+        run: |
+          pip install --no-cache-dir -r src/spot_basic/requirements.txt
+
+      - name: Resolve Rosdep dependencies
+        run: |
+          source /opt/ros/$ROS_DISTRO/setup.bash
+          apt-get update -q
+          rosdep update
+          rosdep install --from-paths src --ignore-src -r -y \
+            --skip-keys "bosdyn bosdyn_msgs spot_wrapper"
+
+      - name: Build packages
+        run: |
+          source /opt/ros/$ROS_DISTRO/setup.bash
+          colcon build --symlink-install --packages-up-to spot_basic
+
+      # Per https://github.com/colcon/colcon-ros/issues/151, pytest args cannot be passed
+      # to an ament_cmake package via colcon test, and the package's ament_add_pytest_test
+      # target collects the whole test directory (including the system tests). We
+      # therefore run pytest directly to exclude the system tests.
+      - name: Run unit tests
+        run: |
+          source install/setup.bash
+          pytest src/spot_basic/test --ignore=src/spot_basic/test/system -vv -s --log-cli-level=DEBUG
