@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Provide OpenCV visualization helpers for Spot camera subscriptions."""
+
 from contextlib import closing, contextmanager
 from typing import Any, Iterator, Optional, Tuple
 
@@ -25,6 +27,15 @@ def prompt_for_click(
         image_hover_xy: Optional[Tuple[int, int]] = None
 
         def mouse_callback(event: Any, x: float, y: float, flags: Any, param: Any) -> None:
+            """Track cursor hover position and record image clicks.
+
+            Args:
+                event: OpenCV mouse event code.
+                x: cursor x-coordinate in the window.
+                y: cursor y-coordinate in the window.
+                flags: OpenCV mouse event flags.
+                param: OpenCV callback parameter.
+            """
             nonlocal image, image_click_xy, image_hover_xy
             if event != cv2.EVENT_LBUTTONUP:
                 image_hover_xy = (int(x), int(y))
@@ -79,6 +90,11 @@ def visual_aid(name: str, camera: CameraSubscription) -> Iterator:
         bridge = cv_bridge.CvBridge()
 
         def imshow(image: Image) -> None:
+            """Render an image message in the named OpenCV window.
+
+            Args:
+                image: ROS 2 image message to render.
+            """
             cv2.imshow(name, bridge.imgmsg_to_cv2(image, "passthrough"))
 
         with closing(camera.image.recall(imshow)):

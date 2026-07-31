@@ -1,6 +1,9 @@
 # Copyright (c) 2025-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
 # Copyright (c) 2023-2026 Robotics and AI Institute LLC dba RAI Institute, LLC. All rights reserved.
+
+"""Helpers for converting spatialmath trajectories into Spot command protobufs."""
+
 from __future__ import annotations
 
 from typing import Any, Optional, Sequence
@@ -36,6 +39,21 @@ def timestamped_se2_vecs_to_se2_trajectory_command_proto(
     *,
     base_frame: str = BODY_FRAME_NAME,
 ) -> basic_command_pb2.SE2TrajectoryCommand.Request:
+    """Convert timestamped SE(2) poses to an SE2 trajectory command protobuf.
+
+    Args:
+        timestamps_sec: sequence of times since the command reference time, in seconds, one per pose.
+        se2_poses: sequence of spatialmath SE2 poses or an array shaped (_, 3) with x, y, and theta values in meters
+        and radians.
+        interpolation: positional interpolation mode for the trajectory points.
+        base_frame: frame name in which the SE(2) poses are expressed.
+
+    Returns:
+        an SE2TrajectoryCommand request containing the timestamped trajectory.
+
+    Raises:
+        ValueError: if `se2_poses` is an array whose shape is not (_, 3).
+    """
     # See also: RobotCommandBuilder.synchro_se2_trajectory_command,
     # where this is done but with the assumption of only one goal point and no time stamping
 
@@ -62,6 +80,18 @@ def timestamped_se2_vecs_to_se2_trajectory_command_proto(
 def timestamped_se2_vecs_to_mobility_command_proto(
     *args: Any, mobility_params: Optional[spot_command_pb2.MobilityParams] = None, **kwargs: Any
 ) -> mobility_command_pb2.MobilityCommand.Request:
+    """Convert timestamped SE(2) poses to a mobility command protobuf.
+
+    The forwarded trajectory arguments describe times in seconds and SE(2) poses in meters and radians.
+
+    Args:
+        *args: trajectory arguments forwarded to `timestamped_se2_vecs_to_se2_trajectory_command_proto`.
+        mobility_params: optional Spot mobility params to pack into the command.
+        **kwargs: keyword arguments forwarded to `timestamped_se2_vecs_to_se2_trajectory_command_proto`.
+
+    Returns:
+        a MobilityCommand request containing the SE(2) trajectory request and optional mobility params.
+    """
     # Build the trajectory proto
     trajectory_command_proto = timestamped_se2_vecs_to_se2_trajectory_command_proto(*args, **kwargs)
 
@@ -77,6 +107,18 @@ def timestamped_se2_vecs_to_mobility_command_proto(
 def timestamped_se2_vecs_to_robot_command_proto(
     *args: Any, mobility_params: spot_command_pb2.MobilityParams, **kwargs: Any
 ) -> robot_command_pb2.RobotCommand:
+    """Convert timestamped SE(2) poses to a synchronized robot command protobuf.
+
+    The forwarded trajectory arguments describe times in seconds and SE(2) poses in meters and radians.
+
+    Args:
+        *args: trajectory arguments forwarded to `timestamped_se2_vecs_to_mobility_command_proto`.
+        mobility_params: Spot mobility params to pack into the mobility command.
+        **kwargs: keyword arguments forwarded to `timestamped_se2_vecs_to_mobility_command_proto`.
+
+    Returns:
+        a RobotCommand containing a synchronized mobility command with the SE(2) trajectory.
+    """
     mobility_command = timestamped_se2_vecs_to_mobility_command_proto(*args, mobility_params=mobility_params, **kwargs)
     synchronized_command = synchronized_command_pb2.SynchronizedCommand.Request(mobility_command=mobility_command)
     return robot_command_pb2.RobotCommand(synchronized_command=synchronized_command)

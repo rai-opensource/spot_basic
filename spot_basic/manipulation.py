@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Arm manipulation, grasping, and object interaction helpers."""
+
 from __future__ import annotations
 
 import math
@@ -32,6 +34,11 @@ class SpotManipulationCommandBuilder:
     """A builder for Spot manipulation commands."""
 
     def __init__(self, target: SpotStateProtocol) -> None:
+        """Initialize the manipulation command builder.
+
+        Args:
+            target: SpotBasic object used to look up robot-specific transforms for manipulation requests.
+        """
         self.target = target
 
     def tight_top_down_grasp_params(self) -> manipulation_api_pb2.GraspParams:
@@ -537,6 +544,16 @@ class SpotManipulationMixin(SpotStateProtocol):
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize manipulation clients and bind generalized methods.
+
+        Creates concrete ROS 2 action and service clients for manipulation and grasp override
+        requests, then rebinds generalized methods through arm-availability guards. The rebound
+        APIs raise `RuntimeError` when invoked on a robot without an arm.
+
+        Args:
+            args: positional arguments forwarded to the next class in the MRO.
+            kwargs: keyword arguments forwarded to the next class in the MRO.
+        """
         super().__init__(*args, **kwargs)
         command_builder = SpotManipulationCommandBuilder(self)
 

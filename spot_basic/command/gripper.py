@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Spot gripper command builders, protocols, and mixin bindings."""
+
 from typing import Any, Callable, Optional, Protocol, TypeAlias, Union
 
 from bosdyn.api import robot_command_pb2
@@ -173,6 +175,15 @@ class SpotGripperCommandMixin(SpotCommandProtocol):
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize guarded gripper command methods.
+
+        Calls the next initializer, creates a command builder, and rebinds gripper generalized methods to guarded robot
+        command executions.
+
+        Args:
+            *args: positional arguments forwarded to the next class in the MRO.
+            **kwargs: keyword arguments forwarded to the next class in the MRO.
+        """
         super().__init__(*args, **kwargs)
         command_builder = SpotGripperCommandBuilder(self)
 

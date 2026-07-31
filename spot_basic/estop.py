@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Provide Spot emergency stop service helpers."""
+
 from typing import Any, Optional, Protocol
 
 from std_srvs.srv import Trigger
@@ -114,6 +116,15 @@ class SpotEStopMixin(SpotBaseProtocol):
     """Mixin offering Spot emergency stops management support."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Bind emergency stop service helpers for the robot.
+
+        Rebinds the generalized hard stop, gentle stop, and release methods to concrete ROS 2 service clients
+        in the robot namespace.
+
+        Args:
+            args: positional arguments forwarded to the next class in the MRO.
+            kwargs: keyword arguments forwarded to the next class in the MRO.
+        """
         super().__init__(*args, **kwargs)
         SpotEStopMixin.estop_hard.rebind(
             self, SpotServiced(Trigger, spot_namespaced(self.robot_name, "estop/hard"), node=self.node)

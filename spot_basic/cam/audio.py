@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Spot CAM audio service helpers."""
+
 import os
 from typing import Any, Optional, Protocol, overload
 
@@ -334,6 +336,15 @@ class SpotCAMAudioMixin(SpotBaseProtocol):
     """Mixin that manages access to the Spot CAM audio system."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize Spot CAM audio service clients and bind generalized methods.
+
+        Creates concrete ROS 2 service clients for listing, loading, playing, deleting sounds and
+        reading or setting volume, then rebinds generalized audio methods to those clients.
+
+        Args:
+            args: positional arguments forwarded to the next class in the MRO.
+            kwargs: keyword arguments forwarded to the next class in the MRO.
+        """
         super().__init__(*args, **kwargs)
         SpotCAMAudioMixin.list_sounds.rebind(
             self, SpotServiced(ListSounds, spot_namespaced(self.robot_name, "list_sounds"), node=self.node)

@@ -1,5 +1,7 @@
 # Copyright (c) 2025-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Joint controller interface for Spot joint command messages."""
+
 from functools import cached_property
 
 from sensor_msgs.msg import JointState

@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Spot full body command builders, protocols, and mixin bindings."""
+
 from enum import IntEnum
 from typing import Any, Callable, Optional, Protocol, TypeAlias, Union, overload
 
@@ -21,6 +23,11 @@ from spot_basic.utilities import SpotActionableProtocol
 
 
 class BatteryChangeDirHint(IntEnum):
+    """Select which side Spot should roll toward when entering battery change pose.
+
+    RIGHT rolls the robot to the right side; LEFT rolls the robot to the left side.
+    """
+
     RIGHT = 1
     LEFT = 2
 
@@ -208,6 +215,15 @@ class SpotFullBodyCommandMixin(SpotCommandProtocol):
     BatteryChangeDirHint: TypeAlias = BatteryChangeDirHint
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize full body command methods.
+
+        Calls the next initializer, creates a command builder, and rebinds full body generalized methods to robot
+        command executions.
+
+        Args:
+            *args: positional arguments forwarded to the next class in the MRO.
+            **kwargs: keyword arguments forwarded to the next class in the MRO.
+        """
         super().__init__(*args, **kwargs)
         command_builder = SpotFullBodyCommandBuilder(self)
         SpotFullBodyCommandMixin.self_right.rebind(self, self.execute.compose(command_builder.self_right_command))

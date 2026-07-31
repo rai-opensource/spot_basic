@@ -1,5 +1,7 @@
 # Copyright (c) 2025-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Forward position controller interface for Spot joint position commands."""
+
 from collections.abc import Sequence
 from functools import cached_property
 from typing import Optional

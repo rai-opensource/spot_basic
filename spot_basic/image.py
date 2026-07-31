@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Image subscriptions and pointcloud reconstruction helpers."""
+
 from collections.abc import Sequence
 from enum import Enum
 from functools import cached_property
@@ -151,6 +153,11 @@ class SpotCameraSubscription:
         HAND = "hand"
 
         def __repr__(self) -> str:
+            """Return the camera location value as its representation.
+
+            Returns:
+                the camera location value.
+            """
             return self.value
 
     def __init__(

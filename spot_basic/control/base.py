@@ -1,5 +1,7 @@
 # Copyright (c) 2025-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Base interfaces for attaching ros2_control controllers to Spot."""
+
 from collections.abc import Sequence
 from typing import Any, Dict, Optional, Protocol, TypeVar
 
@@ -182,6 +184,15 @@ class SpotControllerInterface(SpotControllerProtocol):
 
     @attach.sync_overload
     def _attach_synchronously(self, *, timeout_sec: Optional[float] = None) -> None:
+        """Attach the hardware interface and controllers synchronously.
+
+        Args:
+            timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires, the attach request
+            will be cancelled and the call will raise.
+
+        Raises:
+            RuntimeError: if attachment fails or times out.
+        """
         future = self.attach.asynchronously()
         if not wait_for_future(future, timeout_sec):
             future.cancel()
@@ -215,6 +226,15 @@ class SpotControllerInterface(SpotControllerProtocol):
 
     @detach.sync_overload
     def _detach_synchronously(self, timeout_sec: Optional[float] = None) -> None:
+        """Detach the hardware interface and controllers synchronously.
+
+        Args:
+            timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires, the detach request
+            will be cancelled and the call will raise.
+
+        Raises:
+            RuntimeError: if detachment fails or times out.
+        """
         future = self.detach.asynchronously()
         if not wait_for_future(future, timeout_sec):
             future.cancel()

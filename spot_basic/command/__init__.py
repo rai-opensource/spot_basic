@@ -1,5 +1,7 @@
 # Copyright (c) 2023-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Core Spot command execution protocols and mixin bindings."""
+
 from enum import IntEnum
 from typing import Any, Callable, Optional, Protocol, TypeAlias, Union, overload
 
@@ -474,6 +476,17 @@ class SpotCommandMixin(SpotCommandProtocol):
     LocomotionHint: TypeAlias = LocomotionHint
 
     def __init__(self, *args: Any, disable_collisions: bool = False, **kwargs: Any) -> None:
+        """Initialize command execution clients and default mobility parameters.
+
+        Calls the next initializer, creates default mobility params, and rebinds command generalized methods to the
+        concrete ROS 2 service and action clients.
+
+        Args:
+            *args: positional arguments forwarded to the next class in the MRO.
+            disable_collisions: whether to disable vision obstacle and foot constraint avoidance in the default
+            mobility params.
+            **kwargs: keyword arguments forwarded to the next class in the MRO.
+        """
         super().__init__(*args, **kwargs)
         obstacles = spot_command_pb2.ObstacleParams(
             disable_vision_body_obstacle_avoidance=disable_collisions,

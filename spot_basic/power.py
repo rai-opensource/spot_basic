@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Provide Spot motor power service helpers and power state subscription support."""
+
 import contextlib
 from typing import Any, Generator, Optional, Protocol
 
@@ -78,6 +80,15 @@ class SpotPowerMixin(SpotBaseProtocol):
     """Mixin offering Spot power management support."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Bind power state and motor power service helpers for the robot.
+
+        Creates a power state subscription and rebinds the generalized power on and power off methods
+        to concrete ROS 2 service clients in the robot namespace.
+
+        Args:
+            args: positional arguments forwarded to the next class in the MRO.
+            kwargs: keyword arguments forwarded to the next class in the MRO.
+        """
         super().__init__(*args, **kwargs)
         self.power_states = Subscription(
             PowerState, spot_namespaced(self.robot_name, "status/power_states"), node=self.node

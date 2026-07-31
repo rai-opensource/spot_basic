@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Spot mobility command builders, protocols, and mixin bindings."""
+
 from copy import deepcopy
 from typing import Any, Callable, Iterable, List, Optional, Protocol, TypeAlias, Union, overload
 
@@ -650,6 +652,15 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
     """Mixin that eases basic Spot mobility command execution."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize mobility command methods and velocity publisher.
+
+        Calls the next initializer, creates a command builder, rebinds mobility generalized methods to robot command
+        executions, and creates the `cmd_vel` publisher.
+
+        Args:
+            *args: positional arguments forwarded to the next class in the MRO.
+            **kwargs: keyword arguments forwarded to the next class in the MRO.
+        """
         super().__init__(*args, **kwargs)
         command_builder = SpotMobilityCommandBuilder(self)
         SpotMobilityCommandMixin.sit.rebind(self, self.execute.compose(command_builder.sit_command))

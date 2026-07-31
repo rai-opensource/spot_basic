@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Spot arm command builders, protocols, and mixin bindings."""
+
 import dataclasses
 from typing import Any, Callable, List, Optional, Protocol, Sequence, Tuple, TypeAlias, Union, overload
 
@@ -38,6 +40,11 @@ class AxisModeMap:
 
     @classmethod
     def position_mode(cls) -> "AxisModeMap":
+        """Create an axis mode map with every axis in position mode.
+
+        Returns:
+            axis mode map with all translational and rotational axes set to position control.
+        """
         return cls(
             x=arm_command_pb2.ArmCartesianCommand.Request.AxisMode.AXIS_MODE_POSITION,
             y=arm_command_pb2.ArmCartesianCommand.Request.AxisMode.AXIS_MODE_POSITION,
@@ -49,6 +56,11 @@ class AxisModeMap:
 
     @classmethod
     def force_mode(cls) -> "AxisModeMap":
+        """Create an axis mode map with every axis in force mode.
+
+        Returns:
+            axis mode map with all translational and rotational axes set to force control.
+        """
         return cls(
             x=arm_command_pb2.ArmCartesianCommand.Request.AxisMode.AXIS_MODE_FORCE,
             y=arm_command_pb2.ArmCartesianCommand.Request.AxisMode.AXIS_MODE_FORCE,
@@ -969,6 +981,15 @@ class SpotArmCommandMixin(SpotCommandProtocol):
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize guarded arm command methods.
+
+        Calls the next initializer, creates a command builder, and rebinds arm generalized methods to guarded robot
+        command executions.
+
+        Args:
+            *args: positional arguments forwarded to the next class in the MRO.
+            **kwargs: keyword arguments forwarded to the next class in the MRO.
+        """
         super().__init__(*args, **kwargs)
         command_builder = SpotArmCommandBuilder(self)
 

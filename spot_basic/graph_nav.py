@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""GraphNav localization, graph management, and navigation helpers."""
+
 from enum import Enum
 from functools import cached_property
 from typing import Any, Optional, Protocol, TypeAlias, Union, overload
@@ -35,6 +37,11 @@ class LocalizationMethod(str, Enum):
     WAYPOINT = "waypoint"
 
     def __repr__(self) -> str:
+        """Return the string representation of the localization method.
+
+        Returns:
+            the localization method as text.
+        """
         return str(self)
 
 
@@ -343,7 +350,13 @@ class SpotGraphNavProtocol(SpotBaseProtocol, Protocol):
             """
 
     @property
-    def localization(self) -> Subscription[PoseStamped]: ...
+    def localization(self) -> Subscription[PoseStamped]:
+        """Get latest localization pose estimates subscription.
+
+        Returns:
+            a subscription to GraphNav body pose estimates.
+        """
+        ...
 
     reset_localization: GeneralizedMethodLike[ResetLocalizationProtocol]
     set_localization: GeneralizedMethodLike[ResetLocalizationProtocol]
@@ -364,6 +377,15 @@ class SpotGraphNavMixin(SpotBaseProtocol):
     LocalizationMethod: TypeAlias = LocalizationMethod
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize GraphNav clients and bind generalized methods.
+
+        Creates concrete ROS 2 service and action clients for localization, graph management, and
+        waypoint navigation, then rebinds generalized methods to those clients.
+
+        Args:
+            args: positional arguments forwarded to the next class in the MRO.
+            kwargs: keyword arguments forwarded to the next class in the MRO.
+        """
         super().__init__(*args, **kwargs)
         SpotGraphNavMixin.get_localization_pose.rebind(
             self,

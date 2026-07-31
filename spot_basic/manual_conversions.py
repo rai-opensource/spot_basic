@@ -1,4 +1,7 @@
 # Copyright (c) 2023-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
+
+"""Manual conversions between Spot protobufs, ROS messages, Open3D, and spatialmath types."""
+
 import array
 import sys
 from typing import Any, List, Optional, Protocol
@@ -37,12 +40,24 @@ _nptype_to_pftype = dict((nptype, pftype) for pftype, nptype in _pfnptype_mappin
 
 
 class HasFields_xyz(Protocol):
+    """Protocol for objects with x, y, and z fields.
+
+    This structural type matches ROS messages, Spot SDK helpers, and protobuf messages that store vector components
+    as named fields so shared conversion helpers can read them without depending on a concrete class.
+    """
+
     x: Any
     y: Any
     z: Any
 
 
 class HasFields_wxyz(Protocol):
+    """Protocol for objects with w, x, y, and z fields.
+
+    This structural type matches quaternion-like ROS messages, Spot SDK helpers, and protobuf messages so shared
+    conversion helpers can read scalar-first quaternion components without depending on a concrete class.
+    """
+
     w: Any
     x: Any
     y: Any
@@ -269,6 +284,14 @@ def _ros_transform_to_se3(transform: RosTransform) -> SE3:
 
 
 def _se3pose_to_se3(pose: SE3Pose) -> SE3:
+    """Convert a Spot SDK SE3Pose to a spatialmath SE3 transform.
+
+    Args:
+        pose: Spot SDK SE3Pose.
+
+    Returns:
+        spatialmath SE3 transform with the same translation and rotation.
+    """
     return SE3.Rt(t=get_list_from_xyz(pose), R=to_unit_quaternion(pose.rotation).SO3())
 
 
@@ -316,10 +339,26 @@ def to_se3(
 
 
 def se2_to_se2pose(se2: SE2) -> SE2Pose:
+    """Convert a spatialmath SE2 transform to a Spot SDK SE2Pose.
+
+    Args:
+        se2: spatialmath SE2 transform, with x and y in metres and theta in radians.
+
+    Returns:
+        Spot SDK SE2Pose with the same x, y, and angle.
+    """
     return SE2Pose(x=se2.x, y=se2.y, angle=se2.theta())
 
 
 def se2_to_se2pose_proto(se2: SE2) -> geometry_pb2.SE2Pose:
+    """Convert a spatialmath SE2 transform to a Spot SE2Pose protobuf.
+
+    Args:
+        se2: spatialmath SE2 transform, with x and y in metres and theta in radians.
+
+    Returns:
+        bosdyn.api.geometry_pb2.SE2Pose protobuf with the same x, y, and angle.
+    """
     return se2_to_se2pose(se2).to_proto()
 
 

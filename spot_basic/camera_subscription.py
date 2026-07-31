@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Provide ergonomic ROS 2 camera subscriptions and synchronized image feeds."""
+
 from functools import cached_property
 from typing import Any, NamedTuple, Optional
 

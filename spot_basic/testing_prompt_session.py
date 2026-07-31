@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Interactive prompt helpers for manual hardware-in-the-loop tests."""
+
 import asyncio
 import contextlib
 import contextvars
@@ -24,16 +26,25 @@ class IOProxy(Generic[T]):
     """An IO stream proxy that allows redirection."""
 
     class Redirection:
+        """A reversible IO proxy redirection."""
 
         def __init__(self, proxy: "IOProxy[T]", stream: T) -> None:
+            """Initialize a redirection for a proxy to a target stream.
+
+            Args:
+                proxy: IO proxy whose stream should be redirected.
+                stream: target stream to use while the redirection is enabled.
+            """
             self.proxy = proxy
             self.base_stream = proxy.stream
             self.target_stream = stream
 
         def enable(self) -> None:
+            """Route the proxy to the target stream."""
             self.proxy.stream = self.target_stream
 
         def disable(self) -> None:
+            """Restore the proxy to its original stream."""
             self.proxy.stream = self.base_stream
 
     def __init__(self, stream: T) -> None:
@@ -41,6 +52,14 @@ class IOProxy(Generic[T]):
         self.stream = stream
 
     def __getattr__(self, name: str) -> Any:
+        """Delegate unknown attributes to the currently proxied stream.
+
+        Args:
+            name: attribute name to resolve on the wrapped stream.
+
+        Returns:
+            the attribute value from the current stream.
+        """
         return getattr(self.stream, name)
 
     @contextlib.contextmanager
@@ -62,6 +81,12 @@ class PatchedStdoutProxy(StdoutProxy):
         """An `asyncio.AbstractEventLoop` decorator that binds a given context to every call."""
 
         def __init__(self, unbound_loop: asyncio.AbstractEventLoop, context: contextvars.Context) -> None:
+            """Initialize a loop wrapper that preserves context for scheduled callbacks.
+
+            Args:
+                unbound_loop: event loop to decorate.
+                context: context to bind to scheduled callback methods.
+            """
             self.unbound_loop = unbound_loop
             self.context = context
 
@@ -71,13 +96,32 @@ class PatchedStdoutProxy(StdoutProxy):
             self.call_soon_threadsafe = functools.partial(self.unbound_loop.call_soon_threadsafe, context=self.context)
 
         def __getattr__(self, name: str) -> Any:
+            """Delegate unknown attributes to the wrapped event loop.
+
+            Args:
+                name: attribute name to resolve on the wrapped loop.
+
+            Returns:
+                the attribute value from the wrapped loop.
+            """
             return getattr(self.unbound_loop, name)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize a stdout proxy with the current context captured.
+
+        Args:
+            args: positional arguments forwarded to `StdoutProxy`.
+            kwargs: keyword arguments forwarded to `StdoutProxy`.
+        """
         super().__init__(*args, **kwargs)
         self.context = contextvars.copy_context()
 
     def _get_app_loop(self) -> Optional[asyncio.AbstractEventLoop]:
+        """Return the active prompt application loop bound to the captured context.
+
+        Returns:
+            the context-bound prompt application loop, or None if no loop is available.
+        """
         app = self.app_session.app
         if app is None:
             return None
@@ -195,6 +239,14 @@ class TestingPromptSession:
         """
 
         def is_integer(value: Any) -> bool:
+            """Return whether a value can be parsed as an integer.
+
+            Args:
+                value: candidate value to parse.
+
+            Returns:
+                True if the value can be parsed as an integer.
+            """
             try:
                 int(value)
                 return True
