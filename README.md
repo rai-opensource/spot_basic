@@ -48,6 +48,8 @@ but are not exercised in CI.
 | `spatialmath-python` | `>= 1.1, < 2` |
 | Open3D | `>= 0.17, < 0.19` (capped by the NumPy constraint) |
 
+Only known incompatibilities are constrained; remaining dependencies are left to resolve against your ROS 2 Humble installation. The exact versions and upstream commits the project was last verified against are recorded in [`docs/tested_versions.md`](docs/tested_versions.md).
+
 You will also need:
 
 - A Boston Dynamics Spot robot, reachable over the network, with firmware compatible with Spot SDK
