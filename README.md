@@ -7,12 +7,19 @@ A simpler, more intuitive interface to Boston Dynamics' Spot robots with ROS 2.
 ## Table of contents
 
 - [Overview](#overview)
+- [Requirements](#requirements)
 - [Architecture](#architecture)
 - [Installation](#installation)
 - [Running the Spot driver](#running-the-spot-driver)
 - [A first example](#a-first-example)
 - [Documentation](#documentation)
 - [Testing](#testing)
+- [Limitations](#limitations)
+- [Versioning and releases](#versioning-and-releases)
+- [Maintenance](#maintenance)
+- [Contributing](#contributing)
+- [Help](#help)
+- [License](#license)
 
 ## Overview
 
@@ -20,6 +27,27 @@ A simpler, more intuitive interface to Boston Dynamics' Spot robots with ROS 2.
 
 > [!IMPORTANT]
 > Integration with [process-wide `synchros2`](https://github.com/rai-opensource/synchros2/wiki/Process%E2%80%90wide-APIs) is tight and it is usually easier (though not strictly required) to use it when working with `spot_basic`.
+
+## Requirements
+
+`spot_basic` is developed and tested against the following environment. Other combinations may work but are not exercised in CI.
+
+| Component | Supported version |
+|-----------|-------------------|
+| Operating system | Ubuntu 22.04 (Jammy) |
+| ROS 2 distribution | Humble Hawksbill |
+| Python | 3.10 |
+| CPU architecture | AMD64 (x86_64) and ARM64 (aarch64) |
+| Spot SDK (`bosdyn-client`, `bosdyn-api`, `bosdyn-core`) | 5.0.1 |
+| NumPy | `< 2` (see [`constraints.txt`](constraints.txt)) |
+
+You will also need:
+
+- A Boston Dynamics Spot robot, reachable over the network, with firmware compatible with Spot SDK 5.0.1. Arm-specific APIs additionally require a Spot equipped with an arm.
+- The [`spot_ros2`](https://github.com/rai-opensource/spot_ros2) driver and [`bosdyn_msgs`](https://github.com/rai-opensource/bosdyn_msgs), both built from source alongside `spot_basic` (see [Installation](#installation)).
+
+> [!NOTE]
+> The `numpy < 2` constraint is not arbitrary: ROS 2 Humble binaries and the `spot_wrapper` stack are built against the apt-provided NumPy 1.x, and a NumPy 2.x installed into `~/.local` will silently shadow it and break those extension modules. See [`constraints.txt`](constraints.txt) for details.
 
 ## Architecture
 
@@ -158,3 +186,66 @@ pytest --manual -v -s path/to/spot_basic/test/system
 
 > [!TIP]
 > Wire your workstation to a Spot robot to avoid network issues.
+
+## Limitations
+
+Please read these before adopting `spot_basic`.
+
+- **A running driver is required.** `spot_basic` is a client of the `spot_ros2` driver, not a standalone Spot SDK application. Every API call ultimately travels through a running `spot_driver` instance; there is no direct-to-robot mode.
+- **Tight coupling to `synchros2`.** The API is designed around [process-wide `synchros2`](https://github.com/rai-opensource/synchros2/wiki/Process%E2%80%90wide-APIs) APIs. Using `spot_basic` outside a `synchros2` process is possible but noticeably harder.
+- **Arm APIs require an arm.** Arm, gripper, manipulation, and surface-contact APIs raise a `RuntimeError` on robots without an arm rather than degrading gracefully.
+- **Joint-level control requires driver opt-in.** Mixed-level (joint) control only works when the driver is launched with `controllable:=True`.
+- **Partial Spot CAM coverage.** Only Spot CAM audio is wrapped; other Spot CAM subsystems (for example PTZ, lighting, and media streaming) are not exposed.
+- **Single platform.** Only Ubuntu 22.04 with ROS 2 Humble is tested. Other ROS 2 distributions are not supported.
+- **Source dependencies track `main`.** [`spot_basic.repos`](spot_basic.repos) pins `spot_ros2` and `bosdyn_msgs` to their `main` branches rather than fixed commits, so an upstream change can affect a fresh build.
+- **Automated tests do not touch hardware.** The unit tests that run in CI use mocked ROS 2 interfaces. Real robot behavior is only covered by the interactive hardware-in-the-loop suite, which must be run manually (see [Testing](#testing)).
+
+## Versioning and releases
+
+`spot_basic` is versioned through the `<version>` field of its [`package.xml`](package.xml), following the usual ROS 2 package convention of `MAJOR.MINOR.PATCH`.
+
+- Releases are published as [GitHub Releases](https://github.com/rai-opensource/spot_basic/releases), each backed by a matching git tag.
+- Every release states the Spot SDK version and ROS 2 distribution it was tested against, since compatibility with the Spot SDK is the dominant compatibility concern for this package.
+- Because the project is under [light maintenance](#maintenance), breaking API changes may be introduced in a **minor** version bump, not just a major one. Pin to an exact version if you need stability.
+
+## Maintenance
+
+> [!IMPORTANT]
+> **`spot_basic` is under light maintenance.** No feature development is guaranteed. If you file a bug report, or open a pull request that fixes a bug, expect an RAI maintainer to respond within a few weeks. Requests for new features may be closed without implementation, and breaking changes may be introduced between releases (see [Versioning and releases](#versioning-and-releases)).
+
+If you need behavior that this project does not provide or guarantee, forking is an entirely reasonable option and the MIT license permits it.
+
+## Contributing
+
+Bug reports and bug-fix pull requests are welcome, within the maintenance expectations described above.
+
+**Reporting an issue.** Open an issue on the [issue tracker](https://github.com/rai-opensource/spot_basic/issues). The most useful reports include your Ubuntu, ROS 2, and Spot SDK versions, whether your robot has an arm, the driver launch arguments you used, a minimal script that reproduces the problem, and the full error output.
+
+**Submitting a change.** Fork the repository, follow the [Installation](#installation) steps, and install the pre-commit hooks before making changes:
+
+```bash
+cd <ROS workspace>/src/spot_basic
+pip install pre-commit
+pre-commit install
+pre-commit run --all-files
+```
+
+Then open a pull request describing what changed, why it changed, and how you tested it. All changes require review and approval from a project maintainer before merging, and CI (lint, build, and unit tests) must pass. Note that CI runs for first-time contributors require explicit maintainer approval, so there may be a delay before checks start on your pull request.
+
+## Help
+
+If something is not working, first check [Requirements](#requirements) and [Limitations](#limitations) — most problems come from a version mismatch or from expecting functionality that is intentionally out of scope.
+
+A quick way to confirm your Spot SDK installation is correct (all versions should read `5.0.1`):
+
+```bash
+pip list | grep bosdyn
+```
+
+If that looks right and the problem persists, open an [issue](https://github.com/rai-opensource/spot_basic/issues).
+
+## License
+
+`spot_basic` is released under the MIT License. See [`LICENSE`](LICENSE) for the full text.
+
+Copyright (c) Robotics and AI Institute LLC dba RAI Institute.
