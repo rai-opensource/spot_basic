@@ -259,6 +259,9 @@ following the usual ROS 2 package convention of `MAJOR.MINOR.PATCH`.
 
 Bug reports and bug-fix pull requests are welcome!
 
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full guide, and [`SECURITY.md`](SECURITY.md) for
+reporting security vulnerabilities privately.
+
 **Reporting an issue.** Open an issue on the [issue tracker][8]. The most useful reports include
 your Ubuntu, ROS 2, and Spot SDK versions, whether your robot has an arm, the driver launch
 arguments you used, a minimal script that reproduces the problem, and the full error output.
