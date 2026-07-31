@@ -14,16 +14,21 @@ Copyright (c) 2023-2026 Robotics and AI Institute LLC dba RAI Institute. All rig
 
   <depend>bosdyn_msgs</depend>
   <depend>builtin_interfaces</depend>
+  <depend>controller_manager_msgs</depend>
   <depend>cv_bridge</depend>
   <depend>geometry_msgs</depend>
+  <depend>lifecycle_msgs</depend>
+  <depend>python3-matplotlib</depend>
   <depend>python3-numpy</depend>
   <depend>python3-opencv</depend>
+  <depend>python3-prompt-toolkit</depend>
   <depend>python3-scipy</depend>
   <depend>rcl_interfaces</depend>
   <depend>rclpy</depend>
   <depend>sensor_msgs</depend>
   <depend>spot_msgs</depend>
   <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
   <depend>synchros2</depend>
 
   <exec_depend>spot_driver</exec_depend>
