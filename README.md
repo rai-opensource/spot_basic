@@ -172,10 +172,12 @@ def cli() -> argparse.ArgumentParser:
 def main(args: argparse.Namespace) -> int:
     bridge = cv_bridge.CvBridge()
     spot = SpotBasic(args.robot_name)
-    with spot.lease(timeout_sec=10.0):
-        spot.power_on.synchronously(timeout_sec=10.0)
-        spot.stand.synchronously(timeout_sec=10.0)
-        action = spot.walk.asynchronously(SE2.Trans([1., 0.]))
+    # leash() takes the lease, powers the robot on, stands it up, and
+    # sits it back down and powers it off on exit.
+    with spot.leash(timeout_sec=10.0):
+        world_t_robot = spot.lookup_a_tform_b(spot.vision_frame_name, spot.body_frame_name).yaw_SE2()
+        world_t_goal = world_t_robot * SE2(1.0, 0.0, 0.0)
+        action = spot.walk.asynchronously(frame_t_goal=world_t_goal)
         with closing(spot.cameras.front_right.rgb.image.stream()) as imagestream:
             for image in map(bridge.imgmsg_to_cv2, imagestream):
                 if action.finalized:
@@ -183,8 +185,6 @@ def main(args: argparse.Namespace) -> int:
                 cv2.imshow("Spot View", image)
                 cv2.waitKey(10)
             cv2.destroyAllWindows()
-        spot.sit.synchronously(timeout_sec=10.0)
-        spot.power_off.synchronously(timeout_sec=10.0)
         return 0 if action.succeeded else 1
 
 if __name__ == "__main__":
@@ -286,7 +286,7 @@ approval, so there may be a delay before checks start on your pull request.
 If something is not working, first check [Requirements](#requirements) and
 [Limitations](#limitations).
 
-A common problems is a version mismatch with the Spot SDK. A quick way to confirm your Spot SDK
+A common problem is a version mismatch with the Spot SDK. A quick way to confirm your Spot SDK
 installation is correct (all versions should read `5.0.1`):
 
 ```bash
