@@ -234,15 +234,18 @@ Then open a pull request describing what changed, why it changed, and how you te
 
 ## Help
 
-If something is not working, first check [Requirements](#requirements) and [Limitations](#limitations) — most problems come from a version mismatch or from expecting functionality that is intentionally out of scope.
+If something is not working, first check [Requirements](#requirements) and
+[Limitations](#limitations).
 
-A quick way to confirm your Spot SDK installation is correct (all versions should read `5.0.1`):
+A common problems is a version mismatch with the Spot SDK. A quick way to confirm your Spot SDK
+installation is correct (all versions should read `5.0.1`):
 
 ```bash
 pip list | grep bosdyn
 ```
 
-If that looks right and the problem persists, open an [issue](https://github.com/rai-opensource/spot_basic/issues).
+If that looks right and the problem persists, open an
+[issue](https://github.com/rai-opensource/spot_basic/issues).
 
 ## License
 
