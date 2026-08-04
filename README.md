@@ -38,7 +38,7 @@ consistent, intuitive APIs, suitable for both synchronous and asynchronous progr
 but are not exercised in CI.
 
 | Component | Supported version |
-|-----------|-------------------|
+| --- | --- |
 | Operating system | Ubuntu 22.04 (Jammy) |
 | ROS 2 distribution | Humble Hawksbill |
 | Python | 3.10 |
@@ -63,8 +63,8 @@ It might be overwhelming and confusing when you first start to work with Spots i
 quick rundown of all packages that functionally contribute to a Spot ROS 2 driver (`spot_driver`)
 run:
 
-| Repository      | Package          | Purpose                                                                                |
-|-----------------|------------------|----------------------------------------------------------------------------------------|
+| Repository | Package | Purpose |
+| --- | --- | --- |
 | `spot_ros2` | `spot_driver` | The driver nodes for Spot in ROS 2 (though conceptually it is closer to a bridge). |
 | `spot_ros2` | `spot_msgs` | ROS 2 interfaces specific to Spot (mainly service and action definitions). |
 | `spot_wrapper` | `spot_wrapper` | A thin, convenience layer atop the Spot Python SDK. |
@@ -196,7 +196,7 @@ More runnable scripts live in [`examples/`](examples).
 ## Documentation
 
 | Guide | Contents |
-|-------|----------|
+| --- | --- |
 | [Using `SpotBasic`](docs/using_spot_basic.md) | Executing commands, querying state, and capturing video. |
 | [Extending `SpotBasic`](docs/extending_spot_basic.md) | Adding commands, actions, state streams, and joint-level control. |
 | [Adding an action](docs/adding_an_action.md) | Step-by-step tutorial for wiring up a brand-new action. |
@@ -298,7 +298,6 @@ If that looks right and the problem persists, open an [issue][8].
 ## License
 
 `spot_basic` is released under the MIT License. See [`LICENSE`](LICENSE) for the full text.
-
 
 <!-- References -->
 

@@ -13,13 +13,21 @@
 - [Exposing new SDK functionality](#exposing-new-sdk-functionality)
 - [Where to go next](#where-to-go-next)
 
-Under the hood, `SpotBasic` is structured as an aggregate of loosely coupled [mixins](https://en.wikipedia.org/wiki/Mixin). These mixins heavily rely on [factory](https://en.wikipedia.org/wiki/Factory_method_pattern) and [delegation](https://en.wikipedia.org/wiki/Delegation_pattern) patterns to abstract and reuse what is specific to message passing, which is central to `SpotBasic` implementation, the Spot ROS 2 driver being nothing but a bridge to the Spot SDK over ROS 2 topics, services, and actions.
+Under the hood, `SpotBasic` is structured as an aggregate of loosely coupled [mixins][1]. These
+mixins heavily rely on [factory][2] and [delegation][3] patterns to abstract and reuse what is
+specific to message passing, which is central to `SpotBasic` implementation, the Spot ROS 2 driver
+being nothing but a bridge to the Spot SDK over ROS 2 topics, services, and actions.
 
 ## Exposing a robot command
 
-Any robot command can be constructed and `SpotBasic.execute`d, but some robot commands may be worth adding to `spot_basic` for reuse.
+Any robot command can be constructed and `SpotBasic.execute`d, but some robot commands may be worth
+adding to `spot_basic` for reuse.
 
-The first step to expose a new robot command is to implement a factory function for it. Command factory functions are typically implemented as methods in `spot_basic.command.SpotCommandBuilder` subclasses under the `spot_basic.command` subpackage. Your factory function may semantically fit in an existing subclass or require another -- use your judgement. In the following we will assume a new subclass is required:
+The first step to expose a new robot command is to implement a factory function for it. Command
+factory functions are typically implemented as methods in `spot_basic.command.SpotCommandBuilder`
+subclasses under the `spot_basic.command` subpackage. Your factory function may semantically fit in
+an existing subclass or require another -- use your judgement. In the following we will assume a new
+subclass is required:
 
 ```python
 # spot_basic/command/custom.py
@@ -47,7 +55,12 @@ command = command_builder.my_custom_task_command()
 response = spot.execute.synchronous(command)
 ```
 
-But you may want to further integrate your command with `SpotBasic`. You may want to allow `SpotBasic.do_custom_task()` calls. Typically, `SpotBasic` methods are generalized methods, and that is the case for command execution methods. These generalized command execution methods are implemented in mixin classes under the `spot_basic.command` subpackage. Your command execution method may semantically fit in an existing mixin or require another -- again, use your judgement. In the following we will assume a new mixin is required:
+But you may want to further integrate your command with `SpotBasic`. You may want to allow
+`SpotBasic.do_custom_task()` calls. Typically, `SpotBasic` methods are generalized methods, and that
+is the case for command execution methods. These generalized command execution methods are
+implemented in mixin classes under the `spot_basic.command` subpackage. Your command execution
+method may semantically fit in an existing mixin or require another -- again, use your judgement. In
+the following we will assume a new mixin is required:
 
 ```python
 # spot_basic/command/custom.py
@@ -80,7 +93,8 @@ class SpotCustomCommandMixin(SpotCommandProtocol):
         """Perform some custom command."""
 ```
 
-Once the `SpotCustomCommandMixin` class is appended to the `SpotBasic` base class list, `SpotBasic.do_something` will become available:
+Once the `SpotCustomCommandMixin` class is appended to the `SpotBasic` base class list,
+`SpotBasic.do_something` will become available:
 
 ```python
 from synchros2.futures import wait_for_future
@@ -93,9 +107,11 @@ action = spot.do_something.asynchronously()
 wait_for_future(action.finalization)
 ```
 
-Exposing a manipulation request is no different, except for the fact that `SpotBasic.perform` must be used in place for `SpotBasic.execute`.
+Exposing a manipulation request is no different, except for the fact that `SpotBasic.perform` must
+be used in place for `SpotBasic.execute`.
 
-In the above, we glanced over type annotations for our `SpotBasic.do_something` generalized method. Type annotating generalized methods relies on structural subtyping support i.e. [`Protocol`](https://typing.readthedocs.io/en/latest/spec/protocol.html#protocols)s.
+In the above, we glanced over type annotations for our `SpotBasic.do_something` generalized method.
+Type annotating generalized methods relies on structural subtyping support i.e. [`Protocol`][4]s.
 
 ```python
 # spot_basic/command/custom.py
@@ -163,15 +179,25 @@ class SpotCustomCommandMixin(SpotCustomCommandProtocol):
         """Perform some custom command."""
 ```
 
-Note how the `SpotCustomCommandProtocol.DoSomethingProtocol` stub class makes the method signature explicit for both synchronous and asynchronous invocations. It also shows that the underlying interface is an action, making it clear to a static analyzer that action specific APIs are also available e.g. the [`spot.do_something.wait_for_server()`](https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/action.py#L354) method to wait for the remote action server. This added (and entirely optional) complexity is rewarded by improved static analysis reports.
+Note how the `SpotCustomCommandProtocol.DoSomethingProtocol` stub class makes the method signature
+explicit for both synchronous and asynchronous invocations. It also shows that the underlying
+interface is an action, making it clear to a static analyzer that action specific APIs are also
+available e.g. the [`spot.do_something.wait_for_server()`][5] method to wait for the remote action
+server. This added (and entirely optional) complexity is rewarded by improved static analysis
+reports.
 
 ## Adding a new action
 
-The above discusses how to expose a new capability of an existing action. If we actually need to add a new action (corresponding usually to a new Spot gRPC service), a tutorial for that can be found in [Adding an action to `SpotBasic`](adding_an_action.md).
+The above discusses how to expose a new capability of an existing action. If we actually need to add
+a new action (corresponding usually to a new Spot gRPC service), a tutorial for that can be found in
+[Adding an action to `SpotBasic`](adding_an_action.md).
 
 ## Exposing a state stream
 
-States streams naturally map to topics in ROS 2. Therefore, a topic subscription is all we need to expose one. Topic subscriptions are typically implemented as `SpotBasic` properties in mixin classes under the `spot_basic` subpackage. Your property may semantically fit in an existing mixin or require another -- use your judgement. In the following we will assume a new mixin is required:
+States streams naturally map to topics in ROS 2. Therefore, a topic subscription is all we need to
+expose one. Topic subscriptions are typically implemented as `SpotBasic` properties in mixin classes
+under the `spot_basic` subpackage. Your property may semantically fit in an existing mixin or
+require another -- use your judgement. In the following we will assume a new mixin is required:
 
 ```python
 from functools import cached_property
@@ -191,10 +217,11 @@ class SpotCustomStateMixin(SpotBaseProtocol):
 
 Note that:
 
-- our property is a [cached property](https://docs.python.org/3/library/functools.html#functools.cached_property), affording lazy initialization;
+- our property is a [cached property][6], affording lazy initialization;
 - the topic name is namespaced by the robot name, as per Spot ROS 2 conventions.
 
-Once the `SpotCustomStateMixin` class is appended to the `SpotBasic` base class list, `SpotBasic.some_robot_state` will become available:
+Once the `SpotCustomStateMixin` class is appended to the `SpotBasic` base class list,
+`SpotBasic.some_robot_state` will become available:
 
 ```python
 value = unwrap_future(spot.some_robot_state.update)
@@ -203,15 +230,21 @@ print(value.data)
 
 ## Using the Mixed-Level API
 
-A joint-level API exists within [`spot_ros2`](https://github.com/rai-opensource/spot_ros2/tree/main) using `ros2_control`. A combined API that utilizes both this lower level joint control and the traditional high-level API was created to leverage both of these APIs.
+A joint-level API exists within [`spot_ros2`][7] using `ros2_control`. A combined API that utilizes
+both this lower level joint control and the traditional high-level API was created to leverage both
+of these APIs.
 
-For a full example script, see [`example_controlled_squat.py`](../examples/example_controlled_squat.py). To run this example, first start the driver in mixed-level (controllable) mode by setting the `controllable` launch argument. See the [`spot_ros2_control` Mixed Level API documentation](https://github.com/rai-opensource/spot_ros2/blob/main/spot_ros2_control/README.md#mixed-level-api) for details.
+For a full example script, see
+[`example_controlled_squat.py`](../examples/example_controlled_squat.py). To run this example, first
+start the driver in mixed-level (controllable) mode by setting the `controllable` launch argument.
+See the [`spot_ros2_control` Mixed Level API documentation][8] for details.
 
 ```bash
 ros2 launch spot_driver spot_driver.launch.py controllable:=True config_file:=<path/to/spot_ros.yaml> spot_name:=<spot-name>
 ```
 
-To use this mixed level API, you can use `SpotBasic` as usual with an additional `spot_basic.control` import.
+To use this mixed level API, you can use `SpotBasic` as usual with an additional
+`spot_basic.control` import.
 
 ```python
 # spot_basic/examples/example_controlled_squat.py
@@ -301,13 +334,39 @@ class ControlledSquatExample:
         return 0
 ```
 
-Note the use of `with SpotForwardPositionControllerInterface(self._robot) as ifc:` to transition into the joint level control and expose the state and command streamers while the high level driver is still accessible through the usual interfaces like `walk`. This example specifically makes use of a provided forward position controller for Spot. A forward state controller is also provided in `SpotForwardStateControllerInterface` inside `spot_basic/control/forward_state.py`. New controllers added to the joint-level API will also need a similar interface to access.
+Note the use of `with SpotForwardPositionControllerInterface(self._robot) as ifc:` to transition
+into the joint level control and expose the state and command streamers while the high level driver
+is still accessible through the usual interfaces like `walk`. This example specifically makes use of
+a provided forward position controller for Spot. A forward state controller is also provided in
+`SpotForwardStateControllerInterface` inside `spot_basic/control/forward_state.py`. New controllers
+added to the joint-level API will also need a similar interface to access.
 
 ## Exposing new SDK functionality
 
-If the Spot ROS 2 driver does not already expose some Spot SDK functionality that is of interest to us, things get slightly more involved. The Spot SDK sits deep down the [`spot_driver`](https://github.com/rai-opensource/spot_ros2/tree/main/spot_driver), potentially within the [`spot_wrapper`](https://github.com/rai-opensource/spot_wrapper/tree/main). A suitable ROS 2 interface must be chosen to expose it. [`spot_msgs`](https://github.com/rai-opensource/spot_ros2/tree/main/spot_msgs) hosts service and action definitions, [`bosdyn_msgs`](https://github.com/rai-opensource/bosdyn_msgs) hosts equivalent ROS 2 message for every Spot SDK Protobuf message. Only then a `SpotBasic` mixin class can be put together.
+If the Spot ROS 2 driver does not already expose some Spot SDK functionality that is of interest to
+us, things get slightly more involved. The Spot SDK sits deep down the [`spot_driver`][9],
+potentially within the [`spot_wrapper`][10]. A suitable ROS 2 interface must be chosen to expose it.
+[`spot_msgs`][11] hosts service and action definitions, [`bosdyn_msgs`][12] hosts equivalent ROS 2
+message for every Spot SDK Protobuf message. Only then a `SpotBasic` mixin class can be put
+together.
 
 ## Where to go next
 
 - Take a look at existing mixins in the [`spot_basic`](../spot_basic) subpackage.
-- Explore available functionality in the [`synchros2`](https://github.com/rai-opensource/synchros2/tree/main/synchros2) package.
+- Explore available functionality in the [`synchros2`][13] package.
+
+<!-- References -->
+
+[1]: https://en.wikipedia.org/wiki/Mixin
+[2]: https://en.wikipedia.org/wiki/Factory_method_pattern
+[3]: https://en.wikipedia.org/wiki/Delegation_pattern
+[4]: https://typing.readthedocs.io/en/latest/spec/protocol.html#protocols
+[5]: https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/action.py#L354
+[6]: https://docs.python.org/3/library/functools.html#functools.cached_property
+[7]: https://github.com/rai-opensource/spot_ros2/tree/main
+[8]: https://github.com/rai-opensource/spot_ros2/blob/main/spot_ros2_control/README.md#mixed-level-api
+[9]: https://github.com/rai-opensource/spot_ros2/tree/main/spot_driver
+[10]: https://github.com/rai-opensource/spot_wrapper/tree/main
+[11]: https://github.com/rai-opensource/spot_ros2/tree/main/spot_msgs
+[12]: https://github.com/rai-opensource/bosdyn_msgs
+[13]: https://github.com/rai-opensource/synchros2/tree/main/synchros2
