@@ -10,99 +10,107 @@
 - [SpotBasic code and running](#spotbasic-code-and-running)
 - [Analyzing the code](#analyzing-the-code)
 
-In this tutorial we will add an action to `SpotBasic` to show how the underlying concepts -- and especially [generalized callables](https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/callables.py) -- work.
+In this tutorial we will add an action to `SpotBasic` to show how the underlying concepts -- and
+especially [generalized callables][1] -- work.
 
 The complete code for this tutorial is shown inline below.
 
 ## Create an action definition and server
 
-Normally the server will have been written already (usually as a part of spot ros2 and eventually communicating via a protobuf to the Spot robot).  However, for example purposes we’re going to create a custom server that just prints numbers every second for N seconds.  We will arbitrarily and for no reason other than pedagogical assume that this action can only be called when the Spot robot has an arm.  This tutorial will not focus on how this action works - for an introduction to actions in ROS2 see [here](https://docs.ros.org/en/humble/Tutorials/Intermediate/Creating-an-Action.html).
+Normally the server will have been written already (usually as a part of spot ros2 and eventually
+communicating via a protobuf to the Spot robot). However, for example purposes we’re going to create
+a custom server that just prints numbers every second for N seconds. We will arbitrarily and for no
+reason other than pedagogical assume that this action can only be called when the Spot robot has an
+arm. This tutorial will not focus on how this action works - for an introduction to actions in ROS2
+see [here][2].
 
 1. Create the action definition:
-    1. Add the following to a new file `spot_msgs/action/Count.action` (in the `spot_msgs` interfaces package, which is part of spot_ros2):
 
-        ```bash
-        # Goal
-        int32 n_seconds
-        ---
-        # Result
-        ---
-        # Feedback
+   1. Add the following to a new file `spot_msgs/action/Count.action` (in the `spot_msgs` interfaces
+      package, which is part of spot_ros2):
 
-        ```
+      ```bash
+      # Goal
+      int32 n_seconds
+      ---
+      # Result
+      ---
+      # Feedback
+      ```
 
-    2. Add the new action to `spot_msgs/CMakeLists.txt`:
+   2. Add the new action to `spot_msgs/CMakeLists.txt`:
 
-        ```makefile
+      ```makefile
+      ...
+      set(msg_files
+        "action/Count.action"  # ADD THIS HERE
+        "action/SpotGraspingPipeline.action"
         ...
-        set(msg_files
-          "action/Count.action"  # ADD THIS HERE
-          "action/SpotGraspingPipeline.action"
-          ...
-        ```
+      ```
 
-2. Create an action server that prints out the second every second.  Add the following to a new file `scripts/count_server.py`:
+2. Create an action server that prints out the second every second. Add the following to a new file
+   `scripts/count_server.py`:
 
-    ```python
-    #!/usr/bin/env python
-    # Copyright (c) 2025 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
+   ```python
+   #!/usr/bin/env python
+   # Copyright (c) 2025 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
-    import argparse
-    import time
+   import argparse
+   import time
 
-    import synchros2.process as ros_process
-    from rclpy.action.server import ServerGoalHandle
-    from spot_basic.utilities import spot_namespaced
-    from spot_msgs.action import Count
-    from synchros2.single_goal_action_server import SingleGoalActionServer
+   import synchros2.process as ros_process
+   from rclpy.action.server import ServerGoalHandle
+   from spot_basic.utilities import spot_namespaced
+   from spot_msgs.action import Count
+   from synchros2.single_goal_action_server import SingleGoalActionServer
 
-    def _count_callback(goal_handle: ServerGoalHandle) -> Count.Result:
-        start = time.time()
-        while time.time() - start < goal_handle.request.n_seconds:
-            print(f"It's been {time.time() - start} seconds")
-            time.sleep(1.0)
-        goal_handle.succeed()
-        return Count.Result()
+   def _count_callback(goal_handle: ServerGoalHandle) -> Count.Result:
+       start = time.time()
+       while time.time() - start < goal_handle.request.n_seconds:
+           print(f"It's been {time.time() - start} seconds")
+           time.sleep(1.0)
+       goal_handle.succeed()
+       return Count.Result()
 
-    def cli() -> argparse.ArgumentParser:
-        """Command-line interface."""
-        parser = argparse.ArgumentParser(description="Action server for count action")
-        parser.add_argument("robot_name", help="Name of robot to use")
-        return parser
+   def cli() -> argparse.ArgumentParser:
+       """Command-line interface."""
+       parser = argparse.ArgumentParser(description="Action server for count action")
+       parser.add_argument("robot_name", help="Name of robot to use")
+       return parser
 
-    @ros_process.main(cli())
-    def main(args: argparse.Namespace) -> None:
-        server = SingleGoalActionServer(  # noqa: F841
-            main.node, Count, spot_namespaced(args.robot_name, "count"), _count_callback
-        )
-        print("Ready for counting goals!")
-        ros_process.wait_for_shutdown()
+   @ros_process.main(cli())
+   def main(args: argparse.Namespace) -> None:
+       server = SingleGoalActionServer(  # noqa: F841
+           main.node, Count, spot_namespaced(args.robot_name, "count"), _count_callback
+       )
+       print("Ready for counting goals!")
+       ros_process.wait_for_shutdown()
 
-    if __name__ == "__main__":
-        main()
-    ```
+   if __name__ == "__main__":
+       main()
+   ```
 
 3. Mark it executable:
 
-    ```bash
-    chmod +x scripts/count_server.py
-    ```
+   ```bash
+   chmod +x scripts/count_server.py
+   ```
 
 4. Add this to the list of runnable scripts in `CMakeLists.txt`:
 
-    ```makefile
-    ...
-    install(
-      PROGRAMS
-      scripts/count_server.py  # ADD HERE
-      scripts/estop_gui.sh
-      ...
-    ```
-
+   ```makefile
+   ...
+   install(
+     PROGRAMS
+     scripts/count_server.py  # ADD HERE
+     scripts/estop_gui.sh
+     ...
+   ```
 
 ## SpotBasic code and running
 
-Let’s first write and run the code that calls this action server from Spot Basic and then we’ll analyze it.
+Let’s first write and run the code that calls this action server from Spot Basic and then we’ll
+analyze it.
 
 ### Code
 
@@ -222,7 +230,8 @@ class SpotCountMixin(SpotBaseProtocol):
         """
 ```
 
-We also need to add this to the Spot Basic in `spot_basic/__init__.py` (note that TWO additions are needed):
+We also need to add this to the Spot Basic in `spot_basic/__init__.py` (note that TWO additions are
+needed):
 
 ```python
 ...
@@ -278,7 +287,6 @@ def main(args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     main()
-
 ```
 
 ### Running
@@ -287,35 +295,37 @@ Everything should be done from within your ROS 2 workspace (with the workspace s
 
 1. First build the necessary packages (note: this may take a while):
 
-    ```bash
-    colcon build --packages-select spot_msgs spot_basic
-    ```
+   ```bash
+   colcon build --packages-select spot_msgs spot_basic
+   ```
 
-2. Start the Spot ROS 2 driver, since it needs to run for `SpotBasic` to be created (see the [`spot_ros2`](https://github.com/rai-opensource/spot_ros2) documentation for driver launch instructions):
+2. Start the Spot ROS 2 driver, since it needs to run for `SpotBasic` to be created (see the
+   [`spot_ros2`][3] documentation for driver launch instructions):
 
-    ```bash
-    ros2 launch spot_driver spot_driver.launch.py
-    ```
+   ```bash
+   ros2 launch spot_driver spot_driver.launch.py
+   ```
 
 3. Now start the count action server:
 
-    ```bash
-    ros2 run spot_basic count_server.py <Robot name>
-    ```
+   ```bash
+   ros2 run spot_basic count_server.py <Robot name>
+   ```
 
 4. Finally run the example script:
 
-    ```bash
-    cd examples
-    python example_count.py <Robot name>
-    ```
-
+   ```bash
+   cd examples
+   python example_count.py <Robot name>
+   ```
 
 You should see the prints from the script and also prints in the count server terminal.
 
 ## Analyzing the code
 
-The Spot Basic code is a little complicated because we want to easily be able to create these synchronous and asynchronous calls without having to rewrite that logic every time.  You could imagine the following class:
+The Spot Basic code is a little complicated because we want to easily be able to create these
+synchronous and asynchronous calls without having to rewrite that logic every time. You could
+imagine the following class:
 
 ```python
 class SpotCountMixin:
@@ -345,9 +355,13 @@ class SpotCountMixin:
         return self._action.asynchronous(goal, feedback_callback, timeout_sec, nothrow)
 ```
 
-and in fact this is how Spot Basic was written for a long time.  But it led to a lot of different versions of calling asynchronous and synchronous protocols and way too much living in one file and general chaos and confusion.  So the [`GeneralizedCallable`](https://github.com/rai-opensource/synchros2/blob/bbe365dfafef15e9a6379246f801aca4d90a932b/synchros2/synchros2/callables.py#L61) class of objects were born.
+and in fact this is how Spot Basic was written for a long time. But it led to a lot of different
+versions of calling asynchronous and synchronous protocols and way too much living in one file and
+general chaos and confusion. So the [`GeneralizedCallable`][4] class of objects were born.
 
-All `GeneralizedCallable` objects have `synchronous` and `asynchronous` functions.  This allows us to write a bunch of stuff without having to write two functions for synchronous and asynchronous.  Specifically, we make `count` a [`GeneralizedMethod`](https://github.com/rai-opensource/synchros2/blob/bbe365dfafef15e9a6379246f801aca4d90a932b/synchros2/synchros2/callables.py#L250):
+All `GeneralizedCallable` objects have `synchronous` and `asynchronous` functions. This allows us to
+write a bunch of stuff without having to write two functions for synchronous and asynchronous.
+Specifically, we make `count` a [`GeneralizedMethod`][5]:
 
 ```python
     # This now takes in the same arguments as the protocol and you can call synchronous or asynchronous on it.
@@ -359,7 +373,9 @@ All `GeneralizedCallable` objects have `synchronous` and `asynchronous` function
         """
 ```
 
-A generalized method is just a class that takes another class with `synchronous` and `asynchronous` defined and forwards calls to those functions.  We have this in the form of a [`SpotActionable`](../spot_basic/utilities.py):
+A generalized method is just a class that takes another class with `synchronous` and `asynchronous`
+defined and forwards calls to those functions. We have this in the form of a
+[`SpotActionable`](../spot_basic/utilities.py):
 
 ```python
         # This creates the action client, which already supports synchronous and asynchronous calls and then tells it
@@ -367,9 +383,17 @@ A generalized method is just a class that takes another class with `synchronous`
         implementation = SpotActionable(CountAction, spot_namespaced(self.robot_name, "count"), node=self.node)
 ```
 
-A [`SpotActionable`](../spot_basic/utilities.py) is a wrapper around synchros2’s [`Actionable`](https://github.com/rai-opensource/synchros2/blob/bbe365dfafef15e9a6379246f801aca4d90a932b/synchros2/synchros2/action.py#L451) class, which handles synchronous and asynchronous calls to ROS actions in a way that won’t lead to deadlocks.  The Spot wrapper allows us to pass in either an action goal or the corresponding protobuf (not necessary for this example but usually necessary when dealing with Spot).
+A [`SpotActionable`](../spot_basic/utilities.py) is a wrapper around synchros2’s [`Actionable`][6]
+class, which handles synchronous and asynchronous calls to ROS actions in a way that won’t lead to
+deadlocks. The Spot wrapper allows us to pass in either an action goal or the corresponding protobuf
+(not necessary for this example but usually necessary when dealing with Spot).
 
-However, `SpotActionable` requires that we pass it an action goal (or the equivalent protobuf) but we don’t want people to have to pass in the full action goal - the point of Spot Basic is to allow users to use nice function calls instead.  That’s what the `compose` call does - it tells the `SpotActionable` (which inherits from [`Actionable`](https://github.com/rai-opensource/synchros2/blob/bbe365dfafef15e9a6379246f801aca4d90a932b/synchros2/synchros2/action.py#L451) which inherits from [`ComposedCallable`](https://github.com/rai-opensource/synchros2/blob/bbe365dfafef15e9a6379246f801aca4d90a932b/synchros2/synchros2/callables.py#L107) which allows composition) to first call `_build_count`, which returns the action goal, and then call the `SpotActionable` functions:
+However, `SpotActionable` requires that we pass it an action goal (or the equivalent protobuf) but
+we don’t want people to have to pass in the full action goal - the point of Spot Basic is to allow
+users to use nice function calls instead. That’s what the `compose` call does - it tells the
+`SpotActionable` (which inherits from [`Actionable`][6] which inherits from [`ComposedCallable`][7]
+which allows composition) to first call `_build_count`, which returns the action goal, and then call
+the `SpotActionable` functions:
 
 ```python
         # This creates the action client, which already supports synchronous and asynchronous calls and then tells it
@@ -379,13 +403,15 @@ However, `SpotActionable` requires that we pass it an action goal (or the equiva
         )
 ```
 
-Now `implementation` is a class with `synchronous` and `asynchronous` calls that does what we want.  So we bind it to our `GeneralizedMethod` `count` :
+Now `implementation` is a class with `synchronous` and `asynchronous` calls that does what we want.
+So we bind it to our `GeneralizedMethod` `count` :
 
 ```python
         SpotCountMixin.count.rebind(self, implementation)
 ```
 
-Except we don’t quite do this.  Instead purely for instructive purposes we’ve decided you can only call the count action if the robot has an arm and as such have added in a [`GeneralizedGuard`](https://github.com/rai-opensource/synchros2/blob/bbe365dfafef15e9a6379246f801aca4d90a932b/synchros2/synchros2/callables.py#L184):
+Except we don’t quite do this. Instead purely for instructive purposes we’ve decided you can only
+call the count action if the robot has an arm and as such have added in a [`GeneralizedGuard`][8]:
 
 ```python
         # This sets it up so the count function here to first check whether the robot has an arm and if so
@@ -394,12 +420,17 @@ Except we don’t quite do this.  Instead purely for instructive purposes we’v
             self,
             GeneralizedGuard(self.has_arm, implementation, f"{self.robot_name} has no arm, cannot count"),
         )
-
 ```
 
-A [`GeneralizedGuard`](https://github.com/rai-opensource/synchros2/blob/bbe365dfafef15e9a6379246f801aca4d90a932b/synchros2/synchros2/callables.py#L184) takes in a boolean function (`self.has_arm`), a class with `synchronous` and `asynchronous` functions (`implementation`) and an error message.  `GeneralizedGuard` itself then has `asynchronous` and `synchronous` methods that check the boolean function (`self.has_arm`) and throw a `RuntimeError` with the corresponding error message if it’s false.  Otherwise they call the corresponding function of the underlying class (`implementation`).  So this makes it so that if we call `count` with a robot without an arm, there will be a runtime error.
+A [`GeneralizedGuard`][8] takes in a boolean function (`self.has_arm`), a class with `synchronous`
+and `asynchronous` functions (`implementation`) and an error message. `GeneralizedGuard` itself then
+has `asynchronous` and `synchronous` methods that check the boolean function (`self.has_arm`) and
+throw a `RuntimeError` with the corresponding error message if it’s false. Otherwise they call the
+corresponding function of the underlying class (`implementation`). So this makes it so that if we
+call `count` with a robot without an arm, there will be a runtime error.
 
-And finally we need to make our [mixin](https://www.residentmar.io/2019/07/07/python-mixins.html) available inside the SpotBasic class.  This is done by having `SpotBasic` inherit from the mixin:
+And finally we need to make our [mixin][9] available inside the SpotBasic class. This is done by
+having `SpotBasic` inherit from the mixin:
 
 ```python
 class SpotBasic(
@@ -410,13 +441,39 @@ class SpotBasic(
 ):
 ```
 
-Let’s put all this together by tracing what happens when we call `spot.count.synchronous(n_seconds)`:
+Let’s put all this together by tracing what happens when we call
+`spot.count.synchronous(n_seconds)`:
 
-1. `spot.count` is bound to `GeneralizedGuard(self.has_arm, implementation, f"{self.robot_name} has no arm, cannot count")` .  So `spot.count.synchronous` calls `GeneralizedGuard.synchronous`
-2. `GeneralizedGuard.synchronous`  calls `self.has_arm`  because that’s the boolean guard function we passed.  If the robot doesn’t have an arm, this raises a runtime error.  Otherwise it calls `implementation.synchronous`
-3. `implementation` is a `SpotActionable` composed with `_build_count_command` .  So, because of the composition, it first calls `_build_count_command(n_seconds)` and then sends the output of that (a `CountAction.Goal`) to `SpotActionable.synchronous`
-4. `SpotActionable.synchronous` calls the underlying `Actionable.synchronous` which sends the goal to the action and waits for it to return.
+1. `spot.count` is bound to
+   `GeneralizedGuard(self.has_arm, implementation, f"{self.robot_name} has no arm, cannot count")` .
+   So `spot.count.synchronous` calls `GeneralizedGuard.synchronous`
+2. `GeneralizedGuard.synchronous` calls `self.has_arm` because that’s the boolean guard function we
+   passed. If the robot doesn’t have an arm, this raises a runtime error. Otherwise it calls
+   `implementation.synchronous`
+3. `implementation` is a `SpotActionable` composed with `_build_count_command` . So, because of the
+   composition, it first calls `_build_count_command(n_seconds)` and then sends the output of that
+   (a `CountAction.Goal`) to `SpotActionable.synchronous`
+4. `SpotActionable.synchronous` calls the underlying `Actionable.synchronous` which sends the goal
+   to the action and waits for it to return.
 
-You may have noticed that at no point in the above analysis did we ever reference the big long `SpotCountProtocol` class shown in the `count.py` snippet above. That class isn’t functional! It exists purely for type hinting and documentation -- it makes the `n_seconds` argument and the `synchronous`/`asynchronous` signatures explicit to both static analyzers and human readers.
+You may have noticed that at no point in the above analysis did we ever reference the big long
+`SpotCountProtocol` class shown in the `count.py` snippet above. That class isn’t functional! It
+exists purely for type hinting and documentation -- it makes the `n_seconds` argument and the
+`synchronous`/`asynchronous` signatures explicit to both static analyzers and human readers.
 
-The other thing you might have noticed is that we call `asynchronously` and `synchronously` instead of `asynchronous` and `synchronous`.  These are aliased at the very top of [`GeneralizedCallable`](https://github.com/rai-opensource/synchros2/blob/bbe365dfafef15e9a6379246f801aca4d90a932b/synchros2/synchros2/callables.py#L61) so that `asynchronously` calls `asynchronous` and `synchronously` calls `synchronous`.  We tend to prefer the adverb for actions because it’s grammatically correct.
+The other thing you might have noticed is that we call `asynchronously` and `synchronously` instead
+of `asynchronous` and `synchronous`. These are aliased at the very top of [`GeneralizedCallable`][4]
+so that `asynchronously` calls `asynchronous` and `synchronously` calls `synchronous`. We tend to
+prefer the adverb for actions because it’s grammatically correct.
+
+<!-- References -->
+
+[1]: https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/callables.py
+[2]: https://docs.ros.org/en/humble/Tutorials/Intermediate/Creating-an-Action.html
+[3]: https://github.com/rai-opensource/spot_ros2
+[4]: https://github.com/rai-opensource/synchros2/blob/bbe365dfafef15e9a6379246f801aca4d90a932b/synchros2/synchros2/callables.py#L61
+[5]: https://github.com/rai-opensource/synchros2/blob/bbe365dfafef15e9a6379246f801aca4d90a932b/synchros2/synchros2/callables.py#L250
+[6]: https://github.com/rai-opensource/synchros2/blob/bbe365dfafef15e9a6379246f801aca4d90a932b/synchros2/synchros2/action.py#L451
+[7]: https://github.com/rai-opensource/synchros2/blob/bbe365dfafef15e9a6379246f801aca4d90a932b/synchros2/synchros2/callables.py#L107
+[8]: https://github.com/rai-opensource/synchros2/blob/bbe365dfafef15e9a6379246f801aca4d90a932b/synchros2/synchros2/callables.py#L184
+[9]: https://www.residentmar.io/2019/07/07/python-mixins.html

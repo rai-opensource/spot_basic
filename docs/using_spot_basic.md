@@ -13,10 +13,12 @@
 
 `SpotBasic` user facing APIs are the result of repeatedly applying two abstractions:
 
-- [generalized callables](https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/callables.py), to put out requests and commands over ROS 2 services and actions, and
-- [message feeds](https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/feeds.py), to fetch and iterate over stateful ROS 2 topic streams.
+- [generalized callables][1], to put out requests and commands over ROS 2 services and actions, and
+- [message feeds][2], to fetch and iterate over stateful ROS 2 topic streams.
 
-In combination, these abstractions afford an idiomatic approach to Spot robot programming. The example below makes Spot stand up, walk in a straight line, and sit down, showing the front right camera feed while it walks:
+In combination, these abstractions afford an idiomatic approach to Spot robot programming. The
+example below makes Spot stand up, walk in a straight line, and sit down, showing the front right
+camera feed while it walks:
 
 ```python
 import argparse
@@ -63,11 +65,19 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-Most `SpotBasic` methods are generalized methods, which in practice means they can be blocked on thru completion, with an optional timeout, or managed using futures, and even cancelled, once started. Most `SpotBasic` properties, on the other hand, are message feeds enabling simple iteration as well as more complex update notification schemes, using callbacks or using futures. There is ample room for a variety of programming patterns and idioms.
+Most `SpotBasic` methods are generalized methods, which in practice means they can be blocked on
+thru completion, with an optional timeout, or managed using futures, and even cancelled, once
+started. Most `SpotBasic` properties, on the other hand, are message feeds enabling simple iteration
+as well as more complex update notification schemes, using callbacks or using futures. There is
+ample room for a variety of programming patterns and idioms.
 
 ## Executing commands
 
-`SpotBasic` can execute arbitrary `RobotCommand`s on Spot. These commands can be built using `bosdyn_api_msgs.msg.RobotCommand` ROS 2 (equivalent) messages, or `bosdyn.api.robot_command_pb2.RobotCommand` Protobuf messages as Spot SDK code would. Either way, ROS 2 (equivalent) messages will be returned, as these convey at least the same amount of information (e.g. as to what was the outcome of the command), often more.
+`SpotBasic` can execute arbitrary `RobotCommand`s on Spot. These commands can be built using
+`bosdyn_api_msgs.msg.RobotCommand` ROS 2 (equivalent) messages, or
+`bosdyn.api.robot_command_pb2.RobotCommand` Protobuf messages as Spot SDK code would. Either way,
+ROS 2 (equivalent) messages will be returned, as these convey at least the same amount of
+information (e.g. as to what was the outcome of the command), often more.
 
 ```python
 import argparse
@@ -103,13 +113,21 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-Synchronous commands are blocking. On completion, either a successful result is returned or an exception is raised. Asynchronous commands, on the other hand, return a future-like object immediately without blocking. This object allows the underlying ROS 2 action lifecycle to be monitored, awaiting for specific transitions, registering callbacks, querying status and result, and more.
+Synchronous commands are blocking. On completion, either a successful result is returned or an
+exception is raised. Asynchronous commands, on the other hand, return a future-like object
+immediately without blocking. This object allows the underlying ROS 2 action lifecycle to be
+monitored, awaiting for specific transitions, registering callbacks, querying status and result, and
+more.
 
 > [!TIP]
-> When prototyping, it is usually simpler to develop for the happy path. With synchronous APIs you can defer error handling
-> to the caller, which may be none other than the user once the exception reaches the interpreter, greatly simplifying the code.
+> When prototyping, it is usually simpler to develop for the happy path. With synchronous APIs you
+> can defer error handling to the caller, which may be none other than the user once the exception
+> reaches the interpreter, greatly simplifying the code.
 
-Note that in both cases commands will be followed through completion. This may not always be desirable e.g. for piecewise trajectory control, the extra overhead that command tracking requires can significantly degrade the responsiveness of the system. Instead, for true fire-and-forget behavior, one can simply start executing a command:
+Note that in both cases commands will be followed through completion. This may not always be
+desirable e.g. for piecewise trajectory control, the extra overhead that command tracking requires
+can significantly degrade the responsiveness of the system. Instead, for true fire-and-forget
+behavior, one can simply start executing a command:
 
 ```python
 import argparse
@@ -145,7 +163,8 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-To complement the Spot SDK, the `spot_basic.command` subpackage includes a number of command builders to simplify command construction across the full range of Spot capabilities e.g.:
+To complement the Spot SDK, the `spot_basic.command` subpackage includes a number of command
+builders to simplify command construction across the full range of Spot capabilities e.g.:
 
 ```python
 import argparse
@@ -189,7 +208,10 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-These command builders can craft simple commands and complex maneuvers. These maneuvers are sequences of commands, potentially lazy evaluated so that later commands can react to robot state. Maneuvers can be executed sequentially by means of vectorized execution. Vectorized execution will return all commands results or raise on error.
+These command builders can craft simple commands and complex maneuvers. These maneuvers are
+sequences of commands, potentially lazy evaluated so that later commands can react to robot state.
+Maneuvers can be executed sequentially by means of vectorized execution. Vectorized execution will
+return all commands results or raise on error.
 
 ```python
 import argparse
@@ -235,7 +257,8 @@ Note that this specific maneuver is twice instantiated, as it is a consumable it
 > [!TIP]
 > Do not reuse commands or maneuvers. Many are robot state-dependent.
 
-When working on Spot robots, some commands are used over and over: standing, sitting, walking. These commands are so common that `SpotBasic` already exposes direct interfaces to them.
+When working on Spot robots, some commands are used over and over: standing, sitting, walking. These
+commands are so common that `SpotBasic` already exposes direct interfaces to them.
 
 ```python
 import argparse
@@ -281,11 +304,17 @@ except KeyboardInterrupt:
     spot.stop.synchronously(timeout_sec=20.0)
 ```
 
-Explore the [`spot_basic.command`](../spot_basic/command) subpackage and its documentation for a complete list of all available commands. For manipulation commands, see the [`spot_basic.manipulation`](../spot_basic/manipulation.py) submodule instead. Note `SpotBasic.perform` semantics are very similar to those of `SpotBasic.execute`, yet not the same, to accommodate the distinction that the Spot SDK makes between regular commands and manipulation commands (or requests).
+Explore the [`spot_basic.command`](../spot_basic/command) subpackage and its documentation for a
+complete list of all available commands. For manipulation commands, see the
+[`spot_basic.manipulation`](../spot_basic/manipulation.py) submodule instead. Note
+`SpotBasic.perform` semantics are very similar to those of `SpotBasic.execute`, yet not the same, to
+accommodate the distinction that the Spot SDK makes between regular commands and manipulation
+commands (or requests).
 
 ## Querying state
 
-`SpotBasic` exposes Spot state via stateful feeds and explicit queries. Such is the case for joint states and world object listings, for example.
+`SpotBasic` exposes Spot state via stateful feeds and explicit queries. Such is the case for joint
+states and world object listings, for example.
 
 ```python
 import argparse
@@ -324,7 +353,8 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-However, by far the most common interface is the transform tree. `SpotBasic` API for transform lookup mimics that of the [`TransformListener` wrapper](https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/tf_listener_wrapper.py) in `synchros2`.
+However, by far the most common interface is the transform tree. `SpotBasic` API for transform
+lookup mimics that of the [`TransformListener` wrapper][3] in `synchros2`.
 
 ```python
 import argparse
@@ -357,11 +387,15 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-Explore the [`spot_basic.state`](../spot_basic/state.py) submodule and its documentation for a complete list of all APIs.
+Explore the [`spot_basic.state`](../spot_basic/state.py) submodule and its documentation for a
+complete list of all APIs.
 
 ## Capturing video
 
-`SpotBasic` can access all RGBD cameras on Spot. Each RGBD camera streams RGB images, depth maps, camera intrinsics (usually but not necessarily static), and (locally reconstructed) pointclouds. Subscriptions to these streams are exposed as a single arrangement (or configuration) of [`spot.cameras`](../spot_basic/image.py). You can work with these message feeds in a number of ways:
+`SpotBasic` can access all RGBD cameras on Spot. Each RGBD camera streams RGB images, depth maps,
+camera intrinsics (usually but not necessarily static), and (locally reconstructed) pointclouds.
+Subscriptions to these streams are exposed as a single arrangement (or configuration) of
+[`spot.cameras`](../spot_basic/image.py). You can work with these message feeds in a number of ways:
 
 - fetching the latest frame if available:
 
@@ -403,8 +437,9 @@ with closing(rgb_camera.image_with_info.stream()) as imagestream:
 ```
 
 > [!IMPORTANT]
-> Note the use of `contextlib.closing` on the image stream. This ensures the underlying connection is closed as soon
-> as the code exits the scope, preventing unnecessary buffering (wasting memory and CPU cycles).
+> Note the use of `contextlib.closing` on the image stream. This ensures the underlying connection
+> is closed as soon as the code exits the scope, preventing unnecessary buffering (wasting memory
+> and CPU cycles).
 
 - synchronizing multiple streams:
 
@@ -421,10 +456,19 @@ with closing(sync_rgb_image_feeds.stream()) as imagestream:
             # do something
 ```
 
-And more. Explore the [`synchros2.feeds`](https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/feeds.py) submodule for an overview of what message feeds can do.
+And more. Explore the [`synchros2.feeds`][2] submodule for an overview of what message feeds can do.
 
 ## Where to go next
 
-- Explore the [`spot_basic`](../spot_basic) subpackage and its documentation for a complete list of all available Spot APIs.
-- Explore [`spot_basic` examples](../examples) and [tests](../test/spot_basic) for a practical overview of what you can do with it.
-- Learn how to [extend `SpotBasic`](extending_spot_basic.md) with new commands, state streams, and joint-level control.
+- Explore the [`spot_basic`](../spot_basic) subpackage and its documentation for a complete list of
+  all available Spot APIs.
+- Explore [`spot_basic` examples](../examples) and [tests](../test/spot_basic) for a practical
+  overview of what you can do with it.
+- Learn how to [extend `SpotBasic`](extending_spot_basic.md) with new commands, state streams, and
+  joint-level control.
+
+<!-- References -->
+
+[1]: https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/callables.py
+[2]: https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/feeds.py
+[3]: https://github.com/rai-opensource/synchros2/blob/main/synchros2/synchros2/tf_listener_wrapper.py

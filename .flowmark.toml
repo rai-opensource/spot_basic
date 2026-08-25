@@ -1,0 +1,5 @@
+# Markdown auto-formatting settings, used by the flowmark pre-commit hook and by
+# any manual `flowmark` runs from this directory.
+
+[formatting]
+width = 100
