@@ -119,7 +119,7 @@ run `pre-commit run --all-files` before pushing.
 ## Opening a pull request
 
 Push your branch to your fork and open a pull request against `main`. The
-[pull request template](pull_request_template.md) asks you to describe:
+[pull request template](.github/PULL_REQUEST_TEMPLATE.md) asks you to describe:
 
 - **What** changed.
 - **Why** it changed, linking the relevant issue.
