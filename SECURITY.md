@@ -14,8 +14,8 @@ releases are not patched.
 
 Instead, report them privately through either of the following:
 
-- GitHub's [private vulnerability reporting][1] for this repository, or
-- email to [opensource@rai-inst.com](mailto:opensource@rai-inst.com).
+- Using GitHub's [private vulnerability reporting][1]
+- Email to [opensource@rai-inst.com](mailto:opensource@rai-inst.com)
 
 Please include as much of the following as you can:
 

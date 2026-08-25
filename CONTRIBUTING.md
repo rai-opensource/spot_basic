@@ -24,9 +24,6 @@ project accepts, and how to get a change reviewed and merged.
 > bug report, or open a pull request that fixes a bug, expect a maintainer to respond within a few
 > weeks. Feature requests may be closed without implementation.
 
-Please read this before investing significant effort in a change. If you need guarantees this
-project does not offer, forking is a reasonable option and the [MIT license](LICENSE) permits it.
-
 ## Reporting a bug
 
 Open an issue using the [bug report template][1].
@@ -37,12 +34,11 @@ Good reports are much faster to act on. Please include:
 - Your Spot SDK version (`pip list | grep bosdyn` — all entries should read `5.0.1`).
 - Whether your robot has an arm, since arm APIs behave differently on armless robots.
 - The `spot_driver` launch arguments you used, including whether `controllable:=True` was set.
-- A minimal script that reproduces the problem.
+- A minimal script that reproduces the problem (if possible).
 - The complete error output, not just the final line.
 
 Before filing, please check the [Requirements](README.md#requirements) and
-[Limitations](README.md#limitations) sections of the README. A large share of reported problems turn
-out to be version mismatches or functionality that is intentionally out of scope.
+[Limitations](README.md#limitations) sections of the README.
 
 ## Requesting a feature
 
@@ -65,8 +61,9 @@ source install/setup.bash
 Then install the pre-commit hooks, which run the same checks CI does:
 
 ```bash
-cd ~/spot_ws/src/spot_basic
 pip install pre-commit
+
+cd ~/spot_ws/src/spot_basic
 pre-commit install
 pre-commit run --all-files
 ```
@@ -137,7 +134,7 @@ Push your branch to your fork and open a pull request against `main`. The
 
 - Every pull request requires review and approval from a maintainer listed in
   [`.github/CODEOWNERS`](.github/CODEOWNERS) before it can be merged.
-- CI — lint, build, and unit tests — must pass.
+- CI must pass, including lint, build, and unit tests.
 - Maintainers may ask for changes, or decline a contribution that falls outside the project's scope
   or maintenance commitment.
 
