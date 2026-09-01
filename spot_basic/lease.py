@@ -23,10 +23,9 @@ class SpotLeaseProtocol(SpotBaseProtocol, Protocol):
             """Claim the robot (body) lease synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the claim request will be cancelled and the call will raise. Note
-                this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the claim request will be cancelled and the call will raise. Note this timeout
+                    is local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the claim request.
@@ -50,10 +49,9 @@ class SpotLeaseProtocol(SpotBaseProtocol, Protocol):
             """Release the robot (body) lease synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the release request will be cancelled and the call will raise. Note
-                this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the release request will be cancelled and the call will raise. Note this timeout
+                    is local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the release request.
@@ -77,10 +75,9 @@ class SpotLeaseProtocol(SpotBaseProtocol, Protocol):
             """Forcefully take the (body) lease synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the release request will be cancelled and the call will raise. Note
-                this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the release request will be cancelled and the call will raise. Note this timeout
+                    is local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the take lease request.
@@ -131,8 +128,7 @@ class SpotLeaseMixin(SpotBaseProtocol):
         """Maintain a lease on the robot while in scope.
 
         Args:
-            timeout_sec: optional timeout, in seconds. May block indefinitely
-            if none is provided.
+            timeout_sec: optional timeout, in seconds. May block indefinitely if none is provided.
         """
         self.claim.synchronously(timeout_sec=timeout_sec)
         try:

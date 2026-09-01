@@ -28,9 +28,9 @@ class SpotCAMAudioProtocol(SpotBaseProtocol, Protocol):
 
             Args:
                 timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the listing request will be cancelled and the call will raise.
-                Note this timeout is local to the caller -- the robot is unaware and will
-                complete the computation before discarding the response.
+                    expires, the listing request will be cancelled and the call will raise.
+                    Note this timeout is local to the caller -- the robot is unaware and
+                    will complete the computation before discarding the response.
 
             Returns:
                 the response to the listing request.
@@ -47,10 +47,9 @@ class SpotCAMAudioProtocol(SpotBaseProtocol, Protocol):
             """List available sounds on the Spot CAM synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the listing request will be cancelled. Note this timeout is local
-                to the caller  -- the robot is unaware and will complete the computation
-                before discarding the response.
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires, the
+                    listing request will be cancelled. Note this timeout is local to the caller  -- the
+                    robot is unaware and will complete the computation before discarding the response.
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -76,10 +75,9 @@ class SpotCAMAudioProtocol(SpotBaseProtocol, Protocol):
             Args:
                 name: a name (or label) to id the sound. It will be required to play or delete it.
                 wav_path: a path to a .wav file with the sound to be loaded.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the listing request will be cancelled. Note this timeout is local to
-                the caller -- the robot is unaware and will complete the computation before
-                discarding the response.
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires, the
+                    listing request will be cancelled. Note this timeout is local to the caller -- the
+                    robot is unaware and will complete the computation before discarding the response.
 
             Returns:
                 a response the load request.
@@ -98,10 +96,9 @@ class SpotCAMAudioProtocol(SpotBaseProtocol, Protocol):
             Args:
                 name: a name (or label) to id the sound. It will be required to play or delete it.
                 wav_path: a path to a .wav file with the sound to be loaded.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the listing request will be cancelled. Note this timeout is local to
-                the caller -- the robot is unaware and will complete the computation before
-                discarding the response.
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires, the
+                    listing request will be cancelled. Note this timeout is local to the caller -- the
+                    robot is unaware and will complete the computation before discarding the response.
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -133,10 +130,9 @@ class SpotCAMAudioProtocol(SpotBaseProtocol, Protocol):
             Args:
                 name: name of the sound to play.
                 volume_multiplier: speaker volume gain for sound playback.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, playback will be cancelled and the call will raise. Note this timeout
-                is local to the caller -- the robot is unaware and will complete the computation
-                before discarding the response.
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires, playback
+                    will be cancelled and the call will raise. Note this timeout is local to the caller --
+                    the robot is unaware and will complete the computation before discarding the response.
 
             Returns:
                 the response to the playback request.
@@ -157,9 +153,9 @@ class SpotCAMAudioProtocol(SpotBaseProtocol, Protocol):
             Args:
                 name: name of the sound to play.
                 volume_multiplier: speaker volume gain for sound playback. Must be nonnegative.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, playback will be cancelled. Note this timeout is local to the caller -- the
-                robot is unaware and will complete the computation before discarding the response.
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    playback will be cancelled. Note this timeout is local to the caller -- the robot
+                    is unaware and will complete the computation before discarding the response.
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -188,10 +184,10 @@ class SpotCAMAudioProtocol(SpotBaseProtocol, Protocol):
 
             Args:
                 name: name of the sound to delete.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the request will be cancelled and the call will raise. Note this timeout
-                is local to the caller  -- the robot is unaware and will complete the computation
-                before discarding the response.
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and
+                    it expires, the request will be cancelled and the call will raise.
+                    Note this timeout is local to the caller  -- the robot is unaware
+                    and will complete the computation before discarding the response.
 
             Returns:
                 the response to the request.
@@ -209,10 +205,9 @@ class SpotCAMAudioProtocol(SpotBaseProtocol, Protocol):
 
             Args:
                 name: name of the sound to delete.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the request will be cancelled. Note this timeout is local to the
-                caller -- the robot is unaware and will complete the computation before
-                discarding the response.
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the request will be cancelled. Note this timeout is local to the caller -- the
+                    robot is unaware and will complete the computation before discarding the response.
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -239,9 +234,9 @@ class SpotCAMAudioProtocol(SpotBaseProtocol, Protocol):
             Args:
                 volume: speaker volume as a percentage.
                 timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the volume setting request will be cancelled and the call will raise.
-                Note this timeout is local to the caller -- the robot is unaware and will complete
-                the computation before discarding the response.
+                    expires, the volume setting request will be cancelled and the call will
+                    raise. Note this timeout is local to the caller -- the robot is unaware
+                    and will complete the computation before discarding the response.
 
             Returns:
                 the response to the volume setting request.
@@ -259,10 +254,9 @@ class SpotCAMAudioProtocol(SpotBaseProtocol, Protocol):
 
             Args:
                 volume: speaker volume as a percentage.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the volume setting request will be cancelled. Note this timeout is
-                local to the caller -- the robot is unaware and will complete the computation
-                before discarding the response.
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires, the
+                    volume setting request will be cancelled. Note this timeout is local to the caller --
+                    the robot is unaware and will complete the computation before discarding the response.
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -288,9 +282,9 @@ class SpotCAMAudioProtocol(SpotBaseProtocol, Protocol):
 
             Args:
                 timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the volume request will be cancelled and the call will raise. Note
-                this timeout is local to the caller -- the robot is unaware and will complete
-                the computation before discarding the response.
+                    expires, the volume request will be cancelled and the call will raise.
+                    Note this timeout is local to the caller -- the robot is unaware and
+                    will complete the computation before discarding the response.
 
             Returns:
                 the response to the volume request, including the speaker volume as a percentage.
@@ -307,10 +301,9 @@ class SpotCAMAudioProtocol(SpotBaseProtocol, Protocol):
             """Get the Spot CAM speaker volume synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the volume request will be cancelled. Note this timeout is local to
-                the caller -- the robot is unaware and will complete the computation before
-                discarding the response.
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires, the
+                    volume request will be cancelled. Note this timeout is local to the caller -- the
+                    robot is unaware and will complete the computation before discarding the response.
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:

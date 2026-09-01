@@ -43,8 +43,8 @@ def reconstruct_pointcloud(
         depth_image_message: a depth map.
         camera_intrinsics_message: camera pinhole model parameters.
         camera_extrinsics_message: camera pose w.r.t. to the frame of interest.
-        depth_unit_per_meter: depth map scale factor to express it in meters.
-        Defaults to 1000 (for depth maps expressed in mm).
+        depth_unit_per_meter: depth map scale factor to express it in
+            meters. Defaults to 1000 (for depth maps expressed in mm).
         mask: optional mask to ignore part of the depth map.
     """
     cv_bridge = CvBridge()
@@ -115,9 +115,8 @@ def make_pointcloud_reconstruction_feed(
         depth_image_feed: a depth map message feed.
         camera_intrinsics_feed: camera pinhole model message feed.
         target_frame_id: the frame id of the reconstructed pointcloud.
-        reconstruction_method: algorithm for pointcloud reconstruction
-        as callable, taking rgb image, depth image, camera info, and
-        camera transform messages as positional arguments.
+        reconstruction_method: algorithm for pointcloud reconstruction as callable, taking rgb
+            image, depth image, camera info, and camera transform messages as positional arguments.
         history_length: optional historic data size, defaults to 1.
         node: optional node for the feed, defaults to the current process node.
 
@@ -303,9 +302,9 @@ class SpotImageMixin(SpotMobilityCommandProtocol):
 
         Args:
             cameras: optional subset of camera subscriptions to be used for scanning.
-            All available cameras will be used be default if none are provided.
-            routine: optional sequence of in-place pan/tilt movements to perform
-            during the scan. A full scan will be captured and aggregated in each pose.
+                All available cameras will be used be default if none are provided.
+            routine: optional sequence of in-place pan/tilt movements to perform during
+                the scan. A full scan will be captured and aggregated in each pose.
             timeout_sec: optional timeout, in seconds, for each blocking operation.
 
         Returns:

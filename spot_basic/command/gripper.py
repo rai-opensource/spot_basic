@@ -39,8 +39,9 @@ class SpotGripperCommandBuilder(SpotCommandBuilder):
         """Build a claw gripper command to set to an arbitrary angle.
 
         Args:
-            theta_rad: opening angle for the claw gripper, in radians. Must lie in the [-pi/2, 0] interval,
-            where -pi/2 is the fully open angle and 0 is closed. (This matches the joint angle in joint_states).
+            theta_rad: opening angle for the claw gripper, in radians. Must lie
+                in the [-pi/2, 0] interval, where -pi/2 is the fully open angle
+                and 0 is closed. (This matches the joint angle in joint_states).
             max_torque: maximum allowed torque applied in Nm. If unspecified, a default value of 5.5 will be used.
         """
         if theta_rad > _CLAW_GRIPPER_CLOSED_ANGLE or theta_rad < _CLAW_GRIPPER_OPEN_ANGLE:

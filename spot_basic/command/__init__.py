@@ -94,10 +94,10 @@ class SpotCommandProtocol(SpotStateProtocol, Protocol):
             Args:
                 command: a robot command to execute, in its Protobuf or ROS 2 form.
                 feedback_callback: optional action feedback callback.
-                timeout_sec: optional action timeout, in seconds. If a timeout is specified and it
-                expires, the execution request will be cancelled and the call will raise. Note this
-                timeout is local to the caller. It may take some time for the action to be cancelled,
-                if cancellation is not rejected by the action server.
+                timeout_sec: optional action timeout, in seconds. If a timeout is specified and
+                    it expires, the execution request will be cancelled and the call will raise.
+                    Note this timeout is local to the caller. It may take some time for the
+                    action to be cancelled, if cancellation is not rejected by the action server.
 
             Returns:
                 the execution result.
@@ -127,10 +127,10 @@ class SpotCommandProtocol(SpotStateProtocol, Protocol):
             Args:
                 command: a robot command to execute, in its Protobuf or ROS 2 form.
                 feedback_callback: optional action feedback callback.
-                timeout_sec: optional action timeout, in seconds. If a timeout is specified and it
-                expires, the execution request will be cancelled and the call will raise. Note this
-                timeout is local to the caller. It may take some time for the action to be cancelled,
-                if cancellation is not rejected by the action server.
+                timeout_sec: optional action timeout, in seconds. If a timeout is specified and
+                    it expires, the execution request will be cancelled and the call will raise.
+                    Note this timeout is local to the caller. It may take some time for the
+                    action to be cancelled, if cancellation is not rejected by the action server.
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -151,9 +151,8 @@ class SpotCommandProtocol(SpotStateProtocol, Protocol):
 
             Args:
                 command: a robot command to execute, in its Protobuf or ROS 2 form.
-                track_feedback: whether and how to track action feedback. Other
-                than a boolean to enable or disable tracking, a positive integer
-                may be provided to cap feedback buffer size.
+                track_feedback: whether and how to track action feedback. Other than a boolean to enable
+                    or disable tracking, a positive integer may be provided to cap feedback buffer size.
 
             Returns:
                 the future execution outcome.
@@ -180,10 +179,10 @@ class SpotCommandProtocol(SpotStateProtocol, Protocol):
             Args:
                 command: a robot command to execute, in its Protobuf or ROS 2 form.
                 duration: the intended robot command duration.
-                timeout_sec: optional action timeout, in seconds. If a timeout is specified and it
-                expires, the execution request will be cancelled and the call will raise. Note this
-                timeout is local to the caller -- the robot is unaware and will complete the computation
-                before discarding the response.
+                timeout_sec: optional action timeout, in seconds. If a timeout is specified
+                    and it expires, the execution request will be cancelled and the call will
+                    raise. Note this timeout is local to the caller -- the robot is unaware
+                    and will complete the computation before discarding the response.
 
             Returns:
                 the response to the execution request, including the robot command id.
@@ -219,10 +218,10 @@ class SpotCommandProtocol(SpotStateProtocol, Protocol):
             """Stop an ongoing robot command synchronously.
 
             Args:
-                timeout_sec: optional action timeout, in seconds. If a timeout is specified and it
-                expires, the stop request will be cancelled and the call will raise. Note this
-                timeout is local to the caller -- the robot is unaware and will complete the computation
-                before discarding the response.
+                timeout_sec: optional action timeout, in seconds. If a timeout is specified
+                    and it expires, the stop request will be cancelled and the call will
+                    raise. Note this timeout is local to the caller -- the robot is unaware
+                    and will complete the computation before discarding the response.
 
             Returns:
                 the response to the stop request.
@@ -250,10 +249,10 @@ class SpotCommandProtocol(SpotStateProtocol, Protocol):
 
             Args:
                 locomotion_hint: intended robot locomotion mode.
-                timeout_sec: optional action timeout, in seconds. If a timeout is specified and it
-                expires, the setting change request will be cancelled and the call will raise. Note this
-                timeout is local to the caller -- the robot is unaware and will complete the computation
-                before discarding the response.
+                timeout_sec: optional action timeout, in seconds. If a timeout is specified
+                    and it expires, the setting change request will be cancelled and the call
+                    will raise. Note this timeout is local to the caller -- the robot is
+                    unaware and will complete the computation before discarding the response.
 
             Returns:
                 the response to the setting change request.
@@ -271,10 +270,10 @@ class SpotCommandProtocol(SpotStateProtocol, Protocol):
 
             Args:
                 locomotion_hint: intended robot locomotion mode.
-                timeout_sec: optional action timeout, in seconds. If a timeout is specified and it
-                expires, the setting change request will be cancelled and the call will raise. Note this
-                timeout is local to the caller -- the robot is unaware and will complete the computation
-                before discarding the response.
+                timeout_sec: optional action timeout, in seconds. If a timeout is specified
+                    and it expires, the setting change request will be cancelled and the call
+                    will raise. Note this timeout is local to the caller -- the robot is
+                    unaware and will complete the computation before discarding the response.
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -300,10 +299,10 @@ class SpotCommandProtocol(SpotStateProtocol, Protocol):
 
             Args:
                 enabled: whether the stair mode should be enabled or disabled.
-                timeout_sec: optional action timeout, in seconds. If a timeout is specified and it
-                expires, the toggling request will be cancelled and the call will raise. Note this
-                timeout is local to the caller -- the robot is unaware and will complete the computation
-                before discarding the response.
+                timeout_sec: optional action timeout, in seconds. If a timeout is specified
+                    and it expires, the toggling request will be cancelled and the call will
+                    raise. Note this timeout is local to the caller -- the robot is unaware
+                    and will complete the computation before discarding the response.
 
             Returns:
                 the response to the toggling request.
@@ -321,10 +320,10 @@ class SpotCommandProtocol(SpotStateProtocol, Protocol):
 
             Args:
                 enabled: whether the stair mode should be enabled or disabled.
-                timeout_sec: optional action timeout, in seconds. If a timeout is specified and it
-                expires, the toggling request will be cancelled and the call will raise. Note this
-                timeout is local to the caller -- the robot is unaware and will complete the computation
-                before discarding the response.
+                timeout_sec: optional action timeout, in seconds. If a timeout is specified
+                    and it expires, the toggling request will be cancelled and the call will
+                    raise. Note this timeout is local to the caller -- the robot is unaware
+                    and will complete the computation before discarding the response.
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -350,10 +349,10 @@ class SpotCommandProtocol(SpotStateProtocol, Protocol):
 
             Args:
                 velocity_limit: linear and angular velocity limits.
-                timeout_sec: optional action timeout, in seconds. If a timeout is specified and it
-                expires, the setting change request will be cancelled and the call will raise. Note this
-                timeout is local to the caller -- the robot is unaware and will complete the computation
-                before discarding the response.
+                timeout_sec: optional action timeout, in seconds. If a timeout is specified
+                    and it expires, the setting change request will be cancelled and the call
+                    will raise. Note this timeout is local to the caller -- the robot is
+                    unaware and will complete the computation before discarding the response.
 
             Returns:
                 the response to the setting change request.
@@ -371,10 +370,10 @@ class SpotCommandProtocol(SpotStateProtocol, Protocol):
 
             Args:
                 velocity_limit: linear and angular velocity limits.
-                timeout_sec: optional action timeout, in seconds. If a timeout is specified and it
-                expires, the setting change request will be cancelled and the call will raise. Note this
-                timeout is local to the caller -- the robot is unaware and will complete the computation
-                before discarding the response.
+                timeout_sec: optional action timeout, in seconds. If a timeout is specified
+                    and it expires, the setting change request will be cancelled and the call
+                    will raise. Note this timeout is local to the caller -- the robot is
+                    unaware and will complete the computation before discarding the response.
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -402,10 +401,10 @@ class SpotCommandProtocol(SpotStateProtocol, Protocol):
 
             Args:
                 id: behavior fault id to clear.
-                timeout_sec: optional action timeout, in seconds. If a timeout is specified and it
-                expires, the clearing request will be cancelled and the call will raise. Note this
-                timeout is local to the caller -- the robot is unaware and will complete the computation
-                before discarding the response.
+                timeout_sec: optional action timeout, in seconds. If a timeout is specified
+                    and it expires, the clearing request will be cancelled and the call will
+                    raise. Note this timeout is local to the caller -- the robot is unaware
+                    and will complete the computation before discarding the response.
 
             Returns:
                 the response to the clearing request.
@@ -423,10 +422,10 @@ class SpotCommandProtocol(SpotStateProtocol, Protocol):
 
             Args:
                 id: behavior fault id to clear.
-                timeout_sec: optional action timeout, in seconds. If a timeout is specified and it
-                expires, the clearing request will be cancelled and the call will raise. Note this
-                timeout is local to the caller -- the robot is unaware and will complete the computation
-                before discarding the response.
+                timeout_sec: optional action timeout, in seconds. If a timeout is specified
+                    and it expires, the clearing request will be cancelled and the call will
+                    raise. Note this timeout is local to the caller -- the robot is unaware
+                    and will complete the computation before discarding the response.
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -483,8 +482,8 @@ class SpotCommandMixin(SpotCommandProtocol):
 
         Args:
             *args: positional arguments forwarded to the next class in the MRO.
-            disable_collisions: whether to disable vision obstacle and foot constraint avoidance in the default
-            mobility params.
+            disable_collisions: whether to disable vision obstacle and
+                foot constraint avoidance in the default mobility params.
             **kwargs: keyword arguments forwarded to the next class in the MRO.
         """
         super().__init__(*args, **kwargs)

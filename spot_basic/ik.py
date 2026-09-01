@@ -36,10 +36,9 @@ class SpotIKProtocol(SpotBaseProtocol, Protocol):
 
             Args:
                 request: IK solution request, in its Protobuf or ROS 2 form.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the IK solution query will be cancelled and the call will raise.
-                Note this timeout is local to the caller (and it may take a while for the
-                robot to acknowledge it).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the IK solution query will be cancelled and the call will raise. Note this timeout
+                    is local to the caller (and it may take a while for the robot to acknowledge it).
 
             Returns:
                 the response to the IK solution query.
@@ -64,10 +63,9 @@ class SpotIKProtocol(SpotBaseProtocol, Protocol):
 
             Args:
                 request: IK solution request, in its Protobuf or ROS 2 form.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the IK solution query will be cancelled and the call will raise.
-                Note this timeout is local to the caller (and it may take a while for the
-                robot to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the IK solution query will be cancelled and the call will raise. Note this
+                    timeout is local to the caller (and it may take a while for the robot to react).
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:

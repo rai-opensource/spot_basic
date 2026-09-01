@@ -273,8 +273,8 @@ class TestingPromptSession:
 
         Args:
             question_or_request: an open-ended question or ask to make.
-            who: optional label for the user to identify the source of the ask,
-            defaults to full name of the current pytest test.
+            who: optional label for the user to identify the source of the
+                ask, defaults to full name of the current pytest test.
             kwargs: optional keyword arguments to be forwarded to `TestingPromptSession.prompt`.
 
         Returns:

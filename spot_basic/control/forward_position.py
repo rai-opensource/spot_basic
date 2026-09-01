@@ -42,8 +42,8 @@ class SpotForwardPositionControllerInterface(SpotControllerInterface):
         Missing setpoints will default to 0.
 
         Args:
-            command: full setpoint array. This array follows standard `ros2_control` ordering conventions i.e.
-            `[<position for joint 0>, <position for joint 1>, ..., <position for joint M>]`.
+            command: full setpoint array. This array follows standard `ros2_control` ordering conventions
+                i.e. `[<position for joint 0>, <position for joint 1>, ..., <position for joint M>]`.
             kwargs: these are deduced from controller configuration, allowing commands to be set on a per joint basis.
 
         Raises:

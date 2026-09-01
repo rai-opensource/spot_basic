@@ -25,10 +25,9 @@ class SpotEStopProtocol(SpotBaseProtocol, Protocol):
             """Cut all power synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the emergency stop request will be cancelled and the call will raise.
-                Note this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the emergency stop request will be cancelled and the call will raise. Note this
+                    timeout is local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the emergency stop request.
@@ -56,10 +55,9 @@ class SpotEStopProtocol(SpotBaseProtocol, Protocol):
             """Sit down and cut all power synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the emergency stop request will be cancelled and the call will raise.
-                Note this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the emergency stop request will be cancelled and the call will raise. Note this
+                    timeout is local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the emergency stop request.
@@ -87,10 +85,9 @@ class SpotEStopProtocol(SpotBaseProtocol, Protocol):
             """Release emergency stop synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the emergency stop release request will be cancelled and the call will raise.
-                Note this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires, the
+                    emergency stop release request will be cancelled and the call will raise. Note this
+                    timeout is local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the emergency stop release request.

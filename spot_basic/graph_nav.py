@@ -66,10 +66,9 @@ class SpotGraphNavProtocol(SpotBaseProtocol, Protocol):
             Args:
                 method: method for re-localization, either waypoint or fiducial based.
                 waypoint_id: waypoint ID for waypoint based re-localization.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the reset request will be cancelled and the call will raise.
-                Note this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the reset request will be cancelled and the call will raise. Note this timeout
+                    is local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the localization reset request.
@@ -93,10 +92,9 @@ class SpotGraphNavProtocol(SpotBaseProtocol, Protocol):
             Args:
                 method: method for re-localization, either waypoint or fiducial based.
                 waypoint_id: waypoint ID for waypoint based re-localization.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the reset request will be cancelled and the call will raise.
-                Note this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the reset request will be cancelled and the call will raise. Note this timeout
+                    is local to the caller (and it may take a while for the robot to react).
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -126,9 +124,9 @@ class SpotGraphNavProtocol(SpotBaseProtocol, Protocol):
             """Query GraphNav localization estimate synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the request will be cancelled and the call will raise. Note this timeout
-                is local to the caller (and it may take a while for the robot to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the request will be cancelled and the call will raise. Note this timeout is
+                    local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the localization estimate request.
@@ -145,9 +143,9 @@ class SpotGraphNavProtocol(SpotBaseProtocol, Protocol):
             """Query GraphNav localization estimate synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the request will be cancelled and the call will raise. Note this timeout
-                is local to the caller (and it may take a while for the robot to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the request will be cancelled and the call will raise. Note this timeout is
+                    local to the caller (and it may take a while for the robot to react).
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -174,9 +172,9 @@ class SpotGraphNavProtocol(SpotBaseProtocol, Protocol):
 
             Args:
                 upload_filepath: path to the serialized `bosdyn.api.graph_nav.map_pb2.Graph` instance to be uploaded.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the upload will be cancelled and the call will raise. Note this timeout
-                is local to the caller (and it may take a while for the robot to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the upload will be cancelled and the call will raise. Note this timeout is local
+                    to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the upload request.
@@ -194,9 +192,9 @@ class SpotGraphNavProtocol(SpotBaseProtocol, Protocol):
 
             Args:
                 upload_filepath: path to the serialized `bosdyn.api.graph_nav.map_pb2.Graph` instance to be uploaded.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the upload will be cancelled and the call will raise. Note this timeout
-                is local to the caller (and it may take a while for the robot to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the upload will be cancelled and the call will raise. Note this timeout is local
+                    to the caller (and it may take a while for the robot to react).
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -207,8 +205,8 @@ class SpotGraphNavProtocol(SpotBaseProtocol, Protocol):
             """Upload a new GraphNav graph (ie. waypoints and topology) asynchronously.
 
             Args:
-                upload_filepath: path to the serialized `bosdyn.api.graph_nav.map_pb2.Graph`
-                instance to be uploaded.
+                upload_filepath: path to the serialized
+                    `bosdyn.api.graph_nav.map_pb2.Graph` instance to be uploaded.
 
             Returns:
                 a future response to the upload request.
@@ -224,9 +222,9 @@ class SpotGraphNavProtocol(SpotBaseProtocol, Protocol):
             """Clear the current GraphNav graph.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, graph clearing will be cancelled and the call will raise. Note this timeout
-                is local to the caller (and it may take a while for the robot to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    graph clearing will be cancelled and the call will raise. Note this timeout is
+                    local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the graph clearing request.
@@ -243,9 +241,9 @@ class SpotGraphNavProtocol(SpotBaseProtocol, Protocol):
             """Clear the current GraphNav graph.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, graph clearing will be cancelled and the call will raise. Note this timeout
-                is local to the caller (and it may take a while for the robot to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    graph clearing will be cancelled and the call will raise. Note this timeout is
+                    local to the caller (and it may take a while for the robot to react).
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -268,9 +266,9 @@ class SpotGraphNavProtocol(SpotBaseProtocol, Protocol):
 
             Args:
                 upload_filepath: path to the serialized `bosdyn.api.graph_nav.map_pb2.Graph` instance to be listed.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, graph listing will be cancelled and the call will raise. Note this timeout
-                is local to the caller (and it may take a while for the robot to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    graph listing will be cancelled and the call will raise. Note this timeout is
+                    local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the graph listing request.
@@ -284,9 +282,9 @@ class SpotGraphNavProtocol(SpotBaseProtocol, Protocol):
 
             Args:
                 upload_filepath: path to the serialized `bosdyn.api.graph_nav.map_pb2.Graph` instance to be listed.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, graph listing will be cancelled and the call will raise. Note this timeout
-                is local to the caller (and it may take a while for the robot to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    graph listing will be cancelled and the call will raise. Note this timeout is
+                    local to the caller (and it may take a while for the robot to react).
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -314,9 +312,9 @@ class SpotGraphNavProtocol(SpotBaseProtocol, Protocol):
 
             Args:
                 waypoint_id: id of the waypoint to navigate to
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, graph listing will be cancelled and the call will raise. Note this timeout
-                is local to the caller (and it may take a while for the robot to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    graph listing will be cancelled and the call will raise. Note this timeout is
+                    local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the result to the navigate to request
@@ -330,9 +328,9 @@ class SpotGraphNavProtocol(SpotBaseProtocol, Protocol):
 
             Args:
                 waypoint_id: id of the waypoint to navigate to
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, graph listing will be cancelled and the call will raise. Note this timeout
-                is local to the caller (and it may take a while for the robot to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    graph listing will be cancelled and the call will raise. Note this timeout is
+                    local to the caller (and it may take a while for the robot to react).
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:

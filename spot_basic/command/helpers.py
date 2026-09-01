@@ -43,8 +43,8 @@ def timestamped_se2_vecs_to_se2_trajectory_command_proto(
 
     Args:
         timestamps_sec: sequence of times since the command reference time, in seconds, one per pose.
-        se2_poses: sequence of spatialmath SE2 poses or an array shaped (_, 3) with x, y, and theta values in meters
-        and radians.
+        se2_poses: sequence of spatialmath SE2 poses or an array shaped (_, 3) with x, y, and
+            theta values in meters and radians.
         interpolation: positional interpolation mode for the trajectory points.
         base_frame: frame name in which the SE(2) poses are expressed.
 

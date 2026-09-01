@@ -25,10 +25,9 @@ class SpotPowerProtocol(SpotBaseProtocol, Protocol):
             """Power on the robot (motors) synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the power on request will be cancelled and the call will raise. Note
-                this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the power on request will be cancelled and the call will raise. Note this
+                    timeout is local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the power on request.
@@ -52,10 +51,9 @@ class SpotPowerProtocol(SpotBaseProtocol, Protocol):
             """Power off the robot (motors) synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the power off request will be cancelled and the call will raise. Note
-                this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the power off request will be cancelled and the call will raise. Note this
+                    timeout is local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the power off request.

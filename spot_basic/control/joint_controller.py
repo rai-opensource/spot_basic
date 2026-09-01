@@ -40,11 +40,11 @@ class SpotJointControllerInterface(SpotControllerInterface):
         Typical interfaces are position, velocity, and effort. Missing setpoints will default to 0.
 
         Args:
-            command: A spot_msgs/msg/JointCommand message that has the names of the desired joints to
-            command, desired position, velocity, effort, and gain values. They should be in the same order.
-            Note: Needs <robot_name> prefix for joint names (i.e. Opal/arm_sh0)
-            See https://github.com/rai-opensource/spot_ros2/tree/main/spot_controllers#spotjointcontroller
-            for more info on using the SpotJointController
+            command: A spot_msgs/msg/JointCommand message that has the names of the desired joints
+                to command, desired position, velocity, effort, and gain values. They should be in
+                the same order. Note that this needs <robot_name> prefix for joint names, e.g.,
+                ``Opal/arm_sh0``. For more info on using the SpotJointController, see:
+                https://github.com/rai-opensource/spot_ros2/tree/main/spot_controllers#spotjointcontroller
 
         Raises:
             RuntimeError: if the controller interface is not attached or command is None

@@ -45,8 +45,8 @@ class SpotFullBodyCommandBuilder(SpotCommandBuilder):
 
         Args:
             direction_hint: optional hint for a rolling direction, will default to a right roll.
-            mobility_params: optional mobility params, defaulting to target
-            mobility params if none are provided.
+            mobility_params: optional mobility params, defaulting
+                to target mobility params if none are provided.
         """
         if mobility_params is None:
             mobility_params = self.target.mobility_params
@@ -61,8 +61,8 @@ class SpotFullBodyCommandBuilder(SpotCommandBuilder):
         """Build a self right command.
 
         Args:
-            mobility_params: optional mobility params, defaulting to target
-            mobility params if none are provided.
+            mobility_params: optional mobility params, defaulting
+                to target mobility params if none are provided.
         """
         if mobility_params is None:
             mobility_params = self.target.mobility_params

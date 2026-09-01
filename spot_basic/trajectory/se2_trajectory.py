@@ -80,16 +80,16 @@ class SE2Trajectory:
 
         Args:
             timestamps_sec: timestamps for each pose, in seconds from the start of the trajectory.
-            duration_sec: total trajectory duration, in seconds. If provided, timestamps are evenly distributed from
-            zero to this duration.
+            duration_sec: total trajectory duration, in seconds. If provided,
+                timestamps are evenly distributed from zero to this duration.
             poses: trajectory key poses as spatialmath SE2 objects.
             pose_vecs: trajectory key poses as ``[x, y, theta]`` vectors, with x and y in metres and theta in radians.
             phases: optional phase labels corresponding to each pose.
             make_relative_to_first_pose: if true, express all poses relative to the first pose.
 
         Raises:
-            ValueError: if poses are not specified exactly once, timestamps are not specified exactly once, or any
-            timestamp is NaN.
+            ValueError: if poses are not specified exactly once, timestamps
+                are not specified exactly once, or any timestamp is NaN.
         """
         if (poses is None) and (pose_vecs is None):
             raise ValueError("Require exactly one argument for specifying poses (received zero)")
@@ -213,8 +213,8 @@ class SE2Trajectory:
         """Evaluate or sample the trajectory.
 
         Args:
-            timestamp_sec: timestamp or timestamps to evaluate, in seconds. If omitted, the stored timestamps are used
-            unless ``timestep_sec`` or ``n_timesteps`` specifies generated sample times.
+            timestamp_sec: timestamp or timestamps to evaluate, in seconds. If omitted, the stored timestamps
+                are used unless ``timestep_sec`` or ``n_timesteps`` specifies generated sample times.
             timestep_sec: sample period, in seconds, for generated timestamps from zero through the duration.
             n_timesteps: number of evenly spaced generated timestamps from zero through the duration.
             as_pose: if true, return spatialmath SE2 poses instead of ``[x, y, theta]`` vectors.

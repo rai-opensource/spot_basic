@@ -35,14 +35,12 @@ def make_message(cls: Type[MessageT], *args: Any, **kwargs: Any) -> MessageT:
     Args:
         cls: message class to instantiate and initialize.
         args: positional arguments for message initialization,
-        matched to message fields in order of appearance.
-        kwargs: keyword arguments for message initialization,
-        matched to message fields by name.
+            matched to message fields in order of appearance.
+        kwargs: keyword arguments for message initialization, matched to message fields by name.
 
     Returns:
-         a new message instance, unless a message instance is
-         provided as the sole argument to `make_message`, in
-         which case it will be forward unmodified.
+        a new message instance, unless a message instance is provided as the sole argument to
+        `make_message`, in which case it will be forward unmodified.
     """
     if len(args) == 1 and len(kwargs) == 0:
         if isinstance(args[0], cls):
@@ -97,7 +95,7 @@ class SpotServiced(Serviced[ServiceRequestT, ServiceResponseT]):
         Args:
             args: positional values used to populate the service request fields.
             timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-            expires, the service request will be cancelled and the call will raise.
+                expires, the service request will be cancelled and the call will raise.
             nothrow: when set, errors do not raise exceptions.
             kwargs: keyword values used to populate the service request fields.
 
@@ -154,8 +152,8 @@ class SpotActionable(Actionable[ActionGoalT, ActionResultT, ActionFeedbackT]):
         Args:
             args: positional values used to populate the action goal fields.
             feedback_callback: optional callback invoked for action feedback messages.
-            timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-            expires, the action goal will be cancelled and the call will raise.
+            timeout_sec: optional timeout, in seconds. If a timeout is specified and
+                it expires, the action goal will be cancelled and the call will raise.
             nothrow: when set, errors do not raise exceptions.
             kwargs: keyword values used to populate the action goal fields.
 

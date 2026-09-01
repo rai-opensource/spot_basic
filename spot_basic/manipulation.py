@@ -253,9 +253,9 @@ class SpotManipulationProtocol(SpotStateProtocol, Protocol):
                 request: manipulation request to perform, in its Protobuf or ROS 2 form.
                 feedback_callback: optional action feedback callback.
                 timeout_sec: optional action timeout, in seconds. If a timeout is specified and it
-                expires, the manipulation request will be cancelled and the call will raise. Note this
-                timeout is local to the caller. It may take some time for the action to be cancelled,
-                if cancellation is not rejected by the action server.
+                    expires, the manipulation request will be cancelled and the call will raise.
+                    Note this timeout is local to the caller. It may take some time for the action
+                    to be cancelled, if cancellation is not rejected by the action server.
 
             Returns:
                 the manipulation result.
@@ -278,9 +278,8 @@ class SpotManipulationProtocol(SpotStateProtocol, Protocol):
 
             Args:
                 request: manipulation request to perform, in its Protobuf or ROS 2 form.
-                track_feedback: whether and how to track action feedback. Other
-                than a boolean to enable or disable tracking, a positive integer
-                may be provided to cap feedback buffer size.
+                track_feedback: whether and how to track action feedback. Other than a boolean to enable
+                    or disable tracking, a positive integer may be provided to cap feedback buffer size.
 
             Returns:
                 the future manipulation outcome.
@@ -497,10 +496,9 @@ class SpotManipulationProtocol(SpotStateProtocol, Protocol):
             Args:
                 grasp_override: optional grasp state override.
                 carry_override: optional carry state override.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the override request will be cancelled and the call will raise.
-                Note this timeout is local to the caller (and it may take a while for the
-                robot to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the override request will be cancelled and the call will raise. Note this
+                    timeout is local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the override request.

@@ -164,11 +164,11 @@ class SpotArmCommandBuilder(SpotCommandBuilder):
 
         Args:
             joint_positions: sequence of arm joint positions to command the arm to move to.
-            times: sequence of times, in seconds, to reach each trajectory knot relative to the
-            trajectory reference time.
+            times: sequence of times, in seconds, to reach each trajectory
+                knot relative to the trajectory reference time.
             joint_velocities: optional sequence of of arm joint velocities at each trajectory knot.
-            reference_time: optional reference time for the trajectory, in seconds, defined w.r.t. the
-            robot clock. Defaults to the robot clock epoch.
+            reference_time: optional reference time for the trajectory, in seconds,
+                defined w.r.t. the robot clock. Defaults to the robot clock epoch.
             max_acceleration: optional maximum acceleration allowed for any joint along the trajectory (rad/s^2).
             max_velocity: optional maximum velocity allowed for any joint along the trajectory (rad/s).
 
@@ -286,10 +286,10 @@ class SpotArmCommandBuilder(SpotCommandBuilder):
         Args:
             root_frame: root frame with respect to which the trajectory is defined.
             axis_mode_map: control mode per axis (either position or force).
-            timestamps_between_poses: timestamps, in seconds, to reach each knot pose
-            relative to the trajectory reference time.
-            timestamps_between_wrenches: timestamps, in seconds, to apply each knot wrench
-            relative to the trajectory reference time.
+            timestamps_between_poses: timestamps, in seconds, to reach
+                each knot pose relative to the trajectory reference time.
+            timestamps_between_wrenches: timestamps, in seconds, to apply
+                each knot wrench relative to the trajectory reference time.
             pose_vecs: sequence of poses for the end effector to pass through along its trajectory.
             vel_vecs: sequence of twists for the end effector to command along its trajectory.
             wrench_vecs: sequence of wrenches for the end effector to apply along its trajectory.
@@ -300,11 +300,11 @@ class SpotArmCommandBuilder(SpotCommandBuilder):
             max_angular_velocity: optional maximum angular velocity of the end effector (rad/s).
             max_pos_tracking_error: optional maximum deviation between set and tracked end effector positions.
             max_rot_tracking_error: optional maximum deviation between set and tracked end effector orientations.
-            stay_near_current_joint_configuration: forces the system to look for solutions near the current arm
-            joint configuration.
+            stay_near_current_joint_configuration: forces the system to look
+                for solutions near the current arm joint configuration.
             preferred_joint_configuration: optional, preferred joint configuration for the arm to end up in.
-            reference_time: optional reference time for the trajectory, in seconds, defined w.r.t. the robot clock.
-            Defaults to the robot clock epoch.
+            reference_time: optional reference time for the trajectory, in seconds,
+                defined w.r.t. the robot clock. Defaults to the robot clock epoch.
             positional_interpolation: optional positional interpolation method. Defaults to cubic.
             rotational_interpolation: optional rotational interpolation method. Defaults to cubic.
             body_follow_arm: have the body follow the arm when it moves.  If this is not set, the robot will go into
@@ -397,11 +397,11 @@ class SpotArmCommandBuilder(SpotCommandBuilder):
         Args:
             root_frame: root frame with respect to which the trajectory is defined.
             root_t_task: the transform from the root frame to the task frame.
-            Note the latter need not be a well known, named frame.
+                Note the latter need not be a well known, named frame.
             wrist_t_tool: the tool pose relative to the arm wrist frame.
-            It can also be thought of as the "remote center" frame.
-            trajectory: sequence of trajectory waypoints, defined as tuples of tool pose
-            relative to the task frame and duration to slerp over.
+                It can also be thought of as the "remote center" frame.
+            trajectory: sequence of trajectory waypoints, defined as tuples of
+                tool pose relative to the task frame and duration to slerp over.
             stiffness: optional position/stiffness gains for the x, y, z, rot_x, rot_y, rot_z axes in the task frame.
             damping: optional derivative/damping gains for the x, y, z, rot_x, rot_y, rot_z axes in the task frame.
             wrench_nm: optional feedforward wrench for x, y, z, torque_x, torque_y, torque_z in the task frame.
