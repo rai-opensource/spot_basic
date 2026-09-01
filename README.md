@@ -120,7 +120,7 @@ vcs import --recursive src < src/spot_basic/spot_basic.repos
 # Install system / ROS dependencies declared in package.xml
 rosdep install --from-paths src --ignore-src -r -y
 
-# Install PyPI dependencies that have no rosdep key (Spot SDK, spatialmath)
+# Install PyPI dependencies that have no rosdep key (Spot SDK, spatialmath, etc)
 pip install -r src/spot_basic/requirements.txt
 
 # Build and source
