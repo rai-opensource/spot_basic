@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Provide Spot body lease service helpers and scoped lease management."""
+
 import contextlib
 from typing import Any, Generator, Optional, Protocol
 
@@ -21,10 +23,9 @@ class SpotLeaseProtocol(SpotBaseProtocol, Protocol):
             """Claim the robot (body) lease synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the claim request will be cancelled and the call will raise. Note
-                this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the claim request will be cancelled and the call will raise. Note this timeout
+                    is local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the claim request.
@@ -48,10 +49,9 @@ class SpotLeaseProtocol(SpotBaseProtocol, Protocol):
             """Release the robot (body) lease synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the release request will be cancelled and the call will raise. Note
-                this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the release request will be cancelled and the call will raise. Note this timeout
+                    is local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the release request.
@@ -75,10 +75,9 @@ class SpotLeaseProtocol(SpotBaseProtocol, Protocol):
             """Forcefully take the (body) lease synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the release request will be cancelled and the call will raise. Note
-                this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the release request will be cancelled and the call will raise. Note this timeout
+                    is local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the take lease request.
@@ -104,6 +103,15 @@ class SpotLeaseMixin(SpotBaseProtocol):
     """Mixin offering Spot lease management support."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Bind lease service helpers for the robot.
+
+        Rebinds the generalized claim, release, and take lease methods to concrete ROS 2 service clients
+        in the robot namespace.
+
+        Args:
+            args: positional arguments forwarded to the next class in the MRO.
+            kwargs: keyword arguments forwarded to the next class in the MRO.
+        """
         super().__init__(*args, **kwargs)
         SpotLeaseMixin.claim.rebind(
             self, SpotServiced(Trigger, spot_namespaced(self.robot_name, "claim"), node=self.node)
@@ -120,8 +128,7 @@ class SpotLeaseMixin(SpotBaseProtocol):
         """Maintain a lease on the robot while in scope.
 
         Args:
-            timeout_sec: optional timeout, in seconds. May block indefinitely
-            if none is provided.
+            timeout_sec: optional timeout, in seconds. May block indefinitely if none is provided.
         """
         self.claim.synchronously(timeout_sec=timeout_sec)
         try:

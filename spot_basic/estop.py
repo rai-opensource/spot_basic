@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Provide Spot emergency stop service helpers."""
+
 from typing import Any, Optional, Protocol
 
 from std_srvs.srv import Trigger
@@ -23,10 +25,9 @@ class SpotEStopProtocol(SpotBaseProtocol, Protocol):
             """Cut all power synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the emergency stop request will be cancelled and the call will raise.
-                Note this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the emergency stop request will be cancelled and the call will raise. Note this
+                    timeout is local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the emergency stop request.
@@ -54,10 +55,9 @@ class SpotEStopProtocol(SpotBaseProtocol, Protocol):
             """Sit down and cut all power synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the emergency stop request will be cancelled and the call will raise.
-                Note this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the emergency stop request will be cancelled and the call will raise. Note this
+                    timeout is local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the emergency stop request.
@@ -85,10 +85,9 @@ class SpotEStopProtocol(SpotBaseProtocol, Protocol):
             """Release emergency stop synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the emergency stop release request will be cancelled and the call will raise.
-                Note this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires, the
+                    emergency stop release request will be cancelled and the call will raise. Note this
+                    timeout is local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the emergency stop release request.
@@ -114,6 +113,15 @@ class SpotEStopMixin(SpotBaseProtocol):
     """Mixin offering Spot emergency stops management support."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Bind emergency stop service helpers for the robot.
+
+        Rebinds the generalized hard stop, gentle stop, and release methods to concrete ROS 2 service clients
+        in the robot namespace.
+
+        Args:
+            args: positional arguments forwarded to the next class in the MRO.
+            kwargs: keyword arguments forwarded to the next class in the MRO.
+        """
         super().__init__(*args, **kwargs)
         SpotEStopMixin.estop_hard.rebind(
             self, SpotServiced(Trigger, spot_namespaced(self.robot_name, "estop/hard"), node=self.node)

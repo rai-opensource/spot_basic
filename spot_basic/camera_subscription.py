@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Provide ergonomic ROS 2 camera subscriptions and synchronized image feeds."""
+
 from functools import cached_property
 from typing import Any, NamedTuple, Optional
 
@@ -50,8 +52,7 @@ class CameraSubscription:
             name: camera name, used for topic namespacing.
             history_length: optional historic data size, defaults to 1.
             node: optional node for subscription, defaults to the current process node.
-            kwargs: all other keyword arguments are used for
-            `synchros2.subscription.Subscription` instantiation.
+            kwargs: other keyword arguments for `synchros2.subscription.Subscription` instantiation.
         """
         self._name = name
         self._history_length = history_length

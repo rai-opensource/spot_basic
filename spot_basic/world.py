@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""World object and user no-go region helpers for the SpotBasic client."""
+
 from typing import Any, Iterable, Optional, Protocol, Union, overload
 
 import bosdyn_api_msgs.msg
@@ -43,6 +45,18 @@ class WorldObjectCommandBuilder:
         use_foot_obstacle_inflation: bool,
         object_lifetime_s: int,
     ) -> world_object_pb2.MutateWorldObjectRequest:
+        """Create the common add request fields for a user no-go region.
+
+        Args:
+            name: name assigned to the no-go region.
+            is_foot_obstacle: whether the region should generate foot obstacles.
+            is_body_obstacle: whether the region should generate body obstacles.
+            use_foot_obstacle_inflation: whether foot obstacle inflation should be enabled.
+            object_lifetime_s: region lifetime, in seconds.
+
+        Returns:
+            a mutate request with common no-go region properties set.
+        """
         request = world_object_pb2.MutateWorldObjectRequest()
         request.mutation.action = world_object_pb2.MutateWorldObjectRequest.Action.ACTION_ADD
         request.mutation.object.name = name
@@ -177,10 +191,9 @@ class SpotWorldProtocol(SpotBaseProtocol, Protocol):
 
             Args:
                 request: object listing request, in its Protobuf or ROS 2 form.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the object listing will be cancelled and the call will raise.
-                Note this timeout is local to the caller (and it may take a while for the
-                robot to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the object listing will be cancelled and the call will raise. Note this timeout
+                    is local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the object listing request.
@@ -205,10 +218,9 @@ class SpotWorldProtocol(SpotBaseProtocol, Protocol):
 
             Args:
                 request: object listing request, in its Protobuf or ROS 2 form.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the object listing will be cancelled and the call will raise.
-                Note this timeout is local to the caller (and it may take a while for the
-                robot to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the object listing will be cancelled and the call will raise. Note this timeout
+                    is local to the caller (and it may take a while for the robot to react).
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -247,10 +259,9 @@ class SpotWorldProtocol(SpotBaseProtocol, Protocol):
             """List user no go regions synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the object listing will be cancelled and the call will raise.
-                Note this timeout is local to the caller (and it may take a while for the
-                robot to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the object listing will be cancelled and the call will raise. Note this timeout
+                    is local to the caller (and it may take a while for the robot to react).
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -289,10 +300,9 @@ class SpotWorldProtocol(SpotBaseProtocol, Protocol):
 
             Args:
                 request: object mutation request, in its Protobuf or ROS 2 form.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the object mutation will be cancelled and the call will raise.
-                Note this timeout is local to the caller (and it may take a while for the
-                robot to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the object mutation will be cancelled and the call will raise. Note this timeout
+                    is local to the caller (and it may take a while for the robot to react).
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -599,6 +609,15 @@ class SpotWorldMixin(SpotBaseProtocol):
     """Mixin that manages Spot world representation."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize world object clients and bind generalized methods.
+
+        Creates concrete ROS 2 service clients for world object listing and mutation, then rebinds
+        generalized no-go region helpers to composed request builders.
+
+        Args:
+            args: positional arguments forwarded to the next class in the MRO.
+            kwargs: keyword arguments forwarded to the next class in the MRO.
+        """
         super().__init__(*args, **kwargs)
         self._lister = SpotServiced(
             ListWorldObjects, spot_namespaced(self.robot_name, "list_world_objects"), node=self.node
@@ -711,6 +730,12 @@ class SpotWorldMixin(SpotBaseProtocol):
         """
 
     def get_user_nogo_regions_as_string(self) -> str:
+        """Return user no-go regions formatted as names and IDs.
+
+        Returns:
+            a bracketed string listing each user no-go region name and ID, or an empty string if
+            the list request returns no response.
+        """
         resp = self.list_user_nogo_regions.synchronously()
         if resp is None:
             return ""

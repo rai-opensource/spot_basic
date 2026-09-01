@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Provide Spot gripper camera parameter service helpers."""
+
 from typing import Any, Optional, Protocol, Union, overload
 
 import bosdyn_api_msgs.msg
@@ -25,10 +27,9 @@ class SpotGripperCameraProtocol(SpotBaseProtocol, Protocol):
             """Get gripper camera parameters synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the request will be cancelled and the call will raise. Note
-                this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the request will be cancelled and the call will raise. Note this timeout is
+                    local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the gripper camera parameters request.
@@ -45,10 +46,9 @@ class SpotGripperCameraProtocol(SpotBaseProtocol, Protocol):
             """Get gripper camera parameters synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the request will be cancelled and the call will raise. Note
-                this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the request will be cancelled and the call will raise. Note this timeout is
+                    local to the caller (and it may take a while for the robot to react).
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -80,10 +80,9 @@ class SpotGripperCameraProtocol(SpotBaseProtocol, Protocol):
 
             Args:
                 request: gripper camera parameters change request, in its Protobuf or ROS 2 form.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the request will be cancelled and the call will raise. Note
-                this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the request will be cancelled and the call will raise. Note this timeout is
+                    local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response to the gripper camera parameters change request.
@@ -107,10 +106,9 @@ class SpotGripperCameraProtocol(SpotBaseProtocol, Protocol):
 
             Args:
                 request: gripper camera parameters change request, in its Protobuf or ROS 2 form.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the request will be cancelled and the call will raise. Note
-                this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the request will be cancelled and the call will raise. Note this timeout is
+                    local to the caller (and it may take a while for the robot to react).
                 nothrow: when set, errors do not raise exceptions.
 
             Returns:
@@ -140,6 +138,15 @@ class SpotGripperCameraMixin(SpotBaseProtocol):
     """Mixin to manage the Spot gripper camera."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Bind gripper camera parameter service helpers for the robot.
+
+        Rebinds the generalized get and set gripper camera parameter methods to concrete ROS 2 service clients
+        in the robot namespace.
+
+        Args:
+            args: positional arguments forwarded to the next class in the MRO.
+            kwargs: keyword arguments forwarded to the next class in the MRO.
+        """
         super().__init__(*args, **kwargs)
         SpotGripperCameraMixin.get_gripper_camera_parameters.rebind(
             self,

@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Provide Spot docking and undocking service helpers."""
+
 from typing import Any, Optional, Protocol
 
 from spot_msgs.srv import Dock
@@ -22,10 +24,9 @@ class SpotDockingProtocol(SpotBaseProtocol, Protocol):
 
             Args:
                 dock_id: target dock fiducial id. It must be visible from the robot POV.
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the docking request will be cancelled and the call will raise. Note
-                this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the docking request will be cancelled and the call will raise. Note this timeout
+                    is local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response of to the docking request.
@@ -52,10 +53,9 @@ class SpotDockingProtocol(SpotBaseProtocol, Protocol):
             """Undock the robot synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the undocking request will be cancelled and the call will raise. Note
-                this timeout is local to the caller (and it may take a while for the robot
-                to react).
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the undocking request will be cancelled and the call will raise. Note this
+                    timeout is local to the caller (and it may take a while for the robot to react).
 
             Returns:
                 the response of to the undocking request.
@@ -80,6 +80,14 @@ class SpotDockingMixin(SpotBaseProtocol):
     """Mixin that enables Spot docking maneuvers."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Bind docking service helpers for the robot.
+
+        Rebinds the generalized dock and undock methods to concrete ROS 2 service clients in the robot namespace.
+
+        Args:
+            args: positional arguments forwarded to the next class in the MRO.
+            kwargs: keyword arguments forwarded to the next class in the MRO.
+        """
         super().__init__(*args, **kwargs)
         SpotDockingMixin.dock.rebind(self, SpotServiced(Dock, spot_namespaced(self.robot_name, "dock"), node=self.node))
         SpotDockingMixin.undock.rebind(

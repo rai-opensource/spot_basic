@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Spot gripper command builders, protocols, and mixin bindings."""
+
 from typing import Any, Callable, Optional, Protocol, TypeAlias, Union
 
 from bosdyn.api import robot_command_pb2
@@ -37,8 +39,9 @@ class SpotGripperCommandBuilder(SpotCommandBuilder):
         """Build a claw gripper command to set to an arbitrary angle.
 
         Args:
-            theta_rad: opening angle for the claw gripper, in radians. Must lie in the [-pi/2, 0] interval,
-            where -pi/2 is the fully open angle and 0 is closed. (This matches the joint angle in joint_states).
+            theta_rad: opening angle for the claw gripper, in radians. Must lie
+                in the [-pi/2, 0] interval, where -pi/2 is the fully open angle
+                and 0 is closed. (This matches the joint angle in joint_states).
             max_torque: maximum allowed torque applied in Nm. If unspecified, a default value of 5.5 will be used.
         """
         if theta_rad > _CLAW_GRIPPER_CLOSED_ANGLE or theta_rad < _CLAW_GRIPPER_OPEN_ANGLE:
@@ -173,6 +176,15 @@ class SpotGripperCommandMixin(SpotCommandProtocol):
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize guarded gripper command methods.
+
+        Calls the next initializer, creates a command builder, and rebinds gripper generalized methods to guarded robot
+        command executions.
+
+        Args:
+            *args: positional arguments forwarded to the next class in the MRO.
+            **kwargs: keyword arguments forwarded to the next class in the MRO.
+        """
         super().__init__(*args, **kwargs)
         command_builder = SpotGripperCommandBuilder(self)
 

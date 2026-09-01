@@ -1,5 +1,7 @@
 # Copyright (c) 2025-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Forward state controller interface for Spot joint state commands."""
+
 from collections.abc import Sequence
 from functools import cached_property
 from typing import Optional
@@ -40,10 +42,12 @@ class SpotForwardStateControllerInterface(SpotControllerInterface):
         Typical interfaces are position, velocity, and effort. Missing setpoints will default to 0.
 
         Args:
-            command: full setpoint array. This array follows standard `ros2_control` ordering conventions i.e.
-            `[<interface 0 for joints 0 to M>, <interface 1 for joints 0 to M>, ..., <interface N for joints 0 to M>]`.
-            kwargs: these are deduced from controller configuration, allowing commands to be set on a per interface
-            and a per joint basis. The former must contain M setpoints, whereas the latter must contain N setpoints.
+            command: full setpoint array. This array follows standard `ros2_control`
+                ordering conventions i.e. `[<interface 0 for joints 0 to M>, <interface
+                1 for joints 0 to M>, ..., <interface N for joints 0 to M>]`.
+            kwargs: these are deduced from controller configuration, allowing commands
+                to be set on a per interface and a per joint basis. The former must
+                contain M setpoints, whereas the latter must contain N setpoints.
 
         Raises:
             RuntimeError: if the controller interface is not attached

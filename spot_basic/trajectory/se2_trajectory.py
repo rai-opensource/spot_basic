@@ -1,4 +1,5 @@
 #  Copyright (c) 2023-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
+
 """Tools for handling SE2 reconfigurations"""
 
 from __future__ import annotations
@@ -35,6 +36,14 @@ def pose_change_duration_linear_estimate(
 
 
 def pose_to_vec(pose: SE2) -> npt.NDArray:
+    """Convert an SE2 pose to an ``[x, y, theta]`` vector.
+
+    Args:
+        pose: spatialmath SE2 pose with x and y in metres and theta in radians.
+
+    Returns:
+        pose vector with x and y in metres and theta in radians.
+    """
     return np.array([pose.x, pose.y, pose.theta()])
 
 
@@ -45,6 +54,18 @@ _TimestampedTrajectoryPoints = tuple[npt.ArrayLike, _TrajectoryPoints]
 
 
 class SE2Trajectory:
+    """Timed sequence of planar SE2 poses.
+
+    Each trajectory stores key poses and timestamps in seconds. Poses may be provided as spatialmath ``SE2`` objects
+    or as ``[x, y, theta]`` vectors, with x and y in metres and theta in radians. Indexing with an integer returns the
+    key pose at that index, while indexing with a string looks up the matching phase name.
+
+    Calling the trajectory evaluates it at one or more timestamps. Scalar calls return either an interpolated
+    ``[x, y, theta]`` vector or an ``SE2`` pose, depending on ``as_pose``. Vector calls evaluate each timestamp and
+    return an array of vectors or a list of ``SE2`` poses. Interpolation is linear in x, y, and theta between the
+    surrounding key poses.
+    """
+
     def __init__(
         self,
         *,
@@ -55,6 +76,21 @@ class SE2Trajectory:
         phases: Optional[list[Any]] = None,
         make_relative_to_first_pose: bool = False,
     ):
+        """Initialize a timed SE2 trajectory.
+
+        Args:
+            timestamps_sec: timestamps for each pose, in seconds from the start of the trajectory.
+            duration_sec: total trajectory duration, in seconds. If provided,
+                timestamps are evenly distributed from zero to this duration.
+            poses: trajectory key poses as spatialmath SE2 objects.
+            pose_vecs: trajectory key poses as ``[x, y, theta]`` vectors, with x and y in metres and theta in radians.
+            phases: optional phase labels corresponding to each pose.
+            make_relative_to_first_pose: if true, express all poses relative to the first pose.
+
+        Raises:
+            ValueError: if poses are not specified exactly once, timestamps
+                are not specified exactly once, or any timestamp is NaN.
+        """
         if (poses is None) and (pose_vecs is None):
             raise ValueError("Require exactly one argument for specifying poses (received zero)")
         if (poses is not None) and (pose_vecs is not None):
@@ -94,23 +130,68 @@ class SE2Trajectory:
 
     @property
     def poses(self) -> list[SE2]:
+        """Get trajectory key poses.
+
+        Returns:
+            the list of spatialmath SE2 key poses.
+        """
         return self._poses
 
     def set_poses(self, poses: list[SE2]) -> None:
+        """Set trajectory key poses.
+
+        Args:
+            poses: spatialmath SE2 key poses.
+        """
         self._poses = poses
         assert all(isinstance(pose, SE2) for pose in self._poses)
 
     def copy_with_updated_poses(self, poses: list[SE2]) -> SE2Trajectory:
+        """Copy this trajectory with different key poses.
+
+        Args:
+            poses: replacement spatialmath SE2 key poses.
+
+        Returns:
+            a trajectory with the same timestamps and phases and the given poses.
+        """
         # NOTE assuming timestamps_sec and phases immutable
         return SE2Trajectory(timestamps_sec=self.timestamps_sec, poses=poses, phases=self.phases)
 
     def __mul__(self, other: SE2) -> SE2Trajectory:
+        """Compose each trajectory pose on the right by an SE2 transform.
+
+        Args:
+            other: transform to apply after each trajectory pose.
+
+        Returns:
+            a trajectory containing ``pose * other`` for each pose.
+        """
         return self.copy_with_updated_poses([pose * other for pose in self._poses])
 
     def __rmul__(self, other: SE2) -> SE2Trajectory:
+        """Compose each trajectory pose on the left by an SE2 transform.
+
+        Args:
+            other: transform to apply before each trajectory pose.
+
+        Returns:
+            a trajectory containing ``other * pose`` for each pose.
+        """
         return self.copy_with_updated_poses([other * pose for pose in self._poses])
 
     def __getitem__(self, query: Union[int, str]) -> SE2:
+        """Get a key pose by index or phase name.
+
+        Args:
+            query: integer key-pose index or phase name.
+
+        Returns:
+            the selected spatialmath SE2 key pose.
+
+        Raises:
+            ValueError: if querying by phase name when phase names are undefined.
+        """
         if isinstance(query, str):
             if self.phases is None:
                 raise ValueError("Cannot query by phase name; phase names are undefined")
@@ -129,6 +210,20 @@ class SE2Trajectory:
         as_pose: bool = False,
         with_timestamps: bool = False,
     ) -> Union[_TrajectoryPoint, _TrajectoryPoints, _TimestampedTrajectoryPoints]:
+        """Evaluate or sample the trajectory.
+
+        Args:
+            timestamp_sec: timestamp or timestamps to evaluate, in seconds. If omitted, the stored timestamps
+                are used unless ``timestep_sec`` or ``n_timesteps`` specifies generated sample times.
+            timestep_sec: sample period, in seconds, for generated timestamps from zero through the duration.
+            n_timesteps: number of evenly spaced generated timestamps from zero through the duration.
+            as_pose: if true, return spatialmath SE2 poses instead of ``[x, y, theta]`` vectors.
+            with_timestamps: if true for vector evaluation, return the timestamps together with the trajectory points.
+
+        Returns:
+            an interpolated pose vector, an interpolated SE2 pose, a sequence of either, or a ``(timestamps, points)``
+            tuple when ``with_timestamps`` is true.
+        """
         if timestamp_sec is None:
             if timestep_sec is not None:
                 timestamp_sec = np.append(np.arange(0, self.duration_sec, timestep_sec), self.duration_sec)

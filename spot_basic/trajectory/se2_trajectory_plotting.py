@@ -1,4 +1,7 @@
 #  Copyright (c) 2023-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
+
+"""Plotting helpers for SE2 trajectories and robot body outlines."""
+
 from typing import Any
 
 import matplotlib.pyplot as plt

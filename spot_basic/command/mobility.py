@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Spot mobility command builders, protocols, and mixin bindings."""
+
 from copy import deepcopy
 from typing import Any, Callable, Iterable, List, Optional, Protocol, TypeAlias, Union, overload
 
@@ -35,8 +37,8 @@ class SpotMobilityCommandBuilder(SpotCommandBuilder):
         """Build a sit command.
 
         Args:
-            mobility_params: optional mobility params, defaulting to target
-            mobility params if none are provided.
+            mobility_params: optional mobility params, defaulting
+                to target mobility params if none are provided.
         """
         if mobility_params is None:
             mobility_params = self.target.mobility_params
@@ -48,8 +50,8 @@ class SpotMobilityCommandBuilder(SpotCommandBuilder):
         """Build a stand command.
 
         Args:
-            mobility_params: optional mobility params, defaulting to target
-            mobility params if none are provided.
+            mobility_params: optional mobility params, defaulting
+                to target mobility params if none are provided.
         """
         if mobility_params is None:
             mobility_params = self.target.mobility_params
@@ -61,8 +63,8 @@ class SpotMobilityCommandBuilder(SpotCommandBuilder):
         """Build a stand command with target body height and orientation.
 
         Args:
-            gravbody_r_goal: body frame orientation w.r.t. to a gravity aligned framed
-            with yaw computed from the stance feet.
+            gravbody_r_goal: body frame orientation w.r.t. to a gravity
+                aligned framed with yaw computed from the stance feet.
             body_height: body height, in meters, relative to the nominal stand height.
         """
         gravbody_r_goal = UnitQuaternion(gravbody_r_goal)
@@ -203,9 +205,9 @@ class SpotMobilityCommandBuilder(SpotCommandBuilder):
         by a stand command with target body height and SO(3) orientation.
 
         Args:
-            frame_t_goal: pose to walk to, defined w.r.t. the given `base_frame`. Assumed planar,
-            its SE(2) equivalent disregarding roll and pitch is used for walking, and the full
-            SO(3) rotation is used for standing.
+            frame_t_goal: pose to walk to, defined w.r.t. the given `base_frame`.
+                Assumed planar, its SE(2) equivalent disregarding roll and pitch is
+                used for walking, and the full SO(3) rotation is used for standing.
             body_height: body height, in meters, relative to the nominal stand height.
             base_frame: optional base frame, defaults to the VISION frame.
         """
@@ -650,6 +652,15 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
     """Mixin that eases basic Spot mobility command execution."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize mobility command methods and velocity publisher.
+
+        Calls the next initializer, creates a command builder, rebinds mobility generalized methods to robot command
+        executions, and creates the `cmd_vel` publisher.
+
+        Args:
+            *args: positional arguments forwarded to the next class in the MRO.
+            **kwargs: keyword arguments forwarded to the next class in the MRO.
+        """
         super().__init__(*args, **kwargs)
         command_builder = SpotMobilityCommandBuilder(self)
         SpotMobilityCommandMixin.sit.rebind(self, self.execute.compose(command_builder.sit_command))
@@ -746,8 +757,8 @@ class SpotMobilityCommandMixin(SpotCommandProtocol):
         """Make the robot walk (i.e. move, turn) with a given body-frame velocity.
 
         Args:
-            body_velocity: the desired body velocity
-            (twist2 is a member of se2, which can be viewed as SE2 velocities, see Twist2.skewa)
+            body_velocity: the desired body velocity (twist2 is a member of
+                se2, which can be viewed as SE2 velocities, see Twist2.skewa)
             duration: the time (in seconds) to maintain the desired velocity
                 setting to None (default) means the robot would walk for
                 a minimum duration set by the "cmd_duration" parameter for in spot_ros2.

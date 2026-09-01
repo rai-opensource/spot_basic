@@ -1,5 +1,7 @@
 # Copyright (c) 2023-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""State subscriptions and TF helpers for the SpotBasic client."""
+
 from dataclasses import dataclass
 from enum import Enum
 from functools import cached_property
@@ -161,14 +163,49 @@ class SpotStateProtocol(SpotBaseProtocol, Protocol):
         transform_time: Optional[Time] = None,
         timeout: Optional[float] = None,
         wait_for_frames: bool = False,
-    ) -> SE3: ...
+    ) -> SE3:
+        """Look up a robot-specific transform from `frame_a` to `frame_b`.
+
+        Args:
+            frame_a: base frame for the transform. Un-prefixed frame names are namespaced with
+                the robot name before lookup.
+            frame_b: tip frame for the transform. Un-prefixed frame names are namespaced with
+                the robot name before lookup.
+            transform_time: optional time for transform lookup, or the latest available transform
+                if none is provided.
+            timeout: optional timeout, in seconds, to wait for the transform to become available.
+            wait_for_frames: whether to wait for a path between frames to become available.
+
+        Returns:
+            transform from frame_a to frame_b at the requested time.
+
+        Raises:
+            ValueError: if no TF listener is connected.
+        """
+        ...
 
     def get_transforms_tree_snapshot(
         self,
         transform_time: Optional[Time] = None,
         root_frame: Optional[Union[FrameHint, str]] = None,
         timeout_sec: Optional[float] = None,
-    ) -> FrameTreeSnapshot: ...
+    ) -> FrameTreeSnapshot:
+        """Take a snapshot of all available robot-specific transforms.
+
+        Args:
+            transform_time: optional time for transform lookup,
+                or the latest available transforms if none is provided.
+            root_frame: optional root frame for the transforms tree,
+                or the body frame if none is provided.
+            timeout_sec: optional timeout, in seconds, to wait for transforms to become available.
+
+        Returns:
+            a tree-based collection of all available robot-specific transforms.
+
+        Raises:
+            ValueError: if no TF listener is connected.
+        """
+        ...
 
 
 class SpotStateMixin(SpotBaseProtocol):
@@ -177,6 +214,14 @@ class SpotStateMixin(SpotBaseProtocol):
     FrameHint: TypeAlias = FrameHint
 
     def __init__(self, *args: Any, tf_listener: Optional[TFListenerWrapper] = None, **kwargs: Any) -> None:
+        """Initialize state tracking and robot-specific frame names.
+
+        Args:
+            args: positional arguments forwarded to the next class in the MRO.
+            tf_listener: optional TF listener to use for transform lookups. If none is provided,
+                the current ROS scope listener is used.
+            kwargs: keyword arguments forwarded to the next class in the MRO.
+        """
         super().__init__(*args, **kwargs)
         # A tf listener instance can be connected to the robot.
         self.tf_listener = tf_listener or ros_scope.tf_listener()
@@ -196,6 +241,7 @@ class SpotStateMixin(SpotBaseProtocol):
         self.tf_listener = tf_listener
 
     def unset_tf_listener(self) -> None:
+        """Detach the current TF listener from the robot."""
         self.tf_listener = None
 
     @cached_property
@@ -279,10 +325,10 @@ class SpotStateMixin(SpotBaseProtocol):
         Args:
             frame_a: Base frame for transform.
             frame_b: Tip frame for transform.
-            transform_time: optional time for transform lookup. It defaults to the
-            latest available transform if none is provided.
-            timeout_sec: optional timeout, in seconds, to wait for the transform to become available if
-            the requested is beyond the most recent transform in the buffer.
+            transform_time: optional time for transform lookup. It defaults
+                to the latest available transform if none is provided.
+            timeout_sec: optional timeout, in seconds, to wait for the transform to become
+                available if the requested is beyond the most recent transform in the buffer.
         Returns:
             Whether a transform between frame_a and frame_b is available at the specified time.
         Raises:
@@ -325,13 +371,13 @@ class SpotStateMixin(SpotBaseProtocol):
         Args:
             frame_a: Base frame for transform.
             frame_b: Tip frame for transform.
-            transform_time: optional time for transform lookup. It defaults to the latest available
-            transform if none is provided.
-            timeout: optional timeout, in seconds, to wait for the transform to become available if
-            the requested is beyond the most recent transform in the buffer.
-            wait_for_frames: if true, this method will wait until timeout for a path from frame_a to
-            frame_b to become available in the buffer. If false, this method will return immediately
-            if no such path exists, regardless of the given timeout.
+            transform_time: optional time for transform lookup. It defaults
+                to the latest available transform if none is provided.
+            timeout: optional timeout, in seconds, to wait for the transform to become
+                available if the requested is beyond the most recent transform in the buffer.
+            wait_for_frames: if true, this method will wait until timeout for a path from
+                frame_a to frame_b to become available in the buffer. If false, this method will
+                return immediately if no such path exists, regardless of the given timeout.
         Returns:
             Transform from frame_a to frame_b at the requested time.
         Raises:
@@ -374,13 +420,13 @@ class SpotStateMixin(SpotBaseProtocol):
         possible to reconstruct the tree structure as it was at a given point in time.
 
         Args:
-            transform_time: optional time for transform lookup. It defaults to the latest transforms
-            (on a pair basis) if none is provided.
-            root_frame: optional root frame for the transforms tree. It defaults to the body frame
-            if none is provided.
-            timeout_sec: optional timeout to wait for transforms to become available. It defaults to
-            no waiting if none is provided. Note that this method will only wait for frames it already
-            knows about -- it will not wait for new frames to show up.
+            transform_time: optional time for transform lookup. It defaults to
+                the latest transforms (on a pair basis) if none is provided.
+            root_frame: optional root frame for the transforms tree.
+                It defaults to the body frame if none is provided.
+            timeout_sec: optional timeout to wait for transforms to become available. It
+                defaults to no waiting if none is provided. Note that this method will only wait
+                for frames it already knows about -- it will not wait for new frames to show up.
 
         Args:
             A tree-based collection of all available transforms.

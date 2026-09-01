@@ -1,5 +1,7 @@
 #  Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute.  All rights reserved.
 
+"""SE3 trajectory data types and interpolation utilities."""
+
 from dataclasses import dataclass
 
 import numpy as np

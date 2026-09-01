@@ -1,5 +1,7 @@
 # Copyright (c) 2025-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Base interfaces for attaching ros2_control controllers to Spot."""
+
 from collections.abc import Sequence
 from typing import Any, Dict, Optional, Protocol, TypeVar
 
@@ -34,14 +36,13 @@ class SpotControllerProtocol(Protocol):
             """Attach hardware interface and controller to Spot synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the attach request will be cancelled and the call will raise. Note this
-                timeout is local to the caller and interruption may occur in between service
-                requests.
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the attach request will be cancelled and the call will raise. Note this timeout
+                    is local to the caller and interruption may occur in between service requests.
 
             Raises:
-                RuntimeError: if controller attachment fails or times out. Failure does not imply
-                rollback, it is on the user to retry or undo attachment.
+                RuntimeError: if controller attachment fails or times out. Failure does
+                    not imply rollback, it is on the user to retry or undo attachment.
             """
 
         def asynchronously(self) -> FutureLike[None]:
@@ -51,8 +52,8 @@ class SpotControllerProtocol(Protocol):
                 a future for this operation.
 
             Raises:
-                RuntimeError: if controller attachment fails. Failure does not imply
-                rollback, it is on the user to retry or undo attachment.
+                RuntimeError: if controller attachment fails. Failure does not
+                    imply rollback, it is on the user to retry or undo attachment.
             """
 
     class DetachProtocol(Protocol):
@@ -66,14 +67,13 @@ class SpotControllerProtocol(Protocol):
             """Detach hardware interface and controller to Spot synchronously.
 
             Args:
-                timeout_sec: optional timeout, in seconds. If a timeout is specified and it
-                expires, the attach request will be cancelled and the call will raise. Note this
-                timeout is local to the caller and interruption may occur in between service
-                requests.
+                timeout_sec: optional timeout, in seconds. If a timeout is specified and it expires,
+                    the attach request will be cancelled and the call will raise. Note this timeout
+                    is local to the caller and interruption may occur in between service requests.
 
             Raises:
-                RuntimeError: if controller detachment fails or times out. Failure does not imply
-                rollback, it is on the user to retry or undo detachment.
+                RuntimeError: if controller detachment fails or times out. Failure does
+                    not imply rollback, it is on the user to retry or undo detachment.
             """
 
         def asynchronously(self) -> FutureLike[None]:
@@ -83,8 +83,8 @@ class SpotControllerProtocol(Protocol):
                a future for this operation.
 
             Raises:
-                RuntimeError: if controller detachment fails. Failure does not imply
-                rollback, it is on the user to retry or undo detachment.
+                RuntimeError: if controller detachment fails. Failure does not
+                    imply rollback, it is on the user to retry or undo detachment.
             """
 
 
@@ -182,6 +182,15 @@ class SpotControllerInterface(SpotControllerProtocol):
 
     @attach.sync_overload
     def _attach_synchronously(self, *, timeout_sec: Optional[float] = None) -> None:
+        """Attach the hardware interface and controllers synchronously.
+
+        Args:
+            timeout_sec: optional timeout, in seconds. If a timeout is specified and it
+                expires, the attach request will be cancelled and the call will raise.
+
+        Raises:
+            RuntimeError: if attachment fails or times out.
+        """
         future = self.attach.asynchronously()
         if not wait_for_future(future, timeout_sec):
             future.cancel()
@@ -215,6 +224,15 @@ class SpotControllerInterface(SpotControllerProtocol):
 
     @detach.sync_overload
     def _detach_synchronously(self, timeout_sec: Optional[float] = None) -> None:
+        """Detach the hardware interface and controllers synchronously.
+
+        Args:
+            timeout_sec: optional timeout, in seconds. If a timeout is specified and it
+                expires, the detach request will be cancelled and the call will raise.
+
+        Raises:
+            RuntimeError: if detachment fails or times out.
+        """
         future = self.detach.asynchronously()
         if not wait_for_future(future, timeout_sec):
             future.cancel()

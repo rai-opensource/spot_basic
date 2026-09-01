@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Spot arm surface contact action protocols and mixin bindings."""
+
 from __future__ import annotations
 
 from enum import IntEnum
@@ -21,6 +23,12 @@ from spot_basic.utilities import SpotActionable, SpotActionableProtocol, spot_na
 
 
 class PreferredJointConfigurationMode(IntEnum):
+    """Select how Spot chooses a preferred arm joint configuration near singularity.
+
+    DEFAULT lets Spot choose its default pose, NONE leaves no preferred configuration, CURRENT keeps the arm near its
+    current configuration, and CUSTOM uses the supplied preferred joint configuration.
+    """
+
     DEFAULT = 0
     NONE = 1
     CURRENT = 2
@@ -28,6 +36,7 @@ class PreferredJointConfigurationMode(IntEnum):
 
 
 def _tuple_to_vec3(vec: tuple[float, float, float]) -> geometry_pb2.Vec3:
+    """Convert a three-float tuple to a Vec3 protobuf."""
     return geometry_pb2.Vec3(x=vec[0], y=vec[1], z=vec[2])
 
 
@@ -58,6 +67,7 @@ def _build_arm_surface_contact_command(
     gripper_command: gripper_command_pb2.ClawGripperCommand.Request | None = None,
     follow_hand: bool = False,
 ) -> ArmSurfaceContactProto.Request:
+    """Build an ArmSurfaceContact request protobuf from command parameters."""
     cmd = ArmSurfaceContactProto.Request(
         root_frame_name=root_frame.value,
         x_axis=x_axis_mode,
@@ -302,6 +312,15 @@ class SpotArmSurfaceContactMixin(SpotBaseProtocol):
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the guarded arm surface contact action method.
+
+        Calls the next initializer, composes the ROS 2 action client with the command builder, and rebinds the
+        generalized method behind an arm-presence guard.
+
+        Args:
+            *args: positional arguments forwarded to the next class in the MRO.
+            **kwargs: keyword arguments forwarded to the next class in the MRO.
+        """
         super().__init__(*args, **kwargs)
 
         # This creates the action client, which already supports synchronous and asynchronous calls and then tells it

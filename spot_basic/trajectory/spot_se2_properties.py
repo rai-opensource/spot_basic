@@ -1,5 +1,7 @@
 #  Copyright (c) 2023-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Approximate SE2 speed limits and body dimensions for Spot."""
+
 import numpy as np
 
 # Given Spot's characteristics, it's a bit coarse to try to use these values to estimate how long to spend on

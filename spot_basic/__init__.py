@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Provide the primary SpotBasic interface and package-level convenience helpers."""
+
 import contextlib
 from typing import Generator, Optional, Protocol
 
@@ -128,8 +130,18 @@ class SpotBasic(
 
 
 class _Successful(Protocol):
+    """Protocol for responses carrying a success flag."""
+
     success: bool
 
 
 def successful(result: Optional[_Successful]) -> bool:
+    """Check whether an optional response reports success.
+
+    Args:
+        result: optional response object with a success flag.
+
+    Returns:
+        True if the response exists and reports success, False otherwise.
+    """
     return result is not None and result.success

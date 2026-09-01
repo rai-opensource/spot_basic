@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
 
+"""Provide the base Spot interface with robot naming, node access, and arm detection."""
+
 from typing import Any, Optional, Protocol
 
 import synchros2.scope as ros_scope

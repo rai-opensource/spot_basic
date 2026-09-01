@@ -1,4 +1,5 @@
 #  Copyright (c) 2023-2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
+
 """Demonstrate usage of objects pertaining to SE2 trajectories."""
 # Rather not use notebooks even though they'd be a natural choice for this
 
@@ -14,6 +15,12 @@ from spot_basic.trajectory.spot_se2_properties import BODY_SHAPE, MAX_SPEED_VEC
 
 
 def plot_trajectory(ax: plt.Axes, trajectory: SE2Trajectory) -> None:
+    """Draw a Spot body shape along an SE2 trajectory.
+
+    Args:
+        ax: matplotlib axes to draw on.
+        trajectory: SE2 trajectory samples as ``[x, y, theta]`` rows, with x and y in metres and theta in radians.
+    """
     draw_shape(ax, trajectory, BODY_SHAPE)  # type: ignore
     ax.axis("equal")
 
@@ -71,6 +78,7 @@ def example_transform() -> None:
 
 
 def main() -> None:
+    """Run the requested SE2 trajectory example from the command line."""
     parser = argparse.ArgumentParser()
     parser.add_argument("example_name", help="Name of example to run")
     options = parser.parse_args()
