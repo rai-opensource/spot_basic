@@ -18,7 +18,6 @@ Copyright (c) 2023-2026 Robotics and AI Institute LLC dba RAI Institute. All rig
   <depend>cv_bridge</depend>
   <depend>geometry_msgs</depend>
   <depend>lifecycle_msgs</depend>
-  <depend>python3-matplotlib</depend>
   <depend>python3-numpy</depend>
   <depend>python3-opencv</depend>
   <depend>python3-scipy</depend>
