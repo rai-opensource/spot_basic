@@ -45,6 +45,8 @@ but are not exercised in CI.
 | CPU architecture | AMD64 (x86_64) and ARM64 (aarch64) |
 | Spot SDK (`bosdyn-client`, `bosdyn-api`, `bosdyn-core`) | 5.0.1 |
 | NumPy | `< 2` (see [`constraints.txt`](constraints.txt)) |
+| `spatialmath-python` | `>= 1.1, < 2` |
+| Open3D | `>= 0.17, < 0.19` (capped by the NumPy constraint) |
 
 You will also need:
 
@@ -118,7 +120,7 @@ vcs import --recursive src < src/spot_basic/spot_basic.repos
 # Install system / ROS dependencies declared in package.xml
 rosdep install --from-paths src --ignore-src -r -y
 
-# Install PyPI dependencies that have no rosdep key (Spot SDK, spatialmath)
+# Install PyPI dependencies that have no rosdep key (Spot SDK, spatialmath, etc)
 pip install -r src/spot_basic/requirements.txt
 
 # Build and source

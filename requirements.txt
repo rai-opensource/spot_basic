@@ -10,9 +10,21 @@
 
 # Boston Dynamics Spot SDK (bosdyn.api / bosdyn.client).
 # Pinned to match the prebuilt bosdyn_msgs release and the Spot C++ SDK.
+# These also supply the `google.protobuf` runtime that spot_basic uses, so
+# protobuf is deliberately not declared separately (the apt-provided
+# python3-protobuf is older than what the Spot SDK requires).
 bosdyn-client==5.0.1
 bosdyn-api==5.0.1
 bosdyn-core==5.0.1
 
-# Spatial math types (SE2, SE3, SO3, Twist2, UnitQuaternion, ...).
-spatialmath-python
+# Spatial math types (SE2, SE3, SO3, Twist2, UnitQuaternion, ...). Capped below
+# 2.0 because a new major release may change these core types. Matplotlib is
+# occasionally used, the version is assumed to be determined by Spatial Math.
+spatialmath-python[ros-humble]>=1.1,<2
+matplotlib
+
+# Point cloud types used by spot_basic.image and spot_basic.manual_conversions.
+# Not available from apt or rosdep on Ubuntu 22.04, so it is installed here.
+# Capped below 0.19 because later releases target NumPy 2.x, which conflicts
+# with the numpy < 2 constraint above.
+open3d>=0.17,<0.19
