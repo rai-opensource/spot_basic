@@ -81,6 +81,11 @@ jobs:
         run: |
           pip install --no-cache-dir -r src/spot_basic/requirements.txt
 
+      - name: Verify Matplotlib 3D projection is importable
+        run: |
+          python -c "import matplotlib, mpl_toolkits.mplot3d, spatialmath; print(matplotlib.__version__, matplotlib.__file__)"
+          python -c "from spatialmath.base.graphics import plotvol3; print('plotvol3 ok')"
+
       - name: Build packages
         run: |
           source /opt/ros/$ROS_DISTRO/setup.bash
