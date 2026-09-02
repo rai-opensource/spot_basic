@@ -69,17 +69,17 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE/src/spot_basic"
           git config --global --add safe.directory "$GITHUB_WORKSPACE/src/spot_ros2"
 
-      - name: Install spot_basic Python dependencies
-        run: |
-          pip install --no-cache-dir -r src/spot_basic/requirements.txt
-
       - name: Resolve Rosdep dependencies
         run: |
           source /opt/ros/$ROS_DISTRO/setup.bash
           apt-get update -q
           rosdep update
           rosdep install --from-paths src --ignore-src -r -y \
-            --skip-keys "bosdyn bosdyn_msgs spot_wrapper"
+            --skip-keys "bosdyn bosdyn_msgs spot_wrapper python3-matplotlib"
+
+      - name: Install spot_basic Python dependencies
+        run: |
+          pip install --no-cache-dir -r src/spot_basic/requirements.txt
 
       - name: Build packages
         run: |
