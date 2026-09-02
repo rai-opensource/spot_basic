@@ -17,9 +17,11 @@ bosdyn-client==5.0.1
 bosdyn-api==5.0.1
 bosdyn-core==5.0.1
 
-# Spatial math types (SE2, SE3, SO3, Twist2, UnitQuaternion, ...).
-# Capped below 2.0 because a new major release may change these core types.
-spatialmath-python>=1.1,<2
+# Spatial math types (SE2, SE3, SO3, Twist2, UnitQuaternion, ...). Capped below
+# 2.0 because a new major release may change these core types. Matplotlib is
+# occasionally used, the version is assumed to be determined by Spatial Math.
+spatialmath-python[ros-humble]>=1.1,<2
+matplotlib
 
 # Point cloud types used by spot_basic.image and spot_basic.manual_conversions.
 # Not available from apt or rosdep on Ubuntu 22.04, so it is installed here.

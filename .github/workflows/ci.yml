@@ -75,7 +75,7 @@ jobs:
           apt-get update -q
           rosdep update
           rosdep install --from-paths src --ignore-src -r -y \
-            --skip-keys "bosdyn bosdyn_msgs spot_wrapper python3-matplotlib"
+            --skip-keys "bosdyn bosdyn_msgs spot_wrapper"
 
       - name: Install spot_basic Python dependencies
         run: |
