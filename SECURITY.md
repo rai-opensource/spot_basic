@@ -40,10 +40,20 @@ When judging whether something is in scope, note the following.
 - Robot credentials belong in driver configuration that you keep outside version control.
   `spot_basic` never stores them.
 
-## Dependency management
+## Dependency updates
 
-Dependency updates are monitored with [Dependabot](.github/dependabot.yml). Pull requests it opens
-are reviewed by the maintainers listed in [`.github/CODEOWNERS`](.github/CODEOWNERS).
+Dependency updates are monitored with [Dependabot](.github/dependabot.yml), which covers two
+ecosystems: the PyPI packages in `requirements.txt` and the GitHub Actions used by the CI workflows.
+ROS dependencies are declared in `package.xml` and resolved by rosdep, which Dependabot does not
+support, so they are reviewed by hand when the supported ROS distribution changes. The source
+dependencies listed in `spot_basic.repos` are also updated by hand, since they must stay compatible
+with the Spot SDK version stated in the README.
+
+The maintainers listed in [`.github/CODEOWNERS`](.github/CODEOWNERS) triage both Dependabot security
+alerts and the pull requests it opens. Version update PRs are opened on a weekly schedule as updates
+become available, and are reviewed on the project's usual [light maintenance](README.md#maintenance)
+cadence, within a few weeks. Security alert PRs are looked at as they arrive and are prioritized
+over version updates.
 
 <!-- References -->
 

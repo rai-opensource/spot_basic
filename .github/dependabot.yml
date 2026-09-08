@@ -1,17 +1,27 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+# Dependabot supports scanning the PyPI requirements installed by Pip, and the
+# actions used by the CI workflow. Dependabot does not support ROS dependencies
+# installed by Rosdep, or repos installed by VCS.
 
 version: 2
 updates:
-  - package-ecosystem: "gitsubmodule"
+  - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
+      day: "monday"
       time: "23:59"
       timezone: "America/New_York"
     commit-message:
       prefix: "[dependabot] "
-    # 1 per submodule
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "23:59"
+      timezone: "America/New_York"
+    commit-message:
+      prefix: "[dependabot] "
+    open-pull-requests-limit: 5
