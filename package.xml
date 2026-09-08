@@ -39,6 +39,7 @@ Copyright (c) 2023-2026 Robotics and AI Institute LLC dba RAI Institute. All rig
   <test_depend>ament_lint_common</test_depend>
   <test_depend>python3-prompt-toolkit</test_depend>
   <test_depend>python3-pytest</test_depend>
+  <test_depend>python3-pytest-cov</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
