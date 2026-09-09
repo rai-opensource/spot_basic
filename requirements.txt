@@ -14,7 +14,7 @@
 # protobuf is deliberately not declared separately (the apt-provided
 # python3-protobuf is older than what the Spot SDK requires).
 bosdyn-client==5.0.1
-bosdyn-api==5.0.1
+bosdyn-api==5.1.9
 bosdyn-core==5.0.1
 
 # Spatial math types (SE2, SE3, SO3, Twist2, UnitQuaternion, ...). Capped below
