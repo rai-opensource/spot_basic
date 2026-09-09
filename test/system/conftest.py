@@ -113,3 +113,16 @@ def hardware_spot_graph_description(
 
 def pytest_configure() -> None:
     pytest.hardware_spot_graph_description = hardware_spot_graph_description
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Exempt the system tests from the global pytest-timeout limit.
+
+    These tests drive real hardware and block on interactive prompts, so wall
+    clock time is not a meaningful signal of a hang the way it is for the unit
+    tests.
+    """
+    system_test_dir = str(pathlib.Path(__file__).parent)
+    for item in items:
+        if str(item.fspath).startswith(system_test_dir):
+            item.add_marker(pytest.mark.timeout(0))

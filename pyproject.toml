@@ -7,3 +7,9 @@ target-version = ["py310"]
 [tool.isort]
 profile = "black"
 line_length = 120
+
+[tool.pytest.ini_options]
+# Consider any test running longer than 4 minutes hung
+timeout = 240
+# Use "thread" in case we encounter a hang in ROS extension
+timeout_method = "thread"
