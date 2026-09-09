@@ -32,6 +32,11 @@ repos:
     hooks:
       - id: flake8
 
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.0
+    hooks:
+      - id: gitleaks
+
   - repo: https://github.com/jlevy/flowmark
     rev: v0.7.3
     hooks:
