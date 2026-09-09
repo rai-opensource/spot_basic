@@ -98,4 +98,15 @@ jobs:
       - name: Run unit tests
         run: |
           source install/setup.bash
-          pytest src/spot_basic/test --ignore=src/spot_basic/test/system -vv -s --log-cli-level=DEBUG
+          pytest src/spot_basic/test --ignore=src/spot_basic/test/system \
+            --cov=spot_basic --cov-report=term --cov-report=xml:coverage.xml \
+            --cov-config=src/spot_basic/.coveragerc \
+            -vv -s --log-cli-level=DEBUG
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: warn

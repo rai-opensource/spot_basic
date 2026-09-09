@@ -1,0 +1,18 @@
+# Copyright (c) 2026 Robotics and AI Institute LLC dba RAI Institute. All rights reserved.
+
+[run]
+source = spot_basic
+branch = True
+omit =
+    */test/*
+    */examples/*
+
+[report]
+show_missing = True
+skip_empty = True
+
+[paths]
+spot_basic =
+    spot_basic/
+    */install/spot_basic/*/site-packages/spot_basic/
+    */src/spot_basic/spot_basic/
