@@ -13,7 +13,7 @@
 # These also supply the `google.protobuf` runtime that spot_basic uses, so
 # protobuf is deliberately not declared separately (the apt-provided
 # python3-protobuf is older than what the Spot SDK requires).
-bosdyn-client==5.0.1
+bosdyn-client==5.1.9
 bosdyn-api==5.0.1
 bosdyn-core==5.0.1
 
