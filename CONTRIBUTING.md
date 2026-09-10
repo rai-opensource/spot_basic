@@ -75,6 +75,8 @@ pre-commit run --all-files
 3. Add or update tests covering the behavior you changed.
 4. Update the documentation — the [README](README.md), the guides under [`docs/`](docs), and any
    affected [`examples/`](examples) — when your change affects user-visible behavior.
+5. Add an entry under `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md) for any user-visible
+   change.
 
 ## Running the tests
 
