@@ -11,6 +11,10 @@ is under light maintenance, breaking changes may be introduced in a minor versio
 
 ## [Unreleased][unreleased]
 
+Nothing yet.
+
+## [1.0.0][] - 2026-09-09
+
 ### Added
 
 - `SpotBasic`, a single entry point to Spot capabilities over ROS 2, composed of focused mixins and
@@ -43,6 +47,8 @@ is under light maintenance, breaking changes may be introduced in a minor versio
 - Repointed Dependabot at the `pip` and `github-actions` ecosystems, replacing a stale
   `gitsubmodule` configuration that matched nothing, and documented in `SECURITY.md` which
   dependencies it covers, which are updated by hand, and how updates are triaged.
+- Bumped the GitHub Actions used in CI to their current major versions: `actions/checkout` and
+  `actions/setup-python` to `v7`, and `actions/upload-artifact` to `v7`.
 
 ### Fixed
 
@@ -52,3 +58,4 @@ is under light maintenance, breaking changes may be introduced in a minor versio
   `lifecycle_msgs`.
 
 [unreleased]: https://github.com/rai-opensource/spot_basic/commits/main
+[1.0.0]: https://github.com/rai-opensource/spot_basic/releases/tag/v1.0.0
