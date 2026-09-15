@@ -7,7 +7,7 @@
 #
 #   export PIP_CONSTRAINT="$(pwd)/constraints.txt"
 #
-# Why NumPy < 2:
+# Why NumPy < 3:
 #   ROS 2 Humble binaries (rclpy, cv_bridge, tf_transformations, ...) and the
 #   spot_wrapper stack are built against the apt-provided NumPy 1.21.5. A stray
 #   NumPy 2.x pulled into ~/.local silently shadows the system NumPy and breaks
