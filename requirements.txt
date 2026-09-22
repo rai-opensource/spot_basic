@@ -27,4 +27,4 @@ matplotlib
 # Not available from apt or rosdep on Ubuntu 22.04, so it is installed here.
 # Capped below 0.19 because later releases target NumPy 2.x, which conflicts
 # with the numpy < 2 constraint above.
-open3d>=0.19.0,<0.20
+open3d>=0.20.0,<0.21
